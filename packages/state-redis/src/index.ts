@@ -1,0 +1,185 @@
+import type { Lock, StateAdapter } from "chat-sdk";
+import { createClient, type RedisClientType } from "redis";
+
+export interface RedisStateAdapterOptions {
+  /** Redis connection URL (e.g., redis://localhost:6379) */
+  url: string;
+  /** Key prefix for all Redis keys (default: "chat-sdk") */
+  keyPrefix?: string;
+}
+
+/**
+ * Redis state adapter for production use.
+ *
+ * Provides persistent subscriptions and distributed locking
+ * across multiple server instances.
+ */
+export class RedisStateAdapter implements StateAdapter {
+  private client: RedisClientType;
+  private keyPrefix: string;
+  private connected = false;
+
+  constructor(options: RedisStateAdapterOptions) {
+    this.client = createClient({ url: options.url });
+    this.keyPrefix = options.keyPrefix || "chat-sdk";
+
+    // Handle connection errors
+    this.client.on("error", (err) => {
+      console.error("[chat-sdk] Redis client error:", err);
+    });
+  }
+
+  private key(type: "sub" | "lock", id: string): string {
+    return `${this.keyPrefix}:${type}:${id}`;
+  }
+
+  private subscriptionsSetKey(): string {
+    return `${this.keyPrefix}:subscriptions`;
+  }
+
+  async connect(): Promise<void> {
+    if (!this.connected) {
+      await this.client.connect();
+      this.connected = true;
+    }
+  }
+
+  async disconnect(): Promise<void> {
+    if (this.connected) {
+      await this.client.quit();
+      this.connected = false;
+    }
+  }
+
+  async subscribe(threadId: string): Promise<void> {
+    this.ensureConnected();
+    await this.client.sAdd(this.subscriptionsSetKey(), threadId);
+  }
+
+  async unsubscribe(threadId: string): Promise<void> {
+    this.ensureConnected();
+    await this.client.sRem(this.subscriptionsSetKey(), threadId);
+  }
+
+  async isSubscribed(threadId: string): Promise<boolean> {
+    this.ensureConnected();
+    return this.client.sIsMember(this.subscriptionsSetKey(), threadId);
+  }
+
+  async *listSubscriptions(adapterName?: string): AsyncIterable<string> {
+    this.ensureConnected();
+
+    // Use SSCAN for large sets to avoid blocking
+    let cursor = 0;
+    do {
+      const result = await this.client.sScan(
+        this.subscriptionsSetKey(),
+        cursor,
+        {
+          COUNT: 100,
+        },
+      );
+      cursor = result.cursor;
+
+      for (const threadId of result.members) {
+        if (adapterName) {
+          if (threadId.startsWith(`${adapterName}:`)) {
+            yield threadId;
+          }
+        } else {
+          yield threadId;
+        }
+      }
+    } while (cursor !== 0);
+  }
+
+  async acquireLock(threadId: string, ttlMs: number): Promise<Lock | null> {
+    this.ensureConnected();
+
+    const token = generateToken();
+    const lockKey = this.key("lock", threadId);
+
+    // Use SET NX EX for atomic lock acquisition
+    const acquired = await this.client.set(lockKey, token, {
+      NX: true,
+      PX: ttlMs,
+    });
+
+    if (acquired) {
+      return {
+        threadId,
+        token,
+        expiresAt: Date.now() + ttlMs,
+      };
+    }
+
+    return null;
+  }
+
+  async releaseLock(lock: Lock): Promise<void> {
+    this.ensureConnected();
+
+    const lockKey = this.key("lock", lock.threadId);
+
+    // Use Lua script for atomic check-and-delete
+    const script = `
+      if redis.call("get", KEYS[1]) == ARGV[1] then
+        return redis.call("del", KEYS[1])
+      else
+        return 0
+      end
+    `;
+
+    await this.client.eval(script, {
+      keys: [lockKey],
+      arguments: [lock.token],
+    });
+  }
+
+  async extendLock(lock: Lock, ttlMs: number): Promise<boolean> {
+    this.ensureConnected();
+
+    const lockKey = this.key("lock", lock.threadId);
+
+    // Use Lua script for atomic check-and-extend
+    const script = `
+      if redis.call("get", KEYS[1]) == ARGV[1] then
+        return redis.call("pexpire", KEYS[1], ARGV[2])
+      else
+        return 0
+      end
+    `;
+
+    const result = await this.client.eval(script, {
+      keys: [lockKey],
+      arguments: [lock.token, ttlMs.toString()],
+    });
+
+    return result === 1;
+  }
+
+  private ensureConnected(): void {
+    if (!this.connected) {
+      throw new Error(
+        "RedisStateAdapter is not connected. Call connect() first.",
+      );
+    }
+  }
+
+  /**
+   * Get the underlying Redis client for advanced usage.
+   */
+  getClient(): RedisClientType {
+    return this.client;
+  }
+}
+
+function generateToken(): string {
+  return `redis_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
+}
+
+export function createRedisState(
+  options: RedisStateAdapterOptions,
+): RedisStateAdapter {
+  return new RedisStateAdapter(options);
+}

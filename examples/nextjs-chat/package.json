@@ -1,0 +1,29 @@
+{
+  "name": "example-nextjs-chat",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check src"
+  },
+  "dependencies": {
+    "@chat-sdk/gchat": "workspace:*",
+    "@chat-sdk/slack": "workspace:*",
+    "@chat-sdk/state-memory": "workspace:*",
+    "@chat-sdk/state-redis": "workspace:*",
+    "@chat-sdk/teams": "workspace:*",
+    "chat-sdk": "workspace:*",
+    "next": "^16.1.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/react": "^19.0.1",
+    "@types/react-dom": "^19.0.1",
+    "typescript": "^5.7.2"
+  }
+}
