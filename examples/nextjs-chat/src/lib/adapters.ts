@@ -78,7 +78,10 @@ export function buildAdapters(): Adapters {
   // Option 1: Vercel OIDC (Workload Identity Federation)
   const vercelAuth = createVercelOIDCAuth();
   if (vercelAuth) {
-    adapters.gchat = createGoogleChatAdapter({ auth: vercelAuth });
+    adapters.gchat = createGoogleChatAdapter({
+      auth: vercelAuth,
+      userName: "Chat SDK Demo",
+    });
   }
   // Option 2: Service account credentials (JSON key)
   else if (process.env.GOOGLE_CHAT_CREDENTIALS) {
