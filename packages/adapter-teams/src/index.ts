@@ -6,23 +6,20 @@ import {
   type TurnContext,
 } from "botbuilder";
 
-/** Minimal request interface for botbuilder process */
-interface BotRequest {
-  body: unknown;
-  headers: Record<string, string>;
-  method: string;
-}
-
-/** Minimal response interface for botbuilder process */
-interface BotResponse {
-  status: (code: number) => BotResponse;
-  send: (data?: string) => void;
-  end: () => void;
-}
-
 /** Entity with text property for @mentions */
 interface MentionEntity extends Entity {
   text?: string;
+}
+
+/** Extended CloudAdapter that exposes processActivity for serverless environments */
+class ServerlessCloudAdapter extends CloudAdapter {
+  handleActivity(
+    authHeader: string,
+    activity: Activity,
+    logic: (context: TurnContext) => Promise<void>
+  ) {
+    return this.processActivity(authHeader, activity, logic);
+  }
 }
 
 import type {
@@ -60,7 +57,7 @@ export class TeamsAdapter implements Adapter<TeamsThreadId, unknown> {
   readonly userName: string;
   readonly botUserId?: string;
 
-  private botAdapter: CloudAdapter;
+  private botAdapter: ServerlessCloudAdapter;
   private chat: ChatInstance | null = null;
   private logger: Logger | null = null;
   private formatConverter = new TeamsFormatConverter();
@@ -75,7 +72,7 @@ export class TeamsAdapter implements Adapter<TeamsThreadId, unknown> {
       MicrosoftAppPassword: config.appPassword,
     });
 
-    this.botAdapter = new CloudAdapter(auth);
+    this.botAdapter = new ServerlessCloudAdapter(auth);
   }
 
   async initialize(chat: ChatInstance): Promise<void> {
@@ -87,78 +84,41 @@ export class TeamsAdapter implements Adapter<TeamsThreadId, unknown> {
     request: Request,
     options?: WebhookOptions
   ): Promise<Response> {
-    // Convert web Request to Node-style req/res for botbuilder
     const body = await request.text();
-    console.log("[teams] webhook body:", body);
 
-    const headers: Record<string, string> = {};
-    request.headers.forEach((value, key) => {
-      headers[key] = value;
-    });
-    console.log("[teams] webhook headers:", JSON.stringify(headers, null, 2));
+    let activity: Activity;
+    try {
+      activity = JSON.parse(body);
+    } catch (e) {
+      this.logger?.error("Failed to parse request body", { error: e });
+      return new Response("Invalid JSON", { status: 400 });
+    }
 
-    return new Promise((resolve) => {
-      // Create mock req/res objects for botbuilder
-      let req: BotRequest;
-      try {
-        req = {
-          body: JSON.parse(body),
-          headers,
-          method: request.method,
-        };
-      } catch (e) {
-        this.logger?.error("Failed to parse request body", { error: e });
-        resolve(new Response("Invalid JSON", { status: 400 }));
-        return;
-      }
+    // Get the auth header for token validation
+    const authHeader = request.headers.get("authorization") || "";
 
-      let responseBody = "";
-      let responseStatus = 200;
-      let resolved = false;
-
-      const res: BotResponse = {
-        status: (code: number) => {
-          responseStatus = code;
-          return res;
-        },
-        send: (data?: string) => {
-          if (resolved) return;
-          resolved = true;
-          responseBody = data || "";
-          resolve(
-            new Response(responseBody, {
-              status: responseStatus,
-              headers: { "Content-Type": "application/json" },
-            })
-          );
-        },
-        end: () => {
-          if (resolved) return;
-          resolved = true;
-          resolve(new Response(responseBody, { status: responseStatus }));
-        },
-      };
-
-      // Cast to satisfy botbuilder's Node.js-style req/res types
-      // Our mock objects implement the minimal interface needed
-      // biome-ignore lint/suspicious/noExplicitAny: botbuilder expects Node.js types incompatible with our mock
-      this.botAdapter
-        .process(req as any, res as any, async (context) => {
+    try {
+      // Use handleActivity which takes the activity directly
+      // instead of mocking Node.js req/res objects
+      await this.botAdapter.handleActivity(
+        authHeader,
+        activity,
+        async (context) => {
           await this.handleTurn(context, options);
-        })
-        .catch((error) => {
-          this.logger?.error("Bot adapter process error", { error });
-          if (!resolved) {
-            resolved = true;
-            resolve(
-              new Response(JSON.stringify({ error: "Internal error" }), {
-                status: 500,
-                headers: { "Content-Type": "application/json" },
-              })
-            );
-          }
-        });
-    });
+        }
+      );
+
+      return new Response(JSON.stringify({}), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    } catch (error) {
+      this.logger?.error("Bot adapter process error", { error });
+      return new Response(JSON.stringify({ error: "Internal error" }), {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
   }
 
   private async handleTurn(
