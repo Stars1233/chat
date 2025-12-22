@@ -72,45 +72,77 @@ export interface GoogleChatThreadId {
   threadName?: string;
 }
 
-/** Google Chat event payload (raw message format) */
-export interface GoogleChatEvent {
-  type: string;
-  eventTime: string;
-  space: {
+/** Google Chat message structure */
+export interface GoogleChatMessage {
+  name: string;
+  sender: {
+    name: string;
+    displayName: string;
+    type: string;
+    email?: string;
+  };
+  text: string;
+  argumentText?: string;
+  formattedText?: string;
+  thread?: {
+    name: string;
+  };
+  space?: {
     name: string;
     type: string;
     displayName?: string;
   };
-  message?: {
-    name: string;
-    sender: {
-      name: string;
-      displayName: string;
-      type: string;
-    };
-    text: string;
-    thread?: {
-      name: string;
-    };
-    createTime: string;
-    annotations?: Array<{
-      type: string;
-      userMention?: {
-        user: { name: string; displayName: string };
-        type: string;
-      };
-    }>;
-    attachment?: Array<{
-      name: string;
-      contentName: string;
-      contentType: string;
-      downloadUri?: string;
-    }>;
-  };
-  user?: {
-    name: string;
-    displayName: string;
+  createTime: string;
+  annotations?: Array<{
     type: string;
+    startIndex?: number;
+    length?: number;
+    userMention?: {
+      user: { name: string; displayName: string; type: string };
+      type: string;
+    };
+  }>;
+  attachment?: Array<{
+    name: string;
+    contentName: string;
+    contentType: string;
+    downloadUri?: string;
+  }>;
+}
+
+/** Google Chat space structure */
+export interface GoogleChatSpace {
+  name: string;
+  type: string;
+  displayName?: string;
+  spaceThreadingState?: string;
+}
+
+/** Google Chat user structure */
+export interface GoogleChatUser {
+  name: string;
+  displayName: string;
+  type: string;
+  email?: string;
+}
+
+/**
+ * Google Workspace Add-ons event format.
+ * This is the format used when configuring the app via Google Cloud Console.
+ */
+export interface GoogleChatEvent {
+  commonEventObject?: {
+    userLocale?: string;
+    hostApp?: string;
+    platform?: string;
+  };
+  chat?: {
+    user?: GoogleChatUser;
+    eventTime?: string;
+    messagePayload?: {
+      space: GoogleChatSpace;
+      message: GoogleChatMessage;
+    };
   };
 }
 
@@ -167,41 +199,30 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
   ): Promise<Response> {
     this.logger?.debug("webhook received");
 
-    // Google Chat sends events as JSON POST requests
-    // Verification is done via the service account / bearer token
     const body = await request.text();
-    this.logger?.debug("webhook body", { body: body });
 
     let event: GoogleChatEvent;
-
     try {
       event = JSON.parse(body);
     } catch {
       return new Response("Invalid JSON", { status: 400 });
     }
 
-    this.logger?.debug("event parsed", {
-      type: event.type,
-      hasMessage: !!event.message,
-      space: event.space?.name,
-    });
-
-    // Handle different event types
-    switch (event.type) {
-      case "MESSAGE":
-        this.handleMessageEvent(event, options);
-        break;
-      case "ADDED_TO_SPACE":
-        this.logger?.info("Added to space", { space: event.space?.name });
-        break;
-      case "REMOVED_FROM_SPACE":
-        this.logger?.info("Removed from space", { space: event.space?.name });
-        break;
-      default:
-        this.logger?.debug("Unhandled event type", { type: event.type });
+    // Check for message payload in the Add-ons format
+    const messagePayload = event.chat?.messagePayload;
+    if (messagePayload) {
+      this.logger?.debug("message event", {
+        space: messagePayload.space.name,
+        sender: messagePayload.message.sender?.displayName,
+        text: messagePayload.message.text?.slice(0, 50),
+      });
+      this.handleMessageEvent(event, options);
+    } else {
+      this.logger?.debug("Non-message event received", {
+        hasChat: !!event.chat,
+        hasCommonEventObject: !!event.commonEventObject,
+      });
     }
-
-    this.logger?.debug("returning response");
 
     // Google Chat expects an empty response or a message response
     return new Response(JSON.stringify({}), {
@@ -218,8 +239,10 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
       return;
     }
 
-    const message = event.message;
-    if (!message) return;
+    const messagePayload = event.chat?.messagePayload;
+    if (!messagePayload) return;
+
+    const message = messagePayload.message;
 
     // Skip bot's own messages
     if (message.sender?.type === "BOT") {
@@ -228,7 +251,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
 
     const threadName = message.thread?.name || message.name;
     const threadId = this.encodeThreadId({
-      spaceName: event.space.name,
+      spaceName: messagePayload.space.name,
       threadName,
     });
 
@@ -254,16 +277,12 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
     event: GoogleChatEvent,
     threadId: string
   ): Message<unknown> {
-    const message = event.message;
+    const message = event.chat?.messagePayload?.message;
     if (!message) {
-      throw new Error("Event has no message");
+      throw new Error("Event has no message payload");
     }
-    const text = message.text || "";
 
-    // Check for @mentions to detect if this is a mention of our bot
-    const _isMentionedBot = message.annotations?.some(
-      (ann) => ann.type === "USER_MENTION" && ann.userMention?.type === "BOT"
-    );
+    const text = message.text || "";
 
     return {
       id: message.name,
@@ -375,7 +394,6 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
     _emoji: string
   ): Promise<void> {
     // Google Chat requires the reaction name to delete it
-    // This is a simplified implementation
     this.logger?.warn("removeReaction requires reaction name, not implemented");
   }
 
@@ -469,9 +487,14 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
 
   parseMessage(raw: unknown): Message<unknown> {
     const event = raw as GoogleChatEvent;
-    const threadName = event.message?.thread?.name || event.message?.name || "";
+    const messagePayload = event.chat?.messagePayload;
+    if (!messagePayload) {
+      throw new Error("Cannot parse non-message event");
+    }
+    const threadName =
+      messagePayload.message.thread?.name || messagePayload.message.name;
     const threadId = this.encodeThreadId({
-      spaceName: event.space.name,
+      spaceName: messagePayload.space.name,
       threadName,
     });
     return this.parseGoogleChatMessage(event, threadId);

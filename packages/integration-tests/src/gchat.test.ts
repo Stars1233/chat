@@ -52,19 +52,22 @@ describe("Google Chat Integration", () => {
   });
 
   describe("event handling", () => {
-    it("should handle ADDED_TO_SPACE event", async () => {
+    it("should handle non-message events gracefully", async () => {
+      // Event without messagePayload (e.g., app installation, card interactions, etc.)
       const event = {
-        type: "ADDED_TO_SPACE",
-        eventTime: new Date().toISOString(),
-        space: {
-          name: TEST_SPACE_NAME,
-          type: "ROOM",
-          displayName: "New Space",
+        commonEventObject: {
+          userLocale: "en",
+          hostApp: "CHAT",
+          platform: "WEB",
         },
-        user: {
-          name: "users/user-123",
-          displayName: "John Doe",
-          type: "HUMAN",
+        chat: {
+          user: {
+            name: "users/user-123",
+            displayName: "John Doe",
+            type: "HUMAN",
+          },
+          eventTime: new Date().toISOString(),
+          // No messagePayload - represents a non-message event
         },
       };
 

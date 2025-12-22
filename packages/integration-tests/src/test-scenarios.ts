@@ -3,14 +3,17 @@
  * This ensures consistent behavior testing across Slack, Teams, and Google Chat.
  */
 
-import type { Chat } from "chat-sdk";
+import type { Adapter, Chat } from "chat-sdk";
 import type { Mock } from "vitest";
-import { vi } from "vitest";
+import { expect, vi } from "vitest";
 
 /**
  * Common interface for adapter-specific test context
  */
-export interface AdapterTestContext<TAdapter, TMockClient> {
+export interface AdapterTestContext<
+  TAdapter extends Adapter<unknown, unknown>,
+  TMockClient,
+> {
   chat: Chat<Record<string, TAdapter>>;
   adapter: TAdapter;
   mockClient: TMockClient;
@@ -158,7 +161,10 @@ export interface AuthErrorScenario {
 /**
  * Standard test runner for mention scenarios
  */
-export async function runMentionTest<TAdapter, TMockClient>(
+export async function runMentionTest<
+  TAdapter extends Adapter<unknown, unknown>,
+  TMockClient,
+>(
   ctx: AdapterTestContext<TAdapter, TMockClient>,
   scenario: MentionScenario,
   handlers: {
@@ -197,7 +203,10 @@ export interface ConversationMessage {
   expectReaction?: string;
 }
 
-export async function runConversationFlowTest<TAdapter, TMockClient>(
+export async function runConversationFlowTest<
+  TAdapter extends Adapter<unknown, unknown>,
+  TMockClient,
+>(
   ctx: AdapterTestContext<TAdapter, TMockClient>,
   threadId: string,
   messages: ConversationMessage[],

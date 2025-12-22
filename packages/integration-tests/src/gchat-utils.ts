@@ -17,7 +17,6 @@ export const GCHAT_BOT_NAME = "TestBot";
  * Options for creating a Google Chat event
  */
 export interface GoogleChatEventOptions {
-  type?: string;
   text: string;
   messageName: string;
   spaceName: string;
@@ -30,11 +29,11 @@ export interface GoogleChatEventOptions {
 }
 
 /**
- * Create a realistic Google Chat event payload
+ * Create a realistic Google Chat event payload in the modern Add-ons format.
+ * This matches the format used when configuring apps via Google Cloud Console.
  */
 export function createGoogleChatEvent(options: GoogleChatEventOptions) {
   const {
-    type = "MESSAGE",
     text,
     messageName,
     spaceName,
@@ -64,37 +63,45 @@ export function createGoogleChatEvent(options: GoogleChatEventOptions) {
       ]
     : [];
 
+  // Modern Add-ons event format with chat.messagePayload
   return {
-    type,
-    eventTime,
-    space: {
-      name: spaceName,
-      type: "ROOM",
-      displayName: "Test Space",
-      spaceThreadingState: "THREADED_MESSAGES",
+    commonEventObject: {
+      userLocale: "en",
+      hostApp: "CHAT",
+      platform: "WEB",
     },
-    message: {
-      name: messageName,
-      sender: {
+    chat: {
+      user: {
         name: senderId,
         displayName: senderName,
         type: senderType,
-        domainId: "domain-123",
       },
-      text,
-      thread: threadName ? { name: threadName } : undefined,
-      createTime: eventTime,
-      annotations: annotations.length > 0 ? annotations : undefined,
-      argumentText: hasBotMention ? text.replace(`@${GCHAT_BOT_NAME}`, "").trim() : text,
-      space: {
-        name: spaceName,
-        type: "ROOM",
+      eventTime,
+      messagePayload: {
+        space: {
+          name: spaceName,
+          type: "ROOM",
+          displayName: "Test Space",
+          spaceThreadingState: "THREADED_MESSAGES",
+        },
+        message: {
+          name: messageName,
+          sender: {
+            name: senderId,
+            displayName: senderName,
+            type: senderType,
+          },
+          text,
+          thread: threadName ? { name: threadName } : undefined,
+          createTime: eventTime,
+          annotations: annotations.length > 0 ? annotations : undefined,
+          argumentText: hasBotMention ? text.replace(`@${GCHAT_BOT_NAME}`, "").trim() : text,
+          space: {
+            name: spaceName,
+            type: "ROOM",
+          },
+        },
       },
-    },
-    user: {
-      name: senderId,
-      displayName: senderName,
-      type: senderType,
     },
   };
 }
