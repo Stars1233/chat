@@ -10,7 +10,7 @@ export const bot = new Chat({
   userName: process.env.BOT_USERNAME || "mybot",
   adapters,
   state,
-  logger: process.env.NODE_ENV === "development" ? "debug" : "info",
+  logger: "debug",
 });
 
 // Handle new @mentions of the bot
