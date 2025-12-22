@@ -84,7 +84,7 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
 
   async initialize(chat: ChatInstance): Promise<void> {
     this.chat = chat;
-    this.logger = chat.getLogger();
+    this.logger = chat.getLogger(this.name);
 
     // Fetch bot user ID if not provided
     if (!this._botUserId) {

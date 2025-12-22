@@ -115,20 +115,14 @@ export class Chat<
     request: Request,
     options?: WebhookOptions
   ): Promise<Response> {
-    this.logger.debug("Webhook received", { adapter: adapterName });
-
     // Ensure initialization
     await this.ensureInitialized();
-    this.logger.debug("Initialization complete", { adapter: adapterName });
 
     const adapter = this.adapters.get(adapterName);
     if (!adapter) {
       return new Response(`Unknown adapter: ${adapterName}`, { status: 404 });
     }
 
-    this.logger.debug("Calling adapter webhook handler", {
-      adapter: adapterName,
-    });
     return adapter.handleWebhook(request, options);
   }
 
@@ -223,7 +217,10 @@ export class Chat<
     return this.userName;
   }
 
-  getLogger(): Logger {
+  getLogger(prefix?: string): Logger {
+    if (prefix) {
+      return this.logger.child(prefix);
+    }
     return this.logger;
   }
 

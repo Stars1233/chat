@@ -80,7 +80,7 @@ export class TeamsAdapter implements Adapter<TeamsThreadId, unknown> {
 
   async initialize(chat: ChatInstance): Promise<void> {
     this.chat = chat;
-    this.logger = chat.getLogger();
+    this.logger = chat.getLogger(this.name);
   }
 
   async handleWebhook(

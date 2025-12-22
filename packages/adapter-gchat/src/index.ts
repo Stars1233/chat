@@ -157,19 +157,19 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
 
   async initialize(chat: ChatInstance): Promise<void> {
     this.chat = chat;
-    this.logger = chat.getLogger();
+    this.logger = chat.getLogger(this.name);
   }
 
   async handleWebhook(
     request: Request,
     options?: WebhookOptions,
   ): Promise<Response> {
-    this.logger?.debug("gchat webhook received");
+    this.logger?.debug("webhook received");
 
     // Google Chat sends events as JSON POST requests
     // Verification is done via the service account / bearer token
     const body = await request.text();
-    this.logger?.debug("gchat webhook body read", { length: body.length });
+    this.logger?.debug("webhook body", { body: body.slice(0, 500) });
 
     let event: GoogleChatEvent;
 
@@ -179,7 +179,11 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
       return new Response("Invalid JSON", { status: 400 });
     }
 
-    this.logger?.debug("gchat webhook event parsed", { type: event.type });
+    this.logger?.debug("event parsed", {
+      type: event.type,
+      hasMessage: !!event.message,
+      space: event.space?.name,
+    });
 
     // Handle different event types
     switch (event.type) {
@@ -187,16 +191,16 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
         this.handleMessageEvent(event, options);
         break;
       case "ADDED_TO_SPACE":
-        // Bot was added to a space
         this.logger?.info("Added to space", { space: event.space?.name });
         break;
       case "REMOVED_FROM_SPACE":
-        // Bot was removed from a space
         this.logger?.info("Removed from space", { space: event.space?.name });
         break;
+      default:
+        this.logger?.debug("Unhandled event type", { type: event.type });
     }
 
-    this.logger?.debug("gchat webhook returning response");
+    this.logger?.debug("returning response");
 
     // Google Chat expects an empty response or a message response
     return new Response(JSON.stringify({}), {

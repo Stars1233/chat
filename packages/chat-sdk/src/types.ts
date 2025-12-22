@@ -15,39 +15,54 @@ export interface Logger {
   info(message: string, ...args: unknown[]): void;
   warn(message: string, ...args: unknown[]): void;
   error(message: string, ...args: unknown[]): void;
+  /** Create a sub-logger with a prefix */
+  child(prefix: string): Logger;
 }
 
 /**
  * Default console logger implementation.
  */
 export class ConsoleLogger implements Logger {
-  constructor(private level: LogLevel = "info") {}
+  private prefix: string;
+
+  constructor(
+    private level: LogLevel = "info",
+    prefix = "chat-sdk",
+  ) {
+    this.prefix = prefix;
+  }
 
   private shouldLog(level: LogLevel): boolean {
     const levels: LogLevel[] = ["debug", "info", "warn", "error", "silent"];
     return levels.indexOf(level) >= levels.indexOf(this.level);
   }
 
+  child(prefix: string): Logger {
+    return new ConsoleLogger(this.level, `${this.prefix}:${prefix}`);
+  }
+
   // eslint-disable-next-line no-console
   debug(message: string, ...args: unknown[]): void {
     if (this.shouldLog("debug"))
-      console.debug(`[chat-sdk] ${message}`, ...args);
+      console.debug(`[${this.prefix}] ${message}`, ...args);
   }
 
   // eslint-disable-next-line no-console
   info(message: string, ...args: unknown[]): void {
-    if (this.shouldLog("info")) console.info(`[chat-sdk] ${message}`, ...args);
+    if (this.shouldLog("info"))
+      console.info(`[${this.prefix}] ${message}`, ...args);
   }
 
   // eslint-disable-next-line no-console
   warn(message: string, ...args: unknown[]): void {
-    if (this.shouldLog("warn")) console.warn(`[chat-sdk] ${message}`, ...args);
+    if (this.shouldLog("warn"))
+      console.warn(`[${this.prefix}] ${message}`, ...args);
   }
 
   // eslint-disable-next-line no-console
   error(message: string, ...args: unknown[]): void {
     if (this.shouldLog("error"))
-      console.error(`[chat-sdk] ${message}`, ...args);
+      console.error(`[${this.prefix}] ${message}`, ...args);
   }
 }
 
@@ -183,8 +198,8 @@ export interface ChatInstance {
   ): Promise<void>;
   getState(): StateAdapter;
   getUserName(): string;
-  /** Get the configured logger */
-  getLogger(): Logger;
+  /** Get the configured logger, optionally with a child prefix */
+  getLogger(prefix?: string): Logger;
 }
 
 // =============================================================================
