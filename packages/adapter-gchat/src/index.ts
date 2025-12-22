@@ -164,9 +164,13 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
     request: Request,
     options?: WebhookOptions,
   ): Promise<Response> {
+    this.logger?.debug("gchat webhook received");
+
     // Google Chat sends events as JSON POST requests
     // Verification is done via the service account / bearer token
     const body = await request.text();
+    this.logger?.debug("gchat webhook body read", { length: body.length });
+
     let event: GoogleChatEvent;
 
     try {
@@ -174,6 +178,8 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
     } catch {
       return new Response("Invalid JSON", { status: 400 });
     }
+
+    this.logger?.debug("gchat webhook event parsed", { type: event.type });
 
     // Handle different event types
     switch (event.type) {
@@ -189,6 +195,8 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
         this.logger?.info("Removed from space", { space: event.space?.name });
         break;
     }
+
+    this.logger?.debug("gchat webhook returning response");
 
     // Google Chat expects an empty response or a message response
     return new Response(JSON.stringify({}), {

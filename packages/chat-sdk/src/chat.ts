@@ -115,14 +115,20 @@ export class Chat<
     request: Request,
     options?: WebhookOptions
   ): Promise<Response> {
+    this.logger.debug("Webhook received", { adapter: adapterName });
+
     // Ensure initialization
     await this.ensureInitialized();
+    this.logger.debug("Initialization complete", { adapter: adapterName });
 
     const adapter = this.adapters.get(adapterName);
     if (!adapter) {
       return new Response(`Unknown adapter: ${adapterName}`, { status: 404 });
     }
 
+    this.logger.debug("Calling adapter webhook handler", {
+      adapter: adapterName,
+    });
     return adapter.handleWebhook(request, options);
   }
 
@@ -148,10 +154,14 @@ export class Chat<
     await this.state.connect();
     this.logger.debug("State connected");
 
-    const initPromises = Array.from(this.adapters.values()).map((adapter) => {
-      this.logger.debug("Initializing adapter", { adapter: adapter.name });
-      return adapter.initialize(this);
-    });
+    const initPromises = Array.from(this.adapters.values()).map(
+      async (adapter) => {
+        this.logger.debug("Initializing adapter", adapter.name);
+        const result = await adapter.initialize(this);
+        this.logger.debug("Adapter initialized", adapter.name);
+        return result;
+      }
+    );
     await Promise.all(initPromises);
 
     this.initialized = true;
