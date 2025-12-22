@@ -41,8 +41,13 @@ function createVercelOIDCAuth() {
     );
   }
 
+  const audience = `//iam.googleapis.com/projects/${projectNumber}/locations/global/workloadIdentityPools/${poolId}/providers/${providerId}`;
+  console.log(
+    "[gchat] Using Workload Identity Federation with audience:",
+    audience
+  );
   const client = new IdentityPoolClient({
-    audience: `//iam.googleapis.com/projects/${projectNumber}/locations/global/workloadIdentityPools/${poolId}/providers/${providerId}`,
+    audience,
     subject_token_type: "urn:ietf:params:oauth:token-type:jwt",
     service_account_impersonation_url: `https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/${serviceAccountEmail}:generateAccessToken`,
     subject_token_supplier: new VercelOidcSupplier(),
