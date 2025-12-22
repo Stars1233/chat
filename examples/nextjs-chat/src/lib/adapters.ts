@@ -74,12 +74,13 @@ export function buildAdapters(): Adapters {
   });
 
   // Teams adapter
-  if (process.env.TEAMS_APP_ID && process.env.TEAMS_APP_PASSWORD) {
-    adapters.teams = createTeamsAdapter({
-      appId: process.env.TEAMS_APP_ID,
-      appPassword: process.env.TEAMS_APP_PASSWORD,
-    });
+  if (!process.env.TEAMS_APP_ID || !process.env.TEAMS_APP_PASSWORD) {
+    throw new Error("TEAMS_APP_ID and TEAMS_APP_PASSWORD are required");
   }
+  adapters.teams = createTeamsAdapter({
+    appId: process.env.TEAMS_APP_ID,
+    appPassword: process.env.TEAMS_APP_PASSWORD,
+  });
 
   // Google Chat adapter
   // Option 1: Vercel OIDC (Workload Identity Federation)
