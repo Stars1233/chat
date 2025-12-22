@@ -1,9 +1,19 @@
 {
   "$schema": "https://turbo.build/schema.json",
+  "globalEnv": [
+    "NODE_ENV",
+    "SLACK_BOT_TOKEN",
+    "SLACK_SIGNING_SECRET",
+    "TEAMS_APP_ID",
+    "TEAMS_APP_PASSWORD",
+    "GOOGLE_CHAT_CREDENTIALS",
+    "BOT_USERNAME",
+    "REDIS_URL"
+  ],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": ["dist/**"]
+      "outputs": ["dist/**", ".next/**", "!.next/cache/**"]
     },
     "dev": {
       "cache": false,
