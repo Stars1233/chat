@@ -37,7 +37,8 @@ export interface GoogleChatAdapterServiceAccountConfig
 }
 
 /** Config using Application Default Credentials (ADC) or Workload Identity Federation */
-export interface GoogleChatAdapterADCConfig extends GoogleChatAdapterBaseConfig {
+export interface GoogleChatAdapterADCConfig
+  extends GoogleChatAdapterBaseConfig {
   /**
    * Use Application Default Credentials.
    * Works with:
@@ -148,7 +149,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
       auth = config.auth;
     } else {
       throw new Error(
-        "GoogleChatAdapter requires one of: credentials, useApplicationDefaultCredentials, or auth",
+        "GoogleChatAdapter requires one of: credentials, useApplicationDefaultCredentials, or auth"
       );
     }
 
@@ -162,14 +163,14 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
 
   async handleWebhook(
     request: Request,
-    options?: WebhookOptions,
+    options?: WebhookOptions
   ): Promise<Response> {
     this.logger?.debug("webhook received");
 
     // Google Chat sends events as JSON POST requests
     // Verification is done via the service account / bearer token
     const body = await request.text();
-    this.logger?.debug("webhook body", { body: body.slice(0, 500) });
+    this.logger?.debug("webhook body", { body: body });
 
     let event: GoogleChatEvent;
 
@@ -210,7 +211,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
 
   private handleMessageEvent(
     event: GoogleChatEvent,
-    options?: WebhookOptions,
+    options?: WebhookOptions
   ): void {
     if (!this.chat) {
       this.logger?.warn("Chat instance not initialized");
@@ -251,7 +252,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
 
   private parseGoogleChatMessage(
     event: GoogleChatEvent,
-    threadId: string,
+    threadId: string
   ): Message<unknown> {
     const message = event.message;
     if (!message) {
@@ -261,7 +262,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
 
     // Check for @mentions to detect if this is a mention of our bot
     const _isMentionedBot = message.annotations?.some(
-      (ann) => ann.type === "USER_MENTION" && ann.userMention?.type === "BOT",
+      (ann) => ann.type === "USER_MENTION" && ann.userMention?.type === "BOT"
     );
 
     return {
@@ -294,7 +295,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
 
   async postMessage(
     threadId: string,
-    message: PostableMessage,
+    message: PostableMessage
   ): Promise<RawMessage<unknown>> {
     const { spaceName, threadName } = this.decodeThreadId(threadId);
 
@@ -320,7 +321,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
   async editMessage(
     threadId: string,
     messageId: string,
-    message: PostableMessage,
+    message: PostableMessage
   ): Promise<RawMessage<unknown>> {
     try {
       const response = await this.chatApi.spaces.messages.update({
@@ -354,7 +355,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
   async addReaction(
     _threadId: string,
     messageId: string,
-    emoji: string,
+    emoji: string
   ): Promise<void> {
     try {
       await this.chatApi.spaces.messages.reactions.create({
@@ -371,7 +372,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
   async removeReaction(
     _threadId: string,
     _messageId: string,
-    _emoji: string,
+    _emoji: string
   ): Promise<void> {
     // Google Chat requires the reaction name to delete it
     // This is a simplified implementation
@@ -384,7 +385,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
 
   async fetchMessages(
     threadId: string,
-    options: FetchOptions = {},
+    options: FetchOptions = {}
   ): Promise<Message<unknown>[]> {
     const { spaceName } = this.decodeThreadId(threadId);
 
@@ -487,7 +488,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
       throw new RateLimitError(
         "Google Chat rate limit exceeded",
         undefined,
-        error,
+        error
       );
     }
 
@@ -496,7 +497,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
 }
 
 export function createGoogleChatAdapter(
-  config: GoogleChatAdapterConfig,
+  config: GoogleChatAdapterConfig
 ): GoogleChatAdapter {
   return new GoogleChatAdapter(config);
 }
