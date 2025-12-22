@@ -14,16 +14,56 @@ import { RateLimitError } from "chat-sdk";
 import { type chat_v1, google } from "googleapis";
 import { GoogleChatFormatConverter } from "./markdown";
 
-export interface GoogleChatAdapterConfig {
-  /** Service account credentials JSON */
-  credentials: {
-    client_email: string;
-    private_key: string;
-    project_id?: string;
-  };
+/** Service account credentials for JWT auth */
+export interface ServiceAccountCredentials {
+  client_email: string;
+  private_key: string;
+  project_id?: string;
+}
+
+/** Base config options shared by all auth methods */
+export interface GoogleChatAdapterBaseConfig {
   /** Override bot username (optional) */
   userName?: string;
 }
+
+/** Config using service account credentials (JSON key file) */
+export interface GoogleChatAdapterServiceAccountConfig
+  extends GoogleChatAdapterBaseConfig {
+  /** Service account credentials JSON */
+  credentials: ServiceAccountCredentials;
+  auth?: never;
+  useApplicationDefaultCredentials?: never;
+}
+
+/** Config using Application Default Credentials (ADC) or Workload Identity Federation */
+export interface GoogleChatAdapterADCConfig extends GoogleChatAdapterBaseConfig {
+  /**
+   * Use Application Default Credentials.
+   * Works with:
+   * - GOOGLE_APPLICATION_CREDENTIALS env var pointing to a JSON key file
+   * - Workload Identity Federation (external_account JSON)
+   * - GCE/Cloud Run/Cloud Functions default service account
+   * - gcloud auth application-default login (local development)
+   */
+  useApplicationDefaultCredentials: true;
+  credentials?: never;
+  auth?: never;
+}
+
+/** Config using a custom auth client */
+export interface GoogleChatAdapterCustomAuthConfig
+  extends GoogleChatAdapterBaseConfig {
+  /** Custom auth client (JWT, OAuth2, GoogleAuth, etc.) */
+  auth: Parameters<typeof google.chat>[0]["auth"];
+  credentials?: never;
+  useApplicationDefaultCredentials?: never;
+}
+
+export type GoogleChatAdapterConfig =
+  | GoogleChatAdapterServiceAccountConfig
+  | GoogleChatAdapterADCConfig
+  | GoogleChatAdapterCustomAuthConfig;
 
 /** Google Chat-specific thread ID data */
 export interface GoogleChatThreadId {
@@ -85,12 +125,32 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
   constructor(config: GoogleChatAdapterConfig) {
     this.userName = config.userName || "bot";
 
-    // Create JWT auth client
-    const auth = new google.auth.JWT({
-      email: config.credentials.client_email,
-      key: config.credentials.private_key,
-      scopes: ["https://www.googleapis.com/auth/chat.bot"],
-    });
+    let auth: Parameters<typeof google.chat>[0]["auth"];
+
+    if ("credentials" in config && config.credentials) {
+      // Service account credentials (JWT)
+      auth = new google.auth.JWT({
+        email: config.credentials.client_email,
+        key: config.credentials.private_key,
+        scopes: ["https://www.googleapis.com/auth/chat.bot"],
+      });
+    } else if (
+      "useApplicationDefaultCredentials" in config &&
+      config.useApplicationDefaultCredentials
+    ) {
+      // Application Default Credentials (ADC)
+      // Works with Workload Identity Federation, GCE metadata, GOOGLE_APPLICATION_CREDENTIALS env var
+      auth = new google.auth.GoogleAuth({
+        scopes: ["https://www.googleapis.com/auth/chat.bot"],
+      });
+    } else if ("auth" in config && config.auth) {
+      // Custom auth client provided directly
+      auth = config.auth;
+    } else {
+      throw new Error(
+        "GoogleChatAdapter requires one of: credentials, useApplicationDefaultCredentials, or auth",
+      );
+    }
 
     this.chatApi = google.chat({ version: "v1", auth });
   }

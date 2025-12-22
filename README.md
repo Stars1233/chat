@@ -97,6 +97,8 @@ createTeamsAdapter({
 
 ### Google Chat
 
+Service account credentials (JSON key):
+
 ```typescript
 createGoogleChatAdapter({
   credentials: {
@@ -104,6 +106,26 @@ createGoogleChatAdapter({
     private_key: "...",
     project_id: "...",
   },
+});
+```
+
+Application Default Credentials (Workload Identity Federation, GCE, Cloud Run):
+
+```typescript
+createGoogleChatAdapter({
+  useApplicationDefaultCredentials: true,
+});
+```
+
+Custom auth client:
+
+```typescript
+import { google } from "googleapis";
+
+createGoogleChatAdapter({
+  auth: new google.auth.GoogleAuth({
+    scopes: ["https://www.googleapis.com/auth/chat.bot"],
+  }),
 });
 ```
 

@@ -1,0 +1,1 @@
+- Install npm files with pnpm rather than manually editing package.json
