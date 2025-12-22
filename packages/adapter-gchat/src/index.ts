@@ -321,6 +321,10 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
     try {
       const response = await this.chatApi.spaces.messages.create({
         parent: spaceName,
+        // Required to reply in an existing thread
+        messageReplyOption: threadName
+          ? "REPLY_MESSAGE_FALLBACK_TO_NEW_THREAD"
+          : undefined,
         requestBody: {
           text: this.formatConverter.renderPostable(message),
           thread: threadName ? { name: threadName } : undefined,
