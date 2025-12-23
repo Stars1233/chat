@@ -67,7 +67,7 @@ export interface MentionScenario {
 
 /**
  * Scenario: Subscribed thread handling
- * Tests that messages in subscribed threads trigger onSubscribed handler.
+ * Tests that messages in subscribed threads trigger onSubscribedMessage handler.
  */
 export interface SubscriptionScenario {
   name: string;

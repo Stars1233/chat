@@ -65,7 +65,7 @@ export type {
   RawMessage,
   SentMessage,
   StateAdapter,
-  SubscribedHandler,
+  SubscribedMessageHandler,
   Thread,
   ThreadInfo,
   WebhookOptions,

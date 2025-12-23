@@ -445,7 +445,7 @@ export type MessageHandler = (
   message: Message,
 ) => Promise<void>;
 
-export type SubscribedHandler = (
+export type SubscribedMessageHandler = (
   thread: Thread,
   message: Message,
 ) => Promise<void>;

@@ -139,7 +139,7 @@ describe("Google Chat Integration", () => {
       });
 
       const subscribedHandler = vi.fn();
-      chat.onSubscribed(async (thread, message) => {
+      chat.onSubscribedMessage(async (thread, message) => {
         subscribedHandler(thread.id, message.text);
         await thread.post(`You said: ${message.text}`);
       });
@@ -398,7 +398,7 @@ describe("Google Chat Integration", () => {
         await thread.post("Hi! I'm now listening to this thread. How can I help?");
       });
 
-      chat.onSubscribed(async (thread, message) => {
+      chat.onSubscribedMessage(async (thread, message) => {
         conversationLog.push(`subscribed: ${message.text}`);
         messageCount++;
 
@@ -526,7 +526,7 @@ describe("Google Chat Integration", () => {
         await thread.post("Subscribed to Google Chat thread");
       });
 
-      chat.onSubscribed(async (thread, message) => {
+      chat.onSubscribedMessage(async (thread, message) => {
         const threadId = thread.id;
         if (!threadResponses[threadId]) {
           threadResponses[threadId] = [];

@@ -9,7 +9,7 @@ import type {
   Message,
   MessageHandler,
   StateAdapter,
-  SubscribedHandler,
+  SubscribedMessageHandler,
   Thread,
   WebhookOptions,
 } from "./types";
@@ -64,7 +64,7 @@ export class Chat<
 
   private mentionHandlers: MentionHandler[] = [];
   private messagePatterns: MessagePattern[] = [];
-  private subscribedHandlers: SubscribedHandler[] = [];
+  private subscribedMessageHandlers: SubscribedMessageHandler[] = [];
 
   /** Initialization state */
   private initPromise: Promise<void> | null = null;
@@ -195,10 +195,13 @@ export class Chat<
 
   /**
    * Register a handler for messages in subscribed threads.
+   * This will NOT fire for:
+   * - The message that triggered the subscription (e.g., the initial @mention)
+   * - Messages sent by the bot itself
    */
-  onSubscribed(handler: SubscribedHandler): void {
-    this.subscribedHandlers.push(handler);
-    this.logger.debug("Registered subscribed handler");
+  onSubscribedMessage(handler: SubscribedMessageHandler): void {
+    this.subscribedMessageHandlers.push(handler);
+    this.logger.debug("Registered subscribed message handler");
   }
 
   /**
@@ -265,7 +268,7 @@ export class Chat<
       const isSubscribed = await this.state.isSubscribed(threadId);
       if (isSubscribed) {
         this.logger.debug("Message in subscribed thread", { threadId });
-        await this.runHandlers(this.subscribedHandlers, thread, message);
+        await this.runHandlers(this.subscribedMessageHandlers, thread, message);
         return;
       }
 

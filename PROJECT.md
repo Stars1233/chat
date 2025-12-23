@@ -74,7 +74,7 @@ bot.onNewMessage(/topic/, (thread, message) => {
   await thread.post("Thanks for adding me");
 });
 
-bot.onSubscribed(async (thread, newMessage) => {
+bot.onSubscribedMessage(async (thread, newMessage) => {
   const reply = myAgent.generate({
     recentMessages: thread.recentMessages,
     newMessage

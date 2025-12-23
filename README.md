@@ -52,7 +52,7 @@ bot.onNewMention(async (thread, message) => {
 });
 
 // Handle messages in subscribed threads
-bot.onSubscribed(async (thread, message) => {
+bot.onSubscribedMessage(async (thread, message) => {
   await thread.post(`You said: "${message.text}"`);
 });
 

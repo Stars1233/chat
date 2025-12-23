@@ -215,7 +215,7 @@ class Chat {
       pattern: RegExp;
       handler: (thread: Thread, message: Message) => Promise<void>;
     }>;
-    onSubscribed: Array<(thread: Thread, message: Message) => Promise<void>>;
+    onSubscribedMessage: Array<(thread: Thread, message: Message) => Promise<void>>;
   };
 
   constructor(config: ChatConfig);
@@ -228,7 +228,7 @@ class Chat {
     pattern: RegExp,
     handler: (thread: Thread, message: Message) => Promise<void>
   ): void;
-  onSubscribed(
+  onSubscribedMessage(
     handler: (thread: Thread, message: Message) => Promise<void>
   ): void;
 
@@ -252,7 +252,7 @@ class Chat {
 4. Chat class:
    - Constructs `Thread` object
    - Acquires lock on thread (blocks if another instance is processing)
-   - Checks if subscribed → routes to `onSubscribed` handlers
+   - Checks if subscribed → routes to `onSubscribedMessage` handlers
    - Checks for @-mention of bot → routes to `onNewMention` handlers
    - Checks message against `onNewMessage` patterns → routes to matching handlers
    - Releases lock when all handlers complete

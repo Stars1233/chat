@@ -27,7 +27,7 @@ bot.onNewMention(async (thread, _message) => {
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // Handle messages in subscribed threads
-bot.onSubscribed(async (thread, _message) => {
+bot.onSubscribedMessage(async (thread, _message) => {
   // Start with typing indicator
   await thread.startTyping();
 

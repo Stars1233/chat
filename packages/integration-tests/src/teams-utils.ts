@@ -137,24 +137,15 @@ export function createMockBotAdapter() {
     sentActivities,
     updatedActivities,
     deletedActivities,
-    // Mock the process method - called during webhook handling
-    process: vi.fn(
-      (
-        req: { body: unknown },
-        res: { status: (code: number) => { end: () => void; send: (data?: string) => void } },
+    // Mock the handleActivity method - called during webhook handling
+    handleActivity: vi.fn(
+      async (
+        _authHeader: string,
+        activity: unknown,
         handler: (context: unknown) => Promise<void>,
       ) => {
-        const activity = req.body;
         const mockContext = createMockContext(activity);
-
-        handler(mockContext)
-          .then(() => {
-            res.status(200).end();
-          })
-          .catch((err) => {
-            console.error("Handler error:", err);
-            res.status(500).end();
-          });
+        await handler(mockContext);
       },
     ),
     // Mock continueConversationAsync - called for posting messages

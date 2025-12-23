@@ -155,12 +155,12 @@ describe("Chat", () => {
     expect(mockState.releaseLock).toHaveBeenCalled();
   });
 
-  it("should call onSubscribed handler for subscribed threads", async () => {
+  it("should call onSubscribedMessage handler for subscribed threads", async () => {
     const mentionHandler = vi.fn().mockResolvedValue(undefined);
     const subscribedHandler = vi.fn().mockResolvedValue(undefined);
 
     chat.onNewMention(mentionHandler);
-    chat.onSubscribed(subscribedHandler);
+    chat.onSubscribedMessage(subscribedHandler);
 
     // Subscribe to the thread
     await mockState.subscribe("slack:C123:1234.5678");
