@@ -80,6 +80,8 @@ export function buildAdapters(): Adapters {
   adapters.teams = createTeamsAdapter({
     appId: process.env.TEAMS_APP_ID,
     appPassword: process.env.TEAMS_APP_PASSWORD,
+    appType: "SingleTenant",
+    appTenantId: process.env.TEAMS_APP_TENANT_ID as string,
     userName: "Chat SDK Demo",
   });
 
@@ -90,8 +92,6 @@ export function buildAdapters(): Adapters {
     adapters.gchat = createGoogleChatAdapter({
       auth: vercelAuth,
       userName: "Chat SDK Demo",
-      appType: "SingleTenant",
-      appTenantId: process.env.TEAMS_APP_TENANT_ID as string,
     });
   }
   // Option 2: Service account credentials (JSON key)
