@@ -54,7 +54,12 @@ function createVercelOIDCAuth() {
     service_account_impersonation_url: `https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/${serviceAccountEmail}:generateAccessToken`,
     subject_token_supplier: new VercelOidcSupplier(),
   });
-  client.scopes = ["https://www.googleapis.com/auth/chat.bot"];
+  // Include both Chat API scope and Workspace Events API scopes
+  client.scopes = [
+    "https://www.googleapis.com/auth/chat.bot",
+    "https://www.googleapis.com/auth/chat.spaces.readonly",
+    "https://www.googleapis.com/auth/chat.messages.readonly",
+  ];
   return client;
 }
 
