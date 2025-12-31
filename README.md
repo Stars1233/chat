@@ -1,140 +1,71 @@
-# chat-sdk
+# Chat SDK
 
-A unified chat abstraction for building bots that work across Slack, Microsoft Teams, and Google Chat.
+A unified SDK for building chat bots across Slack, Microsoft Teams, and Google Chat.
 
 ## Features
 
-- Single API for multiple chat platforms
-- Thread subscription and message handling
-- Markdown AST-based message formatting with platform-specific conversion
-- Typing indicators and reactions
-- Pluggable state backends (memory, Redis)
+- Multi-platform support with a single codebase
+- Mention-based thread subscriptions
+- Message deduplication for platform quirks
+- Serverless-ready with pluggable state backends
 
 ## Packages
 
 | Package | Description |
 |---------|-------------|
-| `chat-sdk` | Core SDK with Chat class and types |
+| `chat-sdk` | Core SDK with thread management and handlers |
 | `@chat-sdk/slack` | Slack adapter |
 | `@chat-sdk/teams` | Microsoft Teams adapter |
-| `@chat-sdk/gchat` | Google Chat adapter |
+| `@chat-sdk/gchat` | Google Chat adapter with Workspace Events |
 | `@chat-sdk/state-memory` | In-memory state (development) |
 | `@chat-sdk/state-redis` | Redis state (production) |
-
-## Installation
-
-```bash
-pnpm add chat-sdk @chat-sdk/slack @chat-sdk/state-memory
-```
 
 ## Quick Start
 
 ```typescript
-import { Chat } from "chat-sdk";
+import { createChat } from "chat-sdk";
 import { createSlackAdapter } from "@chat-sdk/slack";
-import { createMemoryState } from "@chat-sdk/state-memory";
+import { createRedisStateAdapter } from "@chat-sdk/state-redis";
 
-const bot = new Chat({
-  userName: "mybot",
-  adapters: {
-    slack: createSlackAdapter({
+const chat = createChat({
+  adapters: [
+    createSlackAdapter({
       botToken: process.env.SLACK_BOT_TOKEN,
       signingSecret: process.env.SLACK_SIGNING_SECRET,
     }),
-  },
-  state: createMemoryState(),
+  ],
+  state: createRedisStateAdapter({ url: process.env.REDIS_URL }),
 });
 
-// Handle @mentions
-bot.onNewMention(async (thread, message) => {
-  await thread.subscribe();
-  await thread.post("Hello! I'm now listening to this thread.");
+chat.onMention(async (thread) => {
+  await thread.reply("Hello! I'm now listening to this thread.");
+  thread.subscribe();
 });
 
-// Handle messages in subscribed threads
-bot.onSubscribedMessage(async (thread, message) => {
-  await thread.post(`You said: "${message.text}"`);
+chat.onSubscribedMessage(async (thread, message) => {
+  await thread.reply(`You said: ${message.text}`);
 });
 
-// Handle messages matching a pattern
-bot.onNewMessage(/help/i, async (thread) => {
-  await thread.post("Here's how I can help...");
-});
-```
-
-## Webhook Setup
-
-Expose webhook handlers for each platform:
-
-```typescript
-// Next.js App Router example
 export async function POST(request: Request) {
-  return bot.webhooks.slack(request, {
-    waitUntil: (task) => after(() => task),
-  });
+  return chat.handleWebhook("slack", request);
 }
 ```
 
-## Configuration
+## Setup
 
-### Slack
+See [SETUP.md](./SETUP.md) for platform configuration instructions including:
 
-```typescript
-createSlackAdapter({
-  botToken: "xoxb-...",
-  signingSecret: "...",
-});
-```
-
-### Microsoft Teams
-
-```typescript
-createTeamsAdapter({
-  appId: "...",
-  appPassword: "...",
-});
-```
-
-### Google Chat
-
-Service account credentials (JSON key):
-
-```typescript
-createGoogleChatAdapter({
-  credentials: {
-    client_email: "...",
-    private_key: "...",
-    project_id: "...",
-  },
-});
-```
-
-Application Default Credentials (Workload Identity Federation, GCE, Cloud Run):
-
-```typescript
-createGoogleChatAdapter({
-  useApplicationDefaultCredentials: true,
-});
-```
-
-Custom auth client:
-
-```typescript
-import { google } from "googleapis";
-
-createGoogleChatAdapter({
-  auth: new google.auth.GoogleAuth({
-    scopes: ["https://www.googleapis.com/auth/chat.bot"],
-  }),
-});
-```
+- Slack app creation and OAuth scopes
+- Microsoft Teams Azure Bot setup
+- Google Chat service account and Pub/Sub configuration
+- Environment variables reference
 
 ## Development
 
 ```bash
 pnpm install
 pnpm build
-pnpm test
+pnpm dev         # Run example app
 pnpm typecheck
 pnpm lint
 ```
