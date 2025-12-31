@@ -233,6 +233,15 @@ export interface StateAdapter {
 
   /** Extend a lock's TTL */
   extendLock(lock: Lock, ttlMs: number): Promise<boolean>;
+
+  /** Get a cached value by key */
+  get<T = unknown>(key: string): Promise<T | null>;
+
+  /** Set a cached value with optional TTL in milliseconds */
+  set<T = unknown>(key: string, value: T, ttlMs?: number): Promise<void>;
+
+  /** Delete a cached value */
+  delete(key: string): Promise<void>;
 }
 
 export interface Lock {

@@ -86,19 +86,28 @@ export function buildAdapters(): Adapters {
   });
 
   // Google Chat adapter
+  // Optional: Pub/Sub topic for receiving ALL messages (not just @mentions)
+  // When set, subscriptions are auto-created when bot is added to a space
+  const pubsubTopic = process.env.GOOGLE_CHAT_PUBSUB_TOPIC;
+
   // Option 1: Vercel OIDC (Workload Identity Federation)
+  // Note: Auto-subscription requires credentials or ADC, not custom auth
   const vercelAuth = createVercelOIDCAuth();
   if (vercelAuth) {
     adapters.gchat = createGoogleChatAdapter({
       auth: vercelAuth,
       userName: "Chat SDK Demo",
+      // pubsubTopic not supported with custom auth - use /api/gchat/subscribe manually
     });
   }
   // Option 2: Service account credentials (JSON key)
   else if (process.env.GOOGLE_CHAT_CREDENTIALS) {
     try {
       const credentials = JSON.parse(process.env.GOOGLE_CHAT_CREDENTIALS);
-      adapters.gchat = createGoogleChatAdapter({ credentials });
+      adapters.gchat = createGoogleChatAdapter({
+        credentials,
+        pubsubTopic, // Auto-subscribe when added to spaces
+      });
     } catch (e) {
       console.warn("[bot] Failed to parse GOOGLE_CHAT_CREDENTIALS:", e);
     }
@@ -107,6 +116,7 @@ export function buildAdapters(): Adapters {
   else if (process.env.GOOGLE_CHAT_USE_ADC === "true") {
     adapters.gchat = createGoogleChatAdapter({
       useApplicationDefaultCredentials: true,
+      pubsubTopic, // Auto-subscribe when added to spaces
     });
   }
 

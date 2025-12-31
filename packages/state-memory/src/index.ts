@@ -6,6 +6,11 @@ interface MemoryLock extends Lock {
   expiresAt: number;
 }
 
+interface CachedValue<T = unknown> {
+  value: T;
+  expiresAt: number | null; // null = no expiry
+}
+
 /**
  * In-memory state adapter for development and testing.
  *
@@ -15,6 +20,7 @@ interface MemoryLock extends Lock {
 export class MemoryStateAdapter implements StateAdapter {
   private subscriptions = new Set<string>();
   private locks = new Map<string, MemoryLock>();
+  private cache = new Map<string, CachedValue>();
   private connected = false;
 
   async connect(): Promise<void> {
@@ -110,6 +116,37 @@ export class MemoryStateAdapter implements StateAdapter {
     // Extend the lock
     existingLock.expiresAt = Date.now() + ttlMs;
     return true;
+  }
+
+  async get<T = unknown>(key: string): Promise<T | null> {
+    this.ensureConnected();
+
+    const cached = this.cache.get(key);
+    if (!cached) {
+      return null;
+    }
+
+    // Check if expired
+    if (cached.expiresAt !== null && cached.expiresAt <= Date.now()) {
+      this.cache.delete(key);
+      return null;
+    }
+
+    return cached.value as T;
+  }
+
+  async set<T = unknown>(key: string, value: T, ttlMs?: number): Promise<void> {
+    this.ensureConnected();
+
+    this.cache.set(key, {
+      value,
+      expiresAt: ttlMs ? Date.now() + ttlMs : null,
+    });
+  }
+
+  async delete(key: string): Promise<void> {
+    this.ensureConnected();
+    this.cache.delete(key);
   }
 
   private ensureConnected(): void {

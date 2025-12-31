@@ -13,6 +13,12 @@ import type {
 import { RateLimitError } from "chat-sdk";
 import { type chat_v1, google } from "googleapis";
 import { GoogleChatFormatConverter } from "./markdown";
+import {
+  createSpaceSubscription,
+  decodePubSubMessage,
+  type PubSubPushMessage,
+  type WorkspaceEventNotification,
+} from "./workspace-events";
 
 /** Service account credentials for JWT auth */
 export interface ServiceAccountCredentials {
@@ -25,6 +31,12 @@ export interface ServiceAccountCredentials {
 export interface GoogleChatAdapterBaseConfig {
   /** Override bot username (optional) */
   userName?: string;
+  /**
+   * Pub/Sub topic for receiving all messages via Workspace Events.
+   * When set, the adapter will automatically create subscriptions when added to a space.
+   * Format: "projects/my-project/topics/my-topic"
+   */
+  pubsubTopic?: string;
 }
 
 /** Config using service account credentials (JSON key file) */
@@ -143,6 +155,14 @@ export interface GoogleChatEvent {
       space: GoogleChatSpace;
       message: GoogleChatMessage;
     };
+    /** Present when the bot is added to a space */
+    addedToSpacePayload?: {
+      space: GoogleChatSpace;
+    };
+    /** Present when the bot is removed from a space */
+    removedFromSpacePayload?: {
+      space: GoogleChatSpace;
+    };
   };
 }
 
@@ -154,14 +174,19 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
   private chat: ChatInstance | null = null;
   private logger: Logger | null = null;
   private formatConverter = new GoogleChatFormatConverter();
+  private pubsubTopic?: string;
+  private credentials?: ServiceAccountCredentials;
+  private useADC = false;
 
   constructor(config: GoogleChatAdapterConfig) {
     this.userName = config.userName || "bot";
+    this.pubsubTopic = config.pubsubTopic;
 
     let auth: Parameters<typeof google.chat>[0]["auth"];
 
     if ("credentials" in config && config.credentials) {
       // Service account credentials (JWT)
+      this.credentials = config.credentials;
       auth = new google.auth.JWT({
         email: config.credentials.client_email,
         key: config.credentials.private_key,
@@ -173,6 +198,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
     ) {
       // Application Default Credentials (ADC)
       // Works with Workload Identity Federation, GCE metadata, GOOGLE_APPLICATION_CREDENTIALS env var
+      this.useADC = true;
       auth = new google.auth.GoogleAuth({
         scopes: ["https://www.googleapis.com/auth/chat.bot"],
       });
@@ -200,11 +226,38 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
     const body = await request.text();
     this.logger?.debug("GChat webhook raw body", { body });
 
-    let event: GoogleChatEvent;
+    let parsed: unknown;
     try {
-      event = JSON.parse(body);
+      parsed = JSON.parse(body);
     } catch {
       return new Response("Invalid JSON", { status: 400 });
+    }
+
+    // Check if this is a Pub/Sub push message (from Workspace Events subscription)
+    const maybePubSub = parsed as PubSubPushMessage;
+    if (maybePubSub.message?.data && maybePubSub.subscription) {
+      return this.handlePubSubMessage(maybePubSub, options);
+    }
+
+    // Otherwise, treat as a direct Google Chat webhook event
+    const event = parsed as GoogleChatEvent;
+
+    // Handle ADDED_TO_SPACE - automatically create subscription
+    const addedPayload = event.chat?.addedToSpacePayload;
+    if (addedPayload) {
+      this.logger?.debug("Bot added to space", {
+        space: addedPayload.space.name,
+        spaceType: addedPayload.space.type,
+      });
+      this.handleAddedToSpace(addedPayload.space, options);
+    }
+
+    // Handle REMOVED_FROM_SPACE (for logging)
+    const removedPayload = event.chat?.removedFromSpacePayload;
+    if (removedPayload) {
+      this.logger?.debug("Bot removed from space", {
+        space: removedPayload.space.name,
+      });
     }
 
     // Check for message payload in the Add-ons format
@@ -216,7 +269,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
         text: messagePayload.message.text?.slice(0, 50),
       });
       this.handleMessageEvent(event, options);
-    } else {
+    } else if (!addedPayload && !removedPayload) {
       this.logger?.debug("Non-message event received", {
         hasChat: !!event.chat,
         hasCommonEventObject: !!event.commonEventObject,
@@ -227,6 +280,176 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
     return new Response(JSON.stringify({}), {
       headers: { "Content-Type": "application/json" },
     });
+  }
+
+  /**
+   * Handle Pub/Sub push messages from Workspace Events subscriptions.
+   * These contain all messages in a space, not just @mentions.
+   */
+  private handlePubSubMessage(
+    pushMessage: PubSubPushMessage,
+    options?: WebhookOptions
+  ): Response {
+    try {
+      const notification = decodePubSubMessage(pushMessage);
+      this.logger?.debug("Pub/Sub notification received", {
+        eventType: notification.eventType,
+        subscription: notification.subscription,
+      });
+
+      // Handle message events from Pub/Sub
+      if (
+        notification.eventType === "google.workspace.chat.message.v1.created" &&
+        notification.message
+      ) {
+        this.handlePubSubMessageEvent(notification, options);
+      }
+
+      // Acknowledge the message
+      return new Response(JSON.stringify({ success: true }), {
+        headers: { "Content-Type": "application/json" },
+      });
+    } catch (error) {
+      this.logger?.error("Error processing Pub/Sub message", { error });
+      // Return 200 to avoid retries for malformed messages
+      return new Response(JSON.stringify({ error: "Processing failed" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+  }
+
+  /**
+   * Handle message events received via Pub/Sub (Workspace Events).
+   */
+  private handlePubSubMessageEvent(
+    notification: WorkspaceEventNotification,
+    options?: WebhookOptions
+  ): void {
+    if (!this.chat || !notification.message) {
+      return;
+    }
+
+    const message = notification.message;
+    // Extract space name from targetResource: "//chat.googleapis.com/spaces/AAAA"
+    const spaceName = notification.targetResource?.replace(
+      "//chat.googleapis.com/",
+      ""
+    );
+    const threadName = message.thread?.name || message.name;
+    const threadId = this.encodeThreadId({
+      spaceName: spaceName || message.space?.name || "",
+      threadName,
+    });
+
+    // Convert to standard message format
+    const text = message.text || "";
+    const isBot = message.sender?.type === "BOT";
+
+    const parsedMessage: Message<unknown> = {
+      id: message.name,
+      threadId,
+      text: this.formatConverter.extractPlainText(text),
+      formatted: this.formatConverter.toAst(text),
+      raw: notification,
+      author: {
+        userId: message.sender?.name || "unknown",
+        userName: message.sender?.displayName || "unknown",
+        fullName: message.sender?.displayName || "unknown",
+        isBot,
+        isMe: isBot,
+      },
+      metadata: {
+        dateSent: new Date(message.createTime),
+        edited: false,
+      },
+      attachments: (message.attachment || []).map((att) => ({
+        type: att.contentType?.startsWith("image/")
+          ? ("image" as const)
+          : ("file" as const),
+        url: att.downloadUri,
+        name: att.contentName,
+        mimeType: att.contentType,
+      })),
+    };
+
+    this.logger?.debug("Pub/Sub parsed message", {
+      threadId,
+      messageId: parsedMessage.id,
+      text: parsedMessage.text,
+      isBot: parsedMessage.author.isBot,
+      isMe: parsedMessage.author.isMe,
+    });
+
+    const handleTask = this.chat
+      .handleIncomingMessage(this, threadId, parsedMessage)
+      .catch((err) => {
+        this.logger?.error("Pub/Sub message handling error", { error: err });
+      });
+
+    if (options?.waitUntil) {
+      options.waitUntil(handleTask);
+    }
+  }
+
+  /**
+   * Handle bot being added to a space - create Workspace Events subscription.
+   */
+  private handleAddedToSpace(
+    space: GoogleChatSpace,
+    options?: WebhookOptions
+  ): void {
+    if (!this.pubsubTopic) {
+      this.logger?.debug(
+        "No pubsubTopic configured, skipping subscription creation"
+      );
+      return;
+    }
+
+    const authOptions = this.credentials
+      ? { credentials: this.credentials }
+      : this.useADC
+        ? { useApplicationDefaultCredentials: true as const }
+        : null;
+
+    if (!authOptions) {
+      this.logger?.warn(
+        "Cannot create subscription: no credentials available (custom auth not supported)"
+      );
+      return;
+    }
+
+    const subscribeTask = (async () => {
+      try {
+        this.logger?.info("Creating Workspace Events subscription", {
+          space: space.name,
+          pubsubTopic: this.pubsubTopic,
+        });
+
+        const result = await createSpaceSubscription(
+          {
+            spaceName: space.name,
+            pubsubTopic: this.pubsubTopic!,
+          },
+          authOptions
+        );
+
+        this.logger?.info("Workspace Events subscription created", {
+          space: space.name,
+          subscriptionName: result.name,
+          expireTime: result.expireTime,
+        });
+      } catch (error) {
+        this.logger?.error("Failed to create Workspace Events subscription", {
+          space: space.name,
+          error,
+        });
+      }
+    })();
+
+    if (options?.waitUntil) {
+      options.waitUntil(subscribeTask);
+    }
   }
 
   private handleMessageEvent(
@@ -544,3 +767,16 @@ export {
   GoogleChatFormatConverter,
   GoogleChatFormatConverter as GoogleChatMarkdownConverter,
 } from "./markdown";
+
+export {
+  createSpaceSubscription,
+  listSpaceSubscriptions,
+  deleteSpaceSubscription,
+  decodePubSubMessage,
+  verifyPubSubRequest,
+  type CreateSpaceSubscriptionOptions,
+  type SpaceSubscriptionResult,
+  type PubSubPushMessage,
+  type WorkspaceEventNotification,
+  type WorkspaceEventsAuthOptions,
+} from "./workspace-events";

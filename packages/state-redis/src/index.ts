@@ -29,7 +29,7 @@ export class RedisStateAdapter implements StateAdapter {
     });
   }
 
-  private key(type: "sub" | "lock", id: string): string {
+  private key(type: "sub" | "lock" | "cache", id: string): string {
     return `${this.keyPrefix}:${type}:${id}`;
   }
 
@@ -156,6 +156,44 @@ export class RedisStateAdapter implements StateAdapter {
     });
 
     return result === 1;
+  }
+
+  async get<T = unknown>(key: string): Promise<T | null> {
+    this.ensureConnected();
+
+    const cacheKey = this.key("cache", key);
+    const value = await this.client.get(cacheKey);
+
+    if (value === null) {
+      return null;
+    }
+
+    try {
+      return JSON.parse(value) as T;
+    } catch {
+      // If parsing fails, return as string
+      return value as unknown as T;
+    }
+  }
+
+  async set<T = unknown>(key: string, value: T, ttlMs?: number): Promise<void> {
+    this.ensureConnected();
+
+    const cacheKey = this.key("cache", key);
+    const serialized = JSON.stringify(value);
+
+    if (ttlMs) {
+      await this.client.set(cacheKey, serialized, { PX: ttlMs });
+    } else {
+      await this.client.set(cacheKey, serialized);
+    }
+  }
+
+  async delete(key: string): Promise<void> {
+    this.ensureConnected();
+
+    const cacheKey = this.key("cache", key);
+    await this.client.del(cacheKey);
   }
 
   private ensureConnected(): void {

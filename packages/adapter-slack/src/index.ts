@@ -59,6 +59,12 @@ interface SlackEventPayload {
   event_time?: number;
 }
 
+/** Cached user info */
+interface CachedUser {
+  displayName: string;
+  realName: string;
+}
+
 export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
   readonly name = "slack";
   readonly userName: string;
@@ -69,6 +75,7 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
   private logger: Logger | null = null;
   private _botUserId: string | null = null;
   private formatConverter = new SlackFormatConverter();
+  private static USER_CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
 
   /** Bot user ID (e.g., U_BOT_123) used for mention detection */
   get botUserId(): string | undefined {
@@ -100,6 +107,58 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
       } catch (error) {
         this.logger.warn("Could not fetch bot user ID", { error });
       }
+    }
+  }
+
+  /**
+   * Look up user info from Slack API with caching via state adapter.
+   * Returns display name and real name, or falls back to user ID.
+   */
+  private async lookupUser(
+    userId: string,
+  ): Promise<{ displayName: string; realName: string }> {
+    const cacheKey = `slack:user:${userId}`;
+
+    // Check cache first (via state adapter for serverless compatibility)
+    if (this.chat) {
+      const cached = await this.chat.getState().get<CachedUser>(cacheKey);
+      if (cached) {
+        return { displayName: cached.displayName, realName: cached.realName };
+      }
+    }
+
+    try {
+      const result = await this.client.users.info({ user: userId });
+      const user = result.user as {
+        name?: string;
+        real_name?: string;
+        profile?: { display_name?: string; real_name?: string };
+      };
+
+      // Slack user naming: profile.display_name > profile.real_name > real_name > name > userId
+      const displayName =
+        user?.profile?.display_name ||
+        user?.profile?.real_name ||
+        user?.real_name ||
+        user?.name ||
+        userId;
+      const realName = user?.real_name || user?.profile?.real_name || displayName;
+
+      // Cache the result via state adapter
+      if (this.chat) {
+        await this.chat.getState().set<CachedUser>(
+          cacheKey,
+          { displayName, realName },
+          SlackAdapter.USER_CACHE_TTL_MS,
+        );
+      }
+
+      this.logger?.debug("Fetched user info", { userId, displayName, realName });
+      return { displayName, realName };
+    } catch (error) {
+      this.logger?.warn("Could not fetch user info", { userId, error });
+      // Fall back to user ID
+      return { displayName: userId, realName: userId };
     }
   }
 
@@ -210,24 +269,24 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
       threadTs,
     });
 
-    const message = this.parseSlackMessage(event, threadId);
-    this.logger?.debug("Slack parsed message", {
-      threadId,
-      messageId: message.id,
-      text: message.text,
-      authorUserId: message.author.userId,
-      authorUserName: message.author.userName,
-      isBot: message.author.isBot,
-      isMe: message.author.isMe,
-      rawEvent: event,
-    });
-
-    // Run message handling in background
-    const handleTask = this.chat
-      .handleIncomingMessage(this, threadId, message)
-      .catch((err) => {
-        this.logger?.error("Message handling error", { error: err });
+    // Run message handling in background (async to allow user lookup)
+    const handleTask = (async () => {
+      const message = await this.parseSlackMessage(event, threadId);
+      this.logger?.debug("Slack parsed message", {
+        threadId,
+        messageId: message.id,
+        text: message.text,
+        authorUserId: message.author.userId,
+        authorUserName: message.author.userName,
+        isBot: message.author.isBot,
+        isMe: message.author.isMe,
+        rawEvent: event,
       });
+
+      await this.chat!.handleIncomingMessage(this, threadId, message);
+    })().catch((err) => {
+      this.logger?.error("Message handling error", { error: err });
+    });
 
     if (options?.waitUntil) {
       options.waitUntil(handleTask);
@@ -238,10 +297,10 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
     }
   }
 
-  private parseSlackMessage(
+  private async parseSlackMessage(
     event: SlackEvent,
     threadId: string,
-  ): Message<unknown> {
+  ): Promise<Message<unknown>> {
     // Check if this message is from our bot
     // Bot messages have bot_id, user messages have user
     const isMe = this._botUserId
@@ -249,6 +308,18 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
       : false;
 
     const text = event.text || "";
+
+    // Get user info - for human users we need to look up the display name
+    // since Slack events only include the user ID, not the username
+    let userName = event.username || "unknown";
+    let fullName = event.username || "unknown";
+
+    // If we have a user ID but no username, look up the user info
+    if (event.user && !event.username) {
+      const userInfo = await this.lookupUser(event.user);
+      userName = userInfo.displayName;
+      fullName = userInfo.realName;
+    }
 
     return {
       id: event.ts || "",
@@ -258,8 +329,8 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
       raw: event,
       author: {
         userId: event.user || event.bot_id || "unknown",
-        userName: event.username || "unknown",
-        fullName: event.username || "unknown",
+        userName,
+        fullName,
         isBot: !!event.bot_id,
         isMe,
       },
@@ -400,7 +471,8 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
       });
 
       const messages = (result.messages || []) as SlackEvent[];
-      return messages.map((msg) => this.parseSlackMessage(msg, threadId));
+      // Use sync version to avoid N API calls for user lookup
+      return messages.map((msg) => this.parseSlackMessageSync(msg, threadId));
     } catch (error) {
       this.handleSlackError(error);
     }
@@ -449,7 +521,56 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
       channel: event.channel || "",
       threadTs,
     });
-    return this.parseSlackMessage(event, threadId);
+    // Use synchronous version without user lookup for interface compliance
+    return this.parseSlackMessageSync(event, threadId);
+  }
+
+  /**
+   * Synchronous message parsing without user lookup.
+   * Used for parseMessage interface - falls back to user ID for username.
+   */
+  private parseSlackMessageSync(
+    event: SlackEvent,
+    threadId: string,
+  ): Message<unknown> {
+    const isMe = this._botUserId
+      ? event.user === this._botUserId || event.bot_id === this._botUserId
+      : false;
+
+    const text = event.text || "";
+    // Without async lookup, fall back to user ID for human users
+    const userName = event.username || event.user || "unknown";
+    const fullName = event.username || event.user || "unknown";
+
+    return {
+      id: event.ts || "",
+      threadId,
+      text: this.formatConverter.extractPlainText(text),
+      formatted: this.formatConverter.toAst(text),
+      raw: event,
+      author: {
+        userId: event.user || event.bot_id || "unknown",
+        userName,
+        fullName,
+        isBot: !!event.bot_id,
+        isMe,
+      },
+      metadata: {
+        dateSent: new Date(parseFloat(event.ts || "0") * 1000),
+        edited: !!event.edited,
+        editedAt: event.edited
+          ? new Date(parseFloat(event.edited.ts) * 1000)
+          : undefined,
+      },
+      attachments: (event.files || []).map((file) => ({
+        type: file.mimetype?.startsWith("image/")
+          ? ("image" as const)
+          : ("file" as const),
+        url: file.url_private,
+        name: file.name,
+        mimeType: file.mimetype,
+      })),
+    };
   }
 
   renderFormatted(content: FormattedContent): string {
