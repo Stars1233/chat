@@ -126,7 +126,7 @@ export interface GoogleChatMessage {
     startIndex?: number;
     length?: number;
     userMention?: {
-      user: { name: string; displayName: string; type: string };
+      user: { name: string; displayName?: string; type: string };
       type: string;
     };
   }>;
@@ -1049,8 +1049,25 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
             );
         }
 
-        if (botDisplayName && annotation.startIndex !== undefined) {
-          // Replace @BotDisplayName with @{userName}
+        // Replace the bot mention with @{userName}
+        // Pub/Sub messages don't include displayName, so use startIndex/length
+        if (
+          annotation.startIndex !== undefined &&
+          annotation.length !== undefined
+        ) {
+          const startIndex = annotation.startIndex;
+          const length = annotation.length;
+          const mentionText = text.slice(startIndex, startIndex + length);
+          text =
+            text.slice(0, startIndex) +
+            `@${this.userName}` +
+            text.slice(startIndex + length);
+          this.logger?.debug("Normalized bot mention", {
+            original: mentionText,
+            replacement: `@${this.userName}`,
+          });
+        } else if (botDisplayName) {
+          // Fallback: use displayName if available (direct webhook)
           const mentionText = `@${botDisplayName}`;
           text = text.replace(mentionText, `@${this.userName}`);
         }
