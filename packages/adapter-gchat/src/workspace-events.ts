@@ -189,10 +189,13 @@ export async function listSpaceSubscriptions(
       key: auth.credentials.private_key,
       scopes: ["https://www.googleapis.com/auth/chat.spaces.readonly"],
     });
-  } else {
+  } else if ("useApplicationDefaultCredentials" in auth) {
     authClient = new google.auth.GoogleAuth({
       scopes: ["https://www.googleapis.com/auth/chat.spaces.readonly"],
     });
+  } else {
+    // Custom auth client (e.g., Vercel OIDC)
+    authClient = auth.auth;
   }
 
   const workspaceEvents = google.workspaceevents({
@@ -226,10 +229,13 @@ export async function deleteSpaceSubscription(
       key: auth.credentials.private_key,
       scopes: ["https://www.googleapis.com/auth/chat.spaces.readonly"],
     });
-  } else {
+  } else if ("useApplicationDefaultCredentials" in auth) {
     authClient = new google.auth.GoogleAuth({
       scopes: ["https://www.googleapis.com/auth/chat.spaces.readonly"],
     });
+  } else {
+    // Custom auth client (e.g., Vercel OIDC)
+    authClient = auth.auth;
   }
 
   const workspaceEvents = google.workspaceevents({

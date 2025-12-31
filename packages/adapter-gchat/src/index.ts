@@ -344,7 +344,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
 
     if (!authOptions) {
       this.logger?.error(
-        "Cannot create subscription: no credentials available. Custom auth (Vercel OIDC) not supported for Workspace Events. Use GOOGLE_CHAT_CREDENTIALS or GOOGLE_CHAT_USE_ADC=true instead.",
+        "Cannot create subscription: no auth configured. Use GOOGLE_CHAT_CREDENTIALS, GOOGLE_CHAT_USE_ADC=true, or custom auth.",
       );
       return;
     }
@@ -449,6 +449,9 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
     }
     if (this.useADC) {
       return { useApplicationDefaultCredentials: true as const };
+    }
+    if (this.customAuth) {
+      return { auth: this.customAuth };
     }
     return null;
   }

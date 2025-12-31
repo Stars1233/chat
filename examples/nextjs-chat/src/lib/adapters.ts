@@ -109,14 +109,14 @@ export function buildAdapters(): Adapters {
       pubsubTopic, // Auto-subscribe when threads are subscribed
     });
   }
-  // Option 3: Vercel OIDC (Workload Identity Federation) - NO Pub/Sub support
-  // Note: Workspace Events API requires credentials or ADC, not custom auth
+  // Option 3: Vercel OIDC (Workload Identity Federation)
+  // Uses Workload Identity Federation for keyless auth
   else {
     const vercelAuth = createVercelOIDCAuth();
     adapters.gchat = createGoogleChatAdapter({
       auth: vercelAuth,
       userName: "Chat SDK Demo",
-      // pubsubTopic not supported - Workspace Events API can't use custom auth
+      pubsubTopic, // Now supported with custom auth
     });
   }
 
