@@ -187,6 +187,13 @@ export interface Adapter<TThreadId = unknown, TRawMessage = unknown> {
 
   /** Render formatted content to platform-specific string */
   renderFormatted(content: FormattedContent): string;
+
+  /**
+   * Optional hook called when a thread is subscribed to.
+   * Adapters can use this to set up platform-specific subscriptions
+   * (e.g., Google Chat Workspace Events).
+   */
+  onThreadSubscribe?(threadId: string): Promise<void>;
 }
 
 /** Internal interface for Chat instance passed to adapters */

@@ -88,6 +88,10 @@ export class ThreadImpl implements Thread {
 
   async subscribe(): Promise<void> {
     await this.state.subscribe(this.id);
+    // Allow adapters to set up platform-specific subscriptions
+    if (this.adapter.onThreadSubscribe) {
+      await this.adapter.onThreadSubscribe(this.id);
+    }
   }
 
   async unsubscribe(): Promise<void> {

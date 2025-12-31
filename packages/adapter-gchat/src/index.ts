@@ -7,6 +7,7 @@ import type {
   Message,
   PostableMessage,
   RawMessage,
+  StateAdapter,
   ThreadInfo,
   WebhookOptions,
 } from "chat-sdk";
@@ -16,9 +17,18 @@ import { GoogleChatFormatConverter } from "./markdown";
 import {
   createSpaceSubscription,
   decodePubSubMessage,
+  listSpaceSubscriptions,
   type PubSubPushMessage,
   type WorkspaceEventNotification,
+  type WorkspaceEventsAuthOptions,
 } from "./workspace-events";
+
+/** How long before expiry to refresh subscriptions (1 hour) */
+const SUBSCRIPTION_REFRESH_BUFFER_MS = 60 * 60 * 1000;
+/** TTL for subscription cache entries (25 hours - longer than max subscription lifetime) */
+const SUBSCRIPTION_CACHE_TTL_MS = 25 * 60 * 60 * 1000;
+/** Key prefix for space subscription cache */
+const SPACE_SUB_KEY_PREFIX = "gchat:space-sub:";
 
 /** Service account credentials for JWT auth */
 export interface ServiceAccountCredentials {
@@ -166,17 +176,26 @@ export interface GoogleChatEvent {
   };
 }
 
+/** Cached subscription info */
+interface SpaceSubscriptionInfo {
+  subscriptionName: string;
+  expireTime: number; // Unix timestamp ms
+}
+
 export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
   readonly name = "gchat";
   readonly userName: string;
 
   private chatApi: chat_v1.Chat;
   private chat: ChatInstance | null = null;
+  private state: StateAdapter | null = null;
   private logger: Logger | null = null;
   private formatConverter = new GoogleChatFormatConverter();
   private pubsubTopic?: string;
   private credentials?: ServiceAccountCredentials;
   private useADC = false;
+  /** In-progress subscription creations to prevent duplicate requests */
+  private pendingSubscriptions = new Map<string, Promise<void>>();
 
   constructor(config: GoogleChatAdapterConfig) {
     this.userName = config.userName || "bot";
@@ -216,7 +235,194 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
 
   async initialize(chat: ChatInstance): Promise<void> {
     this.chat = chat;
+    this.state = chat.getState();
     this.logger = chat.getLogger(this.name);
+  }
+
+  /**
+   * Called when a thread is subscribed to.
+   * Ensures the space has a Workspace Events subscription so we receive all messages.
+   */
+  async onThreadSubscribe(threadId: string): Promise<void> {
+    if (!this.pubsubTopic) {
+      this.logger?.debug(
+        "No pubsubTopic configured, skipping space subscription",
+      );
+      return;
+    }
+
+    const { spaceName } = this.decodeThreadId(threadId);
+    await this.ensureSpaceSubscription(spaceName);
+  }
+
+  /**
+   * Ensure a Workspace Events subscription exists for a space.
+   * Creates one if it doesn't exist or is about to expire.
+   */
+  private async ensureSpaceSubscription(spaceName: string): Promise<void> {
+    if (!this.pubsubTopic || !this.state) {
+      return;
+    }
+
+    const cacheKey = `${SPACE_SUB_KEY_PREFIX}${spaceName}`;
+
+    // Check if we already have a valid subscription
+    const cached = await this.state.get<SpaceSubscriptionInfo>(cacheKey);
+    if (cached) {
+      const timeUntilExpiry = cached.expireTime - Date.now();
+      if (timeUntilExpiry > SUBSCRIPTION_REFRESH_BUFFER_MS) {
+        this.logger?.debug("Space subscription still valid", {
+          spaceName,
+          expiresIn: Math.round(timeUntilExpiry / 1000 / 60),
+        });
+        return;
+      }
+      this.logger?.debug("Space subscription expiring soon, will refresh", {
+        spaceName,
+        expiresIn: Math.round(timeUntilExpiry / 1000 / 60),
+      });
+    }
+
+    // Check if we're already creating a subscription for this space
+    const pending = this.pendingSubscriptions.get(spaceName);
+    if (pending) {
+      this.logger?.debug("Subscription creation already in progress", {
+        spaceName,
+      });
+      return pending;
+    }
+
+    // Create the subscription
+    const createPromise = this.createSpaceSubscriptionWithCache(
+      spaceName,
+      cacheKey,
+    );
+    this.pendingSubscriptions.set(spaceName, createPromise);
+
+    try {
+      await createPromise;
+    } finally {
+      this.pendingSubscriptions.delete(spaceName);
+    }
+  }
+
+  /**
+   * Create a Workspace Events subscription and cache the result.
+   */
+  private async createSpaceSubscriptionWithCache(
+    spaceName: string,
+    cacheKey: string,
+  ): Promise<void> {
+    const authOptions = this.getAuthOptions();
+    if (!authOptions) {
+      this.logger?.warn(
+        "Cannot create subscription: no credentials available (custom auth not supported)",
+      );
+      return;
+    }
+
+    const pubsubTopic = this.pubsubTopic;
+    if (!pubsubTopic) return;
+
+    try {
+      // First check if a subscription already exists via the API
+      const existing = await this.findExistingSubscription(
+        spaceName,
+        authOptions,
+      );
+      if (existing) {
+        this.logger?.debug("Found existing subscription", {
+          spaceName,
+          subscriptionName: existing.subscriptionName,
+        });
+        // Cache it
+        if (this.state) {
+          await this.state.set<SpaceSubscriptionInfo>(
+            cacheKey,
+            existing,
+            SUBSCRIPTION_CACHE_TTL_MS,
+          );
+        }
+        return;
+      }
+
+      this.logger?.info("Creating Workspace Events subscription", {
+        spaceName,
+        pubsubTopic,
+      });
+
+      const result = await createSpaceSubscription(
+        { spaceName, pubsubTopic },
+        authOptions,
+      );
+
+      const subscriptionInfo: SpaceSubscriptionInfo = {
+        subscriptionName: result.name,
+        expireTime: new Date(result.expireTime).getTime(),
+      };
+
+      // Cache the subscription info
+      if (this.state) {
+        await this.state.set<SpaceSubscriptionInfo>(
+          cacheKey,
+          subscriptionInfo,
+          SUBSCRIPTION_CACHE_TTL_MS,
+        );
+      }
+
+      this.logger?.info("Workspace Events subscription created", {
+        spaceName,
+        subscriptionName: result.name,
+        expireTime: result.expireTime,
+      });
+    } catch (error) {
+      this.logger?.error("Failed to create Workspace Events subscription", {
+        spaceName,
+        error,
+      });
+      // Don't throw - subscription failure shouldn't break the main flow
+    }
+  }
+
+  /**
+   * Check if a subscription already exists for this space.
+   */
+  private async findExistingSubscription(
+    spaceName: string,
+    authOptions: WorkspaceEventsAuthOptions,
+  ): Promise<SpaceSubscriptionInfo | null> {
+    try {
+      const subscriptions = await listSpaceSubscriptions(
+        spaceName,
+        authOptions,
+      );
+      for (const sub of subscriptions) {
+        // Check if this subscription is still valid
+        const expireTime = new Date(sub.expireTime).getTime();
+        if (expireTime > Date.now() + SUBSCRIPTION_REFRESH_BUFFER_MS) {
+          return {
+            subscriptionName: sub.name,
+            expireTime,
+          };
+        }
+      }
+    } catch (error) {
+      this.logger?.debug("Error checking existing subscriptions", { error });
+    }
+    return null;
+  }
+
+  /**
+   * Get auth options for Workspace Events API calls.
+   */
+  private getAuthOptions(): WorkspaceEventsAuthOptions | null {
+    if (this.credentials) {
+      return { credentials: this.credentials };
+    }
+    if (this.useADC) {
+      return { useApplicationDefaultCredentials: true as const };
+    }
+    return null;
   }
 
   async handleWebhook(
@@ -381,6 +587,19 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
       isMe: parsedMessage.author.isMe,
     });
 
+    // Refresh subscription if needed (runs in background, doesn't block message handling)
+    const resolvedSpaceName = spaceName || message.space?.name;
+    if (resolvedSpaceName) {
+      const refreshTask = this.ensureSpaceSubscription(resolvedSpaceName).catch(
+        (err) => {
+          this.logger?.debug("Subscription refresh failed", { error: err });
+        },
+      );
+      if (options?.waitUntil) {
+        options.waitUntil(refreshTask);
+      }
+    }
+
     const handleTask = this.chat
       .handleIncomingMessage(this, threadId, parsedMessage)
       .catch((err) => {
@@ -399,56 +618,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
     space: GoogleChatSpace,
     options?: WebhookOptions,
   ): void {
-    if (!this.pubsubTopic) {
-      this.logger?.debug(
-        "No pubsubTopic configured, skipping subscription creation",
-      );
-      return;
-    }
-
-    const authOptions = this.credentials
-      ? { credentials: this.credentials }
-      : this.useADC
-        ? { useApplicationDefaultCredentials: true as const }
-        : null;
-
-    if (!authOptions) {
-      this.logger?.warn(
-        "Cannot create subscription: no credentials available (custom auth not supported)",
-      );
-      return;
-    }
-
-    const subscribeTask = (async () => {
-      try {
-        this.logger?.info("Creating Workspace Events subscription", {
-          space: space.name,
-          pubsubTopic: this.pubsubTopic,
-        });
-
-        const pubsubTopic = this.pubsubTopic;
-        if (!pubsubTopic) return; // Already checked above, but satisfies type checker
-
-        const result = await createSpaceSubscription(
-          {
-            spaceName: space.name,
-            pubsubTopic,
-          },
-          authOptions,
-        );
-
-        this.logger?.info("Workspace Events subscription created", {
-          space: space.name,
-          subscriptionName: result.name,
-          expireTime: result.expireTime,
-        });
-      } catch (error) {
-        this.logger?.error("Failed to create Workspace Events subscription", {
-          space: space.name,
-          error,
-        });
-      }
-    })();
+    const subscribeTask = this.ensureSpaceSubscription(space.name);
 
     if (options?.waitUntil) {
       options.waitUntil(subscribeTask);
