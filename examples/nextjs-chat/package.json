@@ -14,9 +14,7 @@
     "@chat-sdk/slack": "workspace:*",
     "@chat-sdk/state-redis": "workspace:*",
     "@chat-sdk/teams": "workspace:*",
-    "@vercel/functions": "^2.0.0",
     "chat-sdk": "workspace:*",
-    "google-auth-library": "^9.0.0",
     "next": "^16.1.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
