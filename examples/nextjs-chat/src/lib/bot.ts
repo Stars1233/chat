@@ -1,5 +1,5 @@
 import { createRedisState } from "@chat-sdk/state-redis";
-import { Chat } from "chat-sdk";
+import { Chat, emoji } from "chat-sdk";
 import { buildAdapters } from "./adapters";
 
 const state = createRedisState({ url: process.env.REDIS_URL || "" });
@@ -18,7 +18,7 @@ bot.onNewMention(async (thread, _message) => {
   await thread.subscribe();
   await thread.startTyping();
   await thread.post(
-    `Thanks for mentioning me! I'm now listening to this thread.\n\n` +
+    `${emoji.wave} Thanks for mentioning me! I'm now listening to this thread.\n\n` +
       `_Connected via ${thread.adapter.name}_`,
   );
 });
@@ -33,15 +33,15 @@ bot.onSubscribedMessage(async (thread, _message) => {
 
   // After 1 second, post "Processing..."
   await delay(1000);
-  const response = await thread.post("Processing...");
+  const response = await thread.post(`${emoji.thinking} Processing...`);
 
   // After 2 more seconds, edit to "Just a little bit..."
   await delay(2000);
-  await response.edit("Just a little bit...");
+  await response.edit(`${emoji.eyes} Just a little bit...`);
 
   // After 1 more second, edit to final message
   await delay(1000);
-  await response.edit("Thanks for your message");
+  await response.edit(`${emoji.check} Thanks for your message!`);
 });
 
 // Handle messages matching a pattern

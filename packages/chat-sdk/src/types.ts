@@ -554,7 +554,6 @@ export interface EmojiFormats {
  * ```
  */
 // biome-ignore lint/suspicious/noEmptyInterface: Required for TypeScript module augmentation
-// biome-ignore lint/complexity/noBannedTypes: Required for TypeScript module augmentation
 export interface CustomEmojiMap {}
 
 /**

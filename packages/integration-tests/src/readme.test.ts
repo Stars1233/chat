@@ -18,7 +18,7 @@ const REPO_ROOT = join(__dirname, "../../..");
  */
 function extractTypeScriptBlocks(markdown: string): string[] {
   const blocks: string[] = [];
-  const regex = /```typescript\n([\s\S]*?)```/g;
+  const regex = /```(?:typescript|ts)\n([\s\S]*?)```/g;
   let match = regex.exec(markdown);
 
   while (match !== null) {

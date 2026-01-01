@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  convertEmojiPlaceholders,
+  createEmoji,
   DEFAULT_EMOJI_MAP,
   defaultEmojiResolver,
   EmojiResolver,
+  emoji,
 } from "./emoji";
 
 describe("EmojiResolver", () => {
@@ -169,11 +172,106 @@ describe("EmojiResolver", () => {
         "warning",
       ];
 
-      for (const emoji of expectedEmoji) {
-        expect(DEFAULT_EMOJI_MAP[emoji]).toBeDefined();
-        expect(DEFAULT_EMOJI_MAP[emoji].slack).toBeDefined();
-        expect(DEFAULT_EMOJI_MAP[emoji].gchat).toBeDefined();
+      for (const e of expectedEmoji) {
+        expect(DEFAULT_EMOJI_MAP[e]).toBeDefined();
+        expect(DEFAULT_EMOJI_MAP[e].slack).toBeDefined();
+        expect(DEFAULT_EMOJI_MAP[e].gchat).toBeDefined();
       }
     });
+  });
+});
+
+describe("emoji helper", () => {
+  it("should provide placeholders for well-known emoji", () => {
+    expect(emoji.thumbs_up).toBe("{{emoji:thumbs_up}}");
+    expect(emoji.fire).toBe("{{emoji:fire}}");
+    expect(emoji.rocket).toBe("{{emoji:rocket}}");
+    expect(emoji["100"]).toBe("{{emoji:100}}");
+  });
+
+  it("should have a custom() method for custom emoji", () => {
+    expect(emoji.custom("unicorn")).toBe("{{emoji:unicorn}}");
+    expect(emoji.custom("custom_team_emoji")).toBe(
+      "{{emoji:custom_team_emoji}}",
+    );
+  });
+});
+
+describe("convertEmojiPlaceholders", () => {
+  it("should convert placeholders to Slack format", () => {
+    const text = `Thanks! ${emoji.thumbs_up} Great work! ${emoji.fire}`;
+    const result = convertEmojiPlaceholders(text, "slack");
+    expect(result).toBe("Thanks! :+1: Great work! :fire:");
+  });
+
+  it("should convert placeholders to GChat format", () => {
+    const text = `Thanks! ${emoji.thumbs_up} Great work! ${emoji.fire}`;
+    const result = convertEmojiPlaceholders(text, "gchat");
+    expect(result).toBe("Thanks! 👍 Great work! 🔥");
+  });
+
+  it("should convert placeholders to Teams format (unicode)", () => {
+    const text = `Thanks! ${emoji.thumbs_up} Great work! ${emoji.fire}`;
+    const result = convertEmojiPlaceholders(text, "teams");
+    expect(result).toBe("Thanks! 👍 Great work! 🔥");
+  });
+
+  it("should handle unknown emoji by passing through", () => {
+    const text = "Check this {{emoji:unknown_emoji}}!";
+    const result = convertEmojiPlaceholders(text, "slack");
+    expect(result).toBe("Check this :unknown_emoji:!");
+  });
+
+  it("should handle multiple emoji in a message", () => {
+    const text = `${emoji.wave} Hello! ${emoji.smile} How are you? ${emoji.thumbs_up}`;
+    const result = convertEmojiPlaceholders(text, "gchat");
+    expect(result).toBe("👋 Hello! 😊 How are you? 👍");
+  });
+
+  it("should handle text with no emoji", () => {
+    const text = "Just a regular message";
+    const result = convertEmojiPlaceholders(text, "slack");
+    expect(result).toBe("Just a regular message");
+  });
+});
+
+describe("createEmoji", () => {
+  it("should create emoji helper with well-known emoji", () => {
+    const e = createEmoji();
+    expect(e.thumbs_up).toBe("{{emoji:thumbs_up}}");
+    expect(e.fire).toBe("{{emoji:fire}}");
+    expect(e.rocket).toBe("{{emoji:rocket}}");
+  });
+
+  it("should include custom() method", () => {
+    const e = createEmoji();
+    expect(e.custom("unicorn")).toBe("{{emoji:unicorn}}");
+  });
+
+  it("should add custom emoji to the helper", () => {
+    const e = createEmoji({
+      unicorn: { slack: "unicorn_face", gchat: "🦄" },
+      company_logo: { slack: "company", gchat: "🏢" },
+    });
+
+    // Custom emoji are accessible
+    expect(e.unicorn).toBe("{{emoji:unicorn}}");
+    expect(e.company_logo).toBe("{{emoji:company_logo}}");
+
+    // Well-known emoji still work
+    expect(e.thumbs_up).toBe("{{emoji:thumbs_up}}");
+  });
+
+  it("should automatically register custom emoji with default resolver", () => {
+    const e = createEmoji({
+      unicorn: { slack: "unicorn_face", gchat: "🦄" },
+    });
+
+    const text = `${e.unicorn} Magic!`;
+    // No need to manually extend resolver - createEmoji does it automatically
+    expect(convertEmojiPlaceholders(text, "slack")).toBe(
+      ":unicorn_face: Magic!",
+    );
+    expect(convertEmojiPlaceholders(text, "gchat")).toBe("🦄 Magic!");
   });
 });

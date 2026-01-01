@@ -12,7 +12,11 @@ import type {
   ThreadInfo,
   WebhookOptions,
 } from "chat-sdk";
-import { defaultEmojiResolver, RateLimitError } from "chat-sdk";
+import {
+  convertEmojiPlaceholders,
+  defaultEmojiResolver,
+  RateLimitError,
+} from "chat-sdk";
 import { type chat_v1, google } from "googleapis";
 import { GoogleChatFormatConverter } from "./markdown";
 import {
@@ -867,6 +871,12 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
     const { spaceName, threadName } = this.decodeThreadId(threadId);
 
     try {
+      // Convert emoji placeholders to GChat format
+      const text = convertEmojiPlaceholders(
+        this.formatConverter.renderPostable(message),
+        "gchat",
+      );
+
       const response = await this.chatApi.spaces.messages.create({
         parent: spaceName,
         // Required to reply in an existing thread
@@ -874,7 +884,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
           ? "REPLY_MESSAGE_FALLBACK_TO_NEW_THREAD"
           : undefined,
         requestBody: {
-          text: this.formatConverter.renderPostable(message),
+          text,
           thread: threadName ? { name: threadName } : undefined,
         },
       });
@@ -895,11 +905,17 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
     message: PostableMessage,
   ): Promise<RawMessage<unknown>> {
     try {
+      // Convert emoji placeholders to GChat format
+      const text = convertEmojiPlaceholders(
+        this.formatConverter.renderPostable(message),
+        "gchat",
+      );
+
       const response = await this.chatApi.spaces.messages.update({
         name: messageId,
         updateMask: "text",
         requestBody: {
-          text: this.formatConverter.renderPostable(message),
+          text,
         },
       });
 

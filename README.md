@@ -6,6 +6,8 @@ A unified SDK for building chat bots across Slack, Microsoft Teams, and Google C
 
 - Multi-platform support with a single codebase
 - Mention-based thread subscriptions
+- Reaction handling with type-safe emoji
+- Cross-platform emoji helper for consistent rendering
 - Message deduplication for platform quirks
 - Serverless-ready with pluggable state backends
 
@@ -26,7 +28,7 @@ A unified SDK for building chat bots across Slack, Microsoft Teams, and Google C
 ### 1. Create your bot (`lib/bot.ts`)
 
 ```typescript
-import { Chat } from "chat-sdk";
+import { Chat, emoji } from "chat-sdk";
 import { createSlackAdapter } from "@chat-sdk/slack";
 import { createTeamsAdapter } from "@chat-sdk/teams";
 import { createGoogleChatAdapter } from "@chat-sdk/gchat";
@@ -53,12 +55,19 @@ export const bot = new Chat({
 // Handle @mentions - works across all platforms
 bot.onNewMention(async (thread) => {
   await thread.subscribe();
-  await thread.post("Hello! I'm now listening to this thread.");
+  // Emoji auto-converts to platform format: :wave: on Slack, 👋 on Teams/GChat
+  await thread.post(`${emoji.wave} Hello! I'm now listening to this thread.`);
 });
 
 // Handle follow-up messages in subscribed threads
 bot.onSubscribedMessage(async (thread, message) => {
-  await thread.post(`You said: ${message.text}`);
+  await thread.post(`${emoji.check} You said: ${message.text}`);
+});
+
+// Handle emoji reactions
+bot.onReaction(["thumbs_up", "heart", "fire"], async (event) => {
+  if (!event.added) return; // Only respond to added reactions
+  await event.adapter.addReaction(event.threadId, event.messageId, event.emoji);
 });
 ```
 
@@ -102,6 +111,51 @@ See [SETUP.md](./SETUP.md) for platform configuration instructions including:
 - Microsoft Teams Azure Bot setup
 - Google Chat service account and Pub/Sub configuration
 - Environment variables reference
+
+## Emoji Helper
+
+The `emoji` helper provides type-safe, cross-platform emoji that automatically convert to each platform's format. Use it with `thread.post()`:
+
+```
+await thread.post(`${emoji.thumbs_up} Great job!`);
+// Slack: ":+1: Great job!"
+// Teams/GChat: "👍 Great job!"
+```
+
+**Available emoji:**
+
+| Name | Emoji | Name | Emoji |
+|------|-------|------|-------|
+| `emoji.thumbs_up` | 👍 | `emoji.thumbs_down` | 👎 |
+| `emoji.heart` | ❤️ | `emoji.smile` | 😊 |
+| `emoji.laugh` | 😂 | `emoji.thinking` | 🤔 |
+| `emoji.eyes` | 👀 | `emoji.fire` | 🔥 |
+| `emoji.check` | ✅ | `emoji.x` | ❌ |
+| `emoji.question` | ❓ | `emoji.party` | 🎉 |
+| `emoji.rocket` | 🚀 | `emoji.star` | ⭐ |
+| `emoji.wave` | 👋 | `emoji.clap` | 👏 |
+| `emoji["100"]` | 💯 | `emoji.warning` | ⚠️ |
+
+For one-off custom emoji, use `emoji.custom("name")`.
+
+### Custom Emoji (Type-Safe)
+
+For workspace-specific emoji with full type safety, use `createEmoji()`:
+
+```typescript
+import { createEmoji } from "chat-sdk";
+
+// Create emoji helper with custom emoji
+const myEmoji = createEmoji({
+  unicorn: { slack: "unicorn_face", gchat: "🦄" },
+  company_logo: { slack: "company", gchat: "🏢" },
+});
+
+// Type-safe access to custom emoji (with autocomplete)
+const message = `${myEmoji.unicorn} Magic! ${myEmoji.company_logo}`;
+// Slack: ":unicorn_face: Magic! :company:"
+// GChat: "🦄 Magic! 🏢"
+```
 
 ## Development
 

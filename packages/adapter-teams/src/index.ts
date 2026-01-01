@@ -29,7 +29,7 @@ import type {
   ThreadInfo,
   WebhookOptions,
 } from "chat-sdk";
-import { NotImplementedError } from "chat-sdk";
+import { convertEmojiPlaceholders, NotImplementedError } from "chat-sdk";
 import { TeamsFormatConverter } from "./markdown";
 
 export interface TeamsAdapterConfig {
@@ -216,9 +216,15 @@ export class TeamsAdapter implements Adapter<TeamsThreadId, unknown> {
   ): Promise<RawMessage<unknown>> {
     const { conversationId, serviceUrl } = this.decodeThreadId(threadId);
 
+    // Convert emoji placeholders to Teams format (unicode)
+    const text = convertEmojiPlaceholders(
+      this.formatConverter.renderPostable(message),
+      "teams",
+    );
+
     const activity: Partial<Activity> = {
       type: ActivityTypes.Message,
-      text: this.formatConverter.renderPostable(message),
+      text,
       textFormat: "markdown",
     };
 
@@ -254,10 +260,16 @@ export class TeamsAdapter implements Adapter<TeamsThreadId, unknown> {
   ): Promise<RawMessage<unknown>> {
     const { conversationId, serviceUrl } = this.decodeThreadId(threadId);
 
+    // Convert emoji placeholders to Teams format (unicode)
+    const text = convertEmojiPlaceholders(
+      this.formatConverter.renderPostable(message),
+      "teams",
+    );
+
     const activity: Partial<Activity> = {
       id: messageId,
       type: ActivityTypes.Message,
-      text: this.formatConverter.renderPostable(message),
+      text,
       textFormat: "markdown",
     };
 

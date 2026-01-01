@@ -2,9 +2,12 @@
 export { Chat } from "./chat";
 // Emoji utilities
 export {
+  convertEmojiPlaceholders,
+  createEmoji,
   DEFAULT_EMOJI_MAP,
   defaultEmojiResolver,
   EmojiResolver,
+  emoji,
 } from "./emoji";
 // Re-export mdast types for adapters
 export type {

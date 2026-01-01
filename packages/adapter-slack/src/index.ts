@@ -13,7 +13,11 @@ import type {
   ThreadInfo,
   WebhookOptions,
 } from "chat-sdk";
-import { defaultEmojiResolver, RateLimitError } from "chat-sdk";
+import {
+  convertEmojiPlaceholders,
+  defaultEmojiResolver,
+  RateLimitError,
+} from "chat-sdk";
 import { SlackFormatConverter } from "./markdown";
 
 export interface SlackAdapterConfig {
@@ -434,10 +438,16 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
     const { channel, threadTs } = this.decodeThreadId(threadId);
 
     try {
+      // Convert emoji placeholders to Slack format
+      const text = convertEmojiPlaceholders(
+        this.formatConverter.renderPostable(message),
+        "slack",
+      );
+
       const result = await this.client.chat.postMessage({
         channel,
         thread_ts: threadTs,
-        text: this.formatConverter.renderPostable(message),
+        text,
         unfurl_links: false,
         unfurl_media: false,
       });
@@ -460,10 +470,16 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
     const { channel } = this.decodeThreadId(threadId);
 
     try {
+      // Convert emoji placeholders to Slack format
+      const text = convertEmojiPlaceholders(
+        this.formatConverter.renderPostable(message),
+        "slack",
+      );
+
       const result = await this.client.chat.update({
         channel,
         ts: messageId,
-        text: this.formatConverter.renderPostable(message),
+        text,
       });
 
       return {
