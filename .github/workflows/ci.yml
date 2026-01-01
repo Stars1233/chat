@@ -58,6 +58,15 @@ jobs:
 
   build-and-test:
     runs-on: ubuntu-latest
+    env:
+      SLACK_BOT_TOKEN: xoxb-mock
+      SLACK_SIGNING_SECRET: mock
+      TEAMS_APP_ID: mock
+      TEAMS_APP_PASSWORD: mock
+      TEAMS_APP_TENANT_ID: mock
+      GOOGLE_CHAT_CREDENTIALS: '{"type":"service_account","project_id":"mock","private_key":"-----BEGIN RSA PRIVATE KEY-----\nMOCK\n-----END RSA PRIVATE KEY-----","client_email":"mock@mock.iam.gserviceaccount.com"}'
+      REDIS_URL: redis://localhost:6379
+      RECORDING_ENABLED: "false"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -75,7 +84,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build
-        run: pnpm build:validate
+        run: pnpm build
 
       - name: Test
         run: pnpm test
