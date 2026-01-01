@@ -22,34 +22,76 @@ A unified SDK for building chat bots across Slack, Microsoft Teams, and Google C
 
 ## Quick Start
 
+### 1. Create your bot (`lib/bot.ts`)
+
 ```typescript
-import { createChat } from "chat-sdk";
+import { Chat } from "chat-sdk";
 import { createSlackAdapter } from "@chat-sdk/slack";
-import { createRedisStateAdapter } from "@chat-sdk/state-redis";
+import { createTeamsAdapter } from "@chat-sdk/teams";
+import { createGoogleChatAdapter } from "@chat-sdk/gchat";
+import { createRedisState } from "@chat-sdk/state-redis";
 
-const chat = createChat({
-  adapters: [
-    createSlackAdapter({
-      botToken: process.env.SLACK_BOT_TOKEN,
-      signingSecret: process.env.SLACK_SIGNING_SECRET,
+export const bot = new Chat({
+  userName: "mybot",
+  adapters: {
+    slack: createSlackAdapter({
+      botToken: process.env.SLACK_BOT_TOKEN!,
+      signingSecret: process.env.SLACK_SIGNING_SECRET!,
     }),
-  ],
-  state: createRedisStateAdapter({ url: process.env.REDIS_URL }),
+    teams: createTeamsAdapter({
+      appId: process.env.TEAMS_APP_ID!,
+      appPassword: process.env.TEAMS_APP_PASSWORD!,
+    }),
+    gchat: createGoogleChatAdapter({
+      credentials: JSON.parse(process.env.GOOGLE_CHAT_CREDENTIALS!),
+    }),
+  },
+  state: createRedisState({ url: process.env.REDIS_URL! }),
 });
 
-chat.onMention(async (thread) => {
-  await thread.reply("Hello! I'm now listening to this thread.");
-  thread.subscribe();
+// Handle @mentions - works across all platforms
+bot.onNewMention(async (thread) => {
+  await thread.subscribe();
+  await thread.post("Hello! I'm now listening to this thread.");
 });
 
-chat.onSubscribedMessage(async (thread, message) => {
-  await thread.reply(`You said: ${message.text}`);
+// Handle follow-up messages in subscribed threads
+bot.onSubscribedMessage(async (thread, message) => {
+  await thread.post(`You said: ${message.text}`);
 });
+```
 
-export async function POST(request: Request) {
-  return chat.handleWebhook("slack", request);
+### 2. Create a webhook handler (`app/api/webhooks/[platform]/route.ts`)
+
+```typescript
+import { after } from "next/server";
+import { bot } from "@/lib/bot";
+
+type Platform = keyof typeof bot.webhooks;
+
+export async function POST(
+  request: Request,
+  { params }: { params: Promise<{ platform: string }> },
+) {
+  const { platform } = await params;
+
+  const handler = bot.webhooks[platform as Platform];
+  if (!handler) {
+    return new Response(`Unknown platform: ${platform}`, { status: 404 });
+  }
+
+  return handler(request, {
+    waitUntil: (task) => after(() => task),
+  });
 }
 ```
+
+This creates endpoints for each platform:
+- `POST /api/webhooks/slack`
+- `POST /api/webhooks/teams`
+- `POST /api/webhooks/gchat`
+
+The `waitUntil` option ensures message processing completes after the response is sent (required for serverless).
 
 ## Setup
 
