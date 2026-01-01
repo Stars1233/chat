@@ -55,10 +55,20 @@ bot.onNewMessage(/help/i, async (thread, message) => {
   );
 });
 
-// Handle emoji reactions - respond with a matching emoji
+// Handle emoji reactions - respond with a matching emoji or message
 bot.onReaction(["thumbs_up", "heart", "fire", "rocket"], async (event) => {
   // Only respond to added reactions, not removed ones
   if (!event.added) return;
+
+  // GChat bots cannot add reactions via service account auth (API limitation)
+  // Respond with a message instead
+  if (event.adapter.name === "gchat") {
+    await event.adapter.postMessage(
+      event.threadId,
+      `Thanks for the ${event.rawEmoji}!`,
+    );
+    return;
+  }
 
   // React to the same message with the same emoji
   // Adapters auto-convert normalized emoji to platform-specific format

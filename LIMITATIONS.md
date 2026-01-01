@@ -9,8 +9,8 @@ This document outlines the capabilities and limitations of each chat platform ad
 | `postMessage` | ✅ | ✅ | ✅ |
 | `editMessage` | ✅ | ✅ | ✅ |
 | `deleteMessage` | ✅ | ✅ | ✅ |
-| `addReaction` | ✅ | ❌ | ✅ |
-| `removeReaction` | ✅ | ❌ | ✅ |
+| `addReaction` | ✅ | ❌ | ⚠️* |
+| `removeReaction` | ✅ | ❌ | ⚠️* |
 | `onReaction` events | ✅ | ❌ | ✅* |
 | `startTyping` | ❌ | ✅ | ❌ |
 | `fetchMessages` | ✅ | ❌ | ✅ |
@@ -44,6 +44,7 @@ This document outlines the capabilities and limitations of each chat platform ad
 
 **Limitations:**
 - **Typing indicators**: Google Chat does not provide an API for typing indicators. The `startTyping` method is a no-op.
+- **Reactions (addReaction/removeReaction)**: The Google Chat API does not support service account (app) authentication for adding or removing reactions. To use these methods, you must use domain-wide delegation to impersonate a user, but the reaction will appear as coming from that user, not the bot. This is a Google Chat API limitation.
 
 **Notes:**
 - Bot user ID is learned dynamically from message annotations (when bot is @mentioned)
@@ -93,6 +94,8 @@ The SDK provides `onReaction()` to handle emoji reaction events. Support varies 
 | Google Chat | ✅* | Requires Workspace Events API (Pub/Sub subscription) |
 
 *Google Chat reaction events are only delivered via Pub/Sub (Workspace Events API), not direct HTTP webhooks.
+
+**GChat addReaction limitation**: The Google Chat API does not support adding reactions with service account authentication. Bots can receive reaction events but cannot add reactions as themselves. To add reactions, use domain-wide delegation to impersonate a user (the reaction will appear from that user, not the bot).
 
 ### Emoji Normalization
 
