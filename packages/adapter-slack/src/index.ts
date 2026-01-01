@@ -343,8 +343,8 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
       threadTs: event.item.ts,
     });
 
-    // Build message ID (Slack uses ts as message ID within a channel)
-    const messageId = `${event.item.channel}:${event.item.ts}`;
+    // Message ID is just the timestamp (Slack uses ts as message ID)
+    const messageId = event.item.ts;
 
     // Normalize emoji
     const rawEmoji = event.reaction;
