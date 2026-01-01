@@ -328,6 +328,12 @@ export class TeamsAdapter implements Adapter<TeamsThreadId, unknown> {
       conversation: { id: conversationId },
     };
 
+    this.logger?.debug("Teams API: sendActivity (message)", {
+      conversationId,
+      serviceUrl,
+      textLength: text.length,
+    });
+
     let messageId = "";
 
     await this.botAdapter.continueConversationAsync(
@@ -338,6 +344,8 @@ export class TeamsAdapter implements Adapter<TeamsThreadId, unknown> {
         messageId = response?.id || "";
       },
     );
+
+    this.logger?.debug("Teams API: sendActivity response", { messageId });
 
     return {
       id: messageId,
@@ -372,6 +380,12 @@ export class TeamsAdapter implements Adapter<TeamsThreadId, unknown> {
       conversation: { id: conversationId },
     };
 
+    this.logger?.debug("Teams API: updateActivity", {
+      conversationId,
+      messageId,
+      textLength: text.length,
+    });
+
     await this.botAdapter.continueConversationAsync(
       this.config.appId,
       conversationReference as Partial<ConversationReference>,
@@ -379,6 +393,8 @@ export class TeamsAdapter implements Adapter<TeamsThreadId, unknown> {
         await context.updateActivity(activity);
       },
     );
+
+    this.logger?.debug("Teams API: updateActivity response", { ok: true });
 
     return {
       id: messageId,
@@ -396,6 +412,11 @@ export class TeamsAdapter implements Adapter<TeamsThreadId, unknown> {
       conversation: { id: conversationId },
     };
 
+    this.logger?.debug("Teams API: deleteActivity", {
+      conversationId,
+      messageId,
+    });
+
     await this.botAdapter.continueConversationAsync(
       this.config.appId,
       conversationReference as Partial<ConversationReference>,
@@ -403,6 +424,8 @@ export class TeamsAdapter implements Adapter<TeamsThreadId, unknown> {
         await context.deleteActivity(messageId);
       },
     );
+
+    this.logger?.debug("Teams API: deleteActivity response", { ok: true });
   }
 
   async addReaction(
@@ -436,6 +459,8 @@ export class TeamsAdapter implements Adapter<TeamsThreadId, unknown> {
       conversation: { id: conversationId },
     };
 
+    this.logger?.debug("Teams API: sendActivity (typing)", { conversationId });
+
     await this.botAdapter.continueConversationAsync(
       this.config.appId,
       conversationReference as Partial<ConversationReference>,
@@ -443,6 +468,10 @@ export class TeamsAdapter implements Adapter<TeamsThreadId, unknown> {
         await context.sendActivity({ type: ActivityTypes.Typing });
       },
     );
+
+    this.logger?.debug("Teams API: sendActivity (typing) response", {
+      ok: true,
+    });
   }
 
   async fetchMessages(

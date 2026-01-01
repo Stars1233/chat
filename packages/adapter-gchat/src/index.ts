@@ -919,6 +919,12 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
         "gchat",
       );
 
+      this.logger?.debug("GChat API: spaces.messages.create", {
+        spaceName,
+        threadName,
+        textLength: text.length,
+      });
+
       const response = await this.chatApi.spaces.messages.create({
         parent: spaceName,
         // Required to reply in an existing thread
@@ -929,6 +935,10 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
           text,
           thread: threadName ? { name: threadName } : undefined,
         },
+      });
+
+      this.logger?.debug("GChat API: spaces.messages.create response", {
+        messageName: response.data.name,
       });
 
       return {
@@ -953,12 +963,21 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
         "gchat",
       );
 
+      this.logger?.debug("GChat API: spaces.messages.update", {
+        messageId,
+        textLength: text.length,
+      });
+
       const response = await this.chatApi.spaces.messages.update({
         name: messageId,
         updateMask: "text",
         requestBody: {
           text,
         },
+      });
+
+      this.logger?.debug("GChat API: spaces.messages.update response", {
+        messageName: response.data.name,
       });
 
       return {
@@ -973,8 +992,14 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
 
   async deleteMessage(_threadId: string, messageId: string): Promise<void> {
     try {
+      this.logger?.debug("GChat API: spaces.messages.delete", { messageId });
+
       await this.chatApi.spaces.messages.delete({
         name: messageId,
+      });
+
+      this.logger?.debug("GChat API: spaces.messages.delete response", {
+        ok: true,
       });
     } catch (error) {
       this.handleGoogleChatError(error);
@@ -990,12 +1015,24 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
     const gchatEmoji = defaultEmojiResolver.toGChat(emoji);
 
     try {
+      this.logger?.debug("GChat API: spaces.messages.reactions.create", {
+        messageId,
+        emoji: gchatEmoji,
+      });
+
       await this.chatApi.spaces.messages.reactions.create({
         parent: messageId,
         requestBody: {
           emoji: { unicode: gchatEmoji },
         },
       });
+
+      this.logger?.debug(
+        "GChat API: spaces.messages.reactions.create response",
+        {
+          ok: true,
+        },
+      );
     } catch (error) {
       this.handleGoogleChatError(error);
     }
@@ -1012,8 +1049,16 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
     try {
       // Google Chat requires the reaction resource name to delete it.
       // We need to list reactions and find the one with matching emoji.
+      this.logger?.debug("GChat API: spaces.messages.reactions.list", {
+        messageId,
+      });
+
       const response = await this.chatApi.spaces.messages.reactions.list({
         parent: messageId,
+      });
+
+      this.logger?.debug("GChat API: spaces.messages.reactions.list response", {
+        reactionCount: response.data.reactions?.length || 0,
       });
 
       const reaction = response.data.reactions?.find(
@@ -1023,14 +1068,25 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
       if (!reaction?.name) {
         this.logger?.debug("Reaction not found to remove", {
           messageId,
-          emoji,
+          emoji: gchatEmoji,
         });
         return;
       }
 
+      this.logger?.debug("GChat API: spaces.messages.reactions.delete", {
+        reactionName: reaction.name,
+      });
+
       await this.chatApi.spaces.messages.reactions.delete({
         name: reaction.name,
       });
+
+      this.logger?.debug(
+        "GChat API: spaces.messages.reactions.delete response",
+        {
+          ok: true,
+        },
+      );
     } catch (error) {
       this.handleGoogleChatError(error);
     }
@@ -1047,6 +1103,11 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
     const { spaceName } = this.decodeThreadId(threadId);
 
     try {
+      this.logger?.debug("GChat API: spaces.messages.list", {
+        spaceName,
+        pageSize: options.limit || 100,
+      });
+
       const response = await this.chatApi.spaces.messages.list({
         parent: spaceName,
         pageSize: options.limit || 100,
@@ -1054,6 +1115,11 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
       });
 
       const messages = response.data.messages || [];
+
+      this.logger?.debug("GChat API: spaces.messages.list response", {
+        messageCount: messages.length,
+      });
+
       return messages.map((msg) => {
         const msgThreadId = this.encodeThreadId({
           spaceName,
@@ -1089,7 +1155,13 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
     const { spaceName } = this.decodeThreadId(threadId);
 
     try {
+      this.logger?.debug("GChat API: spaces.get", { spaceName });
+
       const response = await this.chatApi.spaces.get({ name: spaceName });
+
+      this.logger?.debug("GChat API: spaces.get response", {
+        displayName: response.data.displayName,
+      });
 
       return {
         id: threadId,

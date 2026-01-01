@@ -445,12 +445,23 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
         "slack",
       );
 
+      this.logger?.debug("Slack API: chat.postMessage", {
+        channel,
+        threadTs,
+        textLength: text.length,
+      });
+
       const result = await this.client.chat.postMessage({
         channel,
         thread_ts: threadTs,
         text,
         unfurl_links: false,
         unfurl_media: false,
+      });
+
+      this.logger?.debug("Slack API: chat.postMessage response", {
+        messageId: result.ts,
+        ok: result.ok,
       });
 
       return {
@@ -477,10 +488,21 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
         "slack",
       );
 
+      this.logger?.debug("Slack API: chat.update", {
+        channel,
+        messageId,
+        textLength: text.length,
+      });
+
       const result = await this.client.chat.update({
         channel,
         ts: messageId,
         text,
+      });
+
+      this.logger?.debug("Slack API: chat.update response", {
+        messageId: result.ts,
+        ok: result.ok,
       });
 
       return {
@@ -497,10 +519,14 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
     const { channel } = this.decodeThreadId(threadId);
 
     try {
+      this.logger?.debug("Slack API: chat.delete", { channel, messageId });
+
       await this.client.chat.delete({
         channel,
         ts: messageId,
       });
+
+      this.logger?.debug("Slack API: chat.delete response", { ok: true });
     } catch (error) {
       this.handleSlackError(error);
     }
@@ -517,11 +543,19 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
     const name = slackEmoji.replace(/:/g, "");
 
     try {
+      this.logger?.debug("Slack API: reactions.add", {
+        channel,
+        messageId,
+        emoji: name,
+      });
+
       await this.client.reactions.add({
         channel,
         timestamp: messageId,
         name,
       });
+
+      this.logger?.debug("Slack API: reactions.add response", { ok: true });
     } catch (error) {
       this.handleSlackError(error);
     }
@@ -538,11 +572,19 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
     const name = slackEmoji.replace(/:/g, "");
 
     try {
+      this.logger?.debug("Slack API: reactions.remove", {
+        channel,
+        messageId,
+        emoji: name,
+      });
+
       await this.client.reactions.remove({
         channel,
         timestamp: messageId,
         name,
       });
+
+      this.logger?.debug("Slack API: reactions.remove response", { ok: true });
     } catch (error) {
       this.handleSlackError(error);
     }
@@ -559,6 +601,12 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
     const { channel, threadTs } = this.decodeThreadId(threadId);
 
     try {
+      this.logger?.debug("Slack API: conversations.replies", {
+        channel,
+        threadTs,
+        limit: options.limit || 100,
+      });
+
       const result = await this.client.conversations.replies({
         channel,
         ts: threadTs,
@@ -567,6 +615,12 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
       });
 
       const messages = (result.messages || []) as SlackEvent[];
+
+      this.logger?.debug("Slack API: conversations.replies response", {
+        messageCount: messages.length,
+        ok: result.ok,
+      });
+
       // Use sync version to avoid N API calls for user lookup
       return messages.map((msg) => this.parseSlackMessageSync(msg, threadId));
     } catch (error) {
@@ -578,8 +632,15 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
     const { channel, threadTs } = this.decodeThreadId(threadId);
 
     try {
+      this.logger?.debug("Slack API: conversations.info", { channel });
+
       const result = await this.client.conversations.info({ channel });
       const channelInfo = result.channel as { name?: string } | undefined;
+
+      this.logger?.debug("Slack API: conversations.info response", {
+        channelName: channelInfo?.name,
+        ok: result.ok,
+      });
 
       return {
         id: threadId,
