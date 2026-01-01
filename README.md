@@ -18,7 +18,8 @@ A unified SDK for building chat bots across Slack, Microsoft Teams, and Google C
 | `@chat-sdk/teams` | Microsoft Teams adapter |
 | `@chat-sdk/gchat` | Google Chat adapter with Workspace Events |
 | `@chat-sdk/state-memory` | In-memory state (development) |
-| `@chat-sdk/state-redis` | Redis state (production) |
+| `@chat-sdk/state-redis` | Redis state using `redis` package (production) |
+| `@chat-sdk/state-ioredis` | Redis state using `ioredis` package (production) |
 
 ## Quick Start
 

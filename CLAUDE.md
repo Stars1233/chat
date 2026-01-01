@@ -23,6 +23,10 @@ pnpm knip
 # Run all tests
 pnpm test
 
+# Run full validation. ALWAYS do this before declaring a task to be done.
+pnpm validate
+
+
 # Run dev mode (watch for changes)
 pnpm dev
 
@@ -74,6 +78,7 @@ This is a **pnpm monorepo** using **Turborepo** for build orchestration. All pac
 ### Thread ID Format
 
 All thread IDs follow the pattern: `{adapter}:{channel}:{thread}`
+
 - Slack: `slack:C123ABC:1234567890.123456`
 - Teams: `teams:{base64(conversationId)}:{base64(serviceUrl)}`
 - Google Chat: `gchat:spaces/ABC123:{base64(threadName)}`
@@ -91,6 +96,7 @@ All thread IDs follow the pattern: `{adapter}:{channel}:{thread}`
 ### Formatting System
 
 Messages use **mdast** (Markdown AST) as the canonical format. Each adapter has a `FormatConverter` that:
+
 - `toAst(platformText)` - Converts platform format to mdast
 - `fromAst(ast)` - Converts mdast to platform format
 - `renderPostable(message)` - Renders a `PostableMessage` to platform string
@@ -98,6 +104,7 @@ Messages use **mdast** (Markdown AST) as the canonical format. Each adapter has 
 ## Linting
 
 Uses **Biome** with strict rules:
+
 - `noUnusedImports` and `noUnusedVariables` as errors
 - `useImportType` enforced - use `import type` for type-only imports
 - `noExplicitAny` - avoid `any` types
@@ -106,6 +113,7 @@ Uses **Biome** with strict rules:
 ## Environment Variables
 
 Key env vars used (see `turbo.json` for full list):
+
 - `SLACK_BOT_TOKEN`, `SLACK_SIGNING_SECRET` - Slack credentials
 - `TEAMS_APP_ID`, `TEAMS_APP_PASSWORD`, `TEAMS_APP_TENANT_ID` - Teams credentials
 - `GOOGLE_CHAT_CREDENTIALS` or `GOOGLE_CHAT_USE_ADC` - Google Chat auth

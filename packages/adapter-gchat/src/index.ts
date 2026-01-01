@@ -640,7 +640,10 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
     notification: WorkspaceEventNotification,
     threadId: string,
   ): Message<unknown> {
-    const message = notification.message!;
+    const message = notification.message;
+    if (!message) {
+      throw new Error("PubSub notification missing message");
+    }
     const text = this.normalizeBotMentions(message);
     const isBot = message.sender?.type === "BOT";
     const isMe = this.isMessageFromSelf(message);

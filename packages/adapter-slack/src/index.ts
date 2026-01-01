@@ -266,7 +266,9 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
     // Skip message subtypes we don't handle (edits, deletes, etc.)
     // Note: bot_message subtype is allowed through - Chat class filters via isMe
     if (event.subtype && event.subtype !== "bot_message") {
-      this.logger?.debug("Ignoring message subtype", { subtype: event.subtype });
+      this.logger?.debug("Ignoring message subtype", {
+        subtype: event.subtype,
+      });
       return;
     }
 

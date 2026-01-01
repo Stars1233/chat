@@ -8,7 +8,7 @@ import { execSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 
 const README_PATH = join(__dirname, "../../../README.md");
 const REPO_ROOT = join(__dirname, "../../..");
@@ -19,10 +19,11 @@ const REPO_ROOT = join(__dirname, "../../..");
 function extractTypeScriptBlocks(markdown: string): string[] {
   const blocks: string[] = [];
   const regex = /```typescript\n([\s\S]*?)```/g;
-  let match: RegExpExecArray | null;
+  let match = regex.exec(markdown);
 
-  while ((match = regex.exec(markdown)) !== null) {
+  while (match !== null) {
     blocks.push(match[1].trim());
+    match = regex.exec(markdown);
   }
 
   return blocks;
@@ -49,11 +50,21 @@ function createTempProject(codeBlocks: string[]): string {
       typeRoots: [join(REPO_ROOT, "node_modules/@types")],
       paths: {
         "chat-sdk": [join(__dirname, "../../chat-sdk/src/index.ts")],
-        "@chat-sdk/slack": [join(__dirname, "../../adapter-slack/src/index.ts")],
-        "@chat-sdk/teams": [join(__dirname, "../../adapter-teams/src/index.ts")],
-        "@chat-sdk/gchat": [join(__dirname, "../../adapter-gchat/src/index.ts")],
-        "@chat-sdk/state-redis": [join(__dirname, "../../state-redis/src/index.ts")],
-        "@chat-sdk/state-memory": [join(__dirname, "../../state-memory/src/index.ts")],
+        "@chat-sdk/slack": [
+          join(__dirname, "../../adapter-slack/src/index.ts"),
+        ],
+        "@chat-sdk/teams": [
+          join(__dirname, "../../adapter-teams/src/index.ts"),
+        ],
+        "@chat-sdk/gchat": [
+          join(__dirname, "../../adapter-gchat/src/index.ts"),
+        ],
+        "@chat-sdk/state-redis": [
+          join(__dirname, "../../state-redis/src/index.ts"),
+        ],
+        "@chat-sdk/state-memory": [
+          join(__dirname, "../../state-memory/src/index.ts"),
+        ],
         "@/lib/bot": [join(tempDir, "bot.ts")],
         "next/server": [join(tempDir, "next-server.d.ts")],
       },
@@ -61,12 +72,18 @@ function createTempProject(codeBlocks: string[]): string {
     include: [join(tempDir, "*.ts")],
   };
 
-  writeFileSync(join(tempDir, "tsconfig.json"), JSON.stringify(tsconfig, null, 2));
+  writeFileSync(
+    join(tempDir, "tsconfig.json"),
+    JSON.stringify(tsconfig, null, 2),
+  );
 
   // Create stub for next/server since it's not installed
-  writeFileSync(join(tempDir, "next-server.d.ts"), `
+  writeFileSync(
+    join(tempDir, "next-server.d.ts"),
+    `
 export function after(fn: () => unknown): void;
-  `);
+  `,
+  );
 
   // Write each code block as a separate file
   // The bot.ts file needs to be written first so route.ts can import it
@@ -78,7 +95,7 @@ export function after(fn: () => unknown): void;
     } else if (code.includes("export async function POST")) {
       filename = "route.ts";
       // Fix the import path for the test environment
-      code = code.replace('@/lib/bot', './bot');
+      code = code.replace("@/lib/bot", "./bot");
     } else {
       filename = `block-${index}.ts`;
     }
@@ -118,7 +135,7 @@ describe("README.md code examples", () => {
       // Fail with helpful error message
       expect.fail(
         `README.md TypeScript code blocks failed type-checking:\n\n${output}\n\n` +
-        `Code blocks tested:\n${codeBlocks.map((b, i) => `--- Block ${i} ---\n${b}`).join("\n\n")}`
+          `Code blocks tested:\n${codeBlocks.map((b, i) => `--- Block ${i} ---\n${b}`).join("\n\n")}`,
       );
     }
 
@@ -130,14 +147,19 @@ describe("README.md code examples", () => {
     const readme = readFileSync(README_PATH, "utf-8");
     const codeBlocks = extractTypeScriptBlocks(readme);
 
-    const hasBotDefinition = codeBlocks.some((block) =>
-      block.includes("new Chat") && block.includes("adapters:")
+    const hasBotDefinition = codeBlocks.some(
+      (block) => block.includes("new Chat") && block.includes("adapters:"),
     );
     const hasRouteHandler = codeBlocks.some((block) =>
-      block.includes("export async function POST")
+      block.includes("export async function POST"),
     );
 
-    expect(hasBotDefinition, "README should have a Chat instantiation example").toBe(true);
-    expect(hasRouteHandler, "README should have a POST handler example").toBe(true);
+    expect(
+      hasBotDefinition,
+      "README should have a Chat instantiation example",
+    ).toBe(true);
+    expect(hasRouteHandler, "README should have a POST handler example").toBe(
+      true,
+    );
   });
 });

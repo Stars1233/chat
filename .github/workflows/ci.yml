@@ -38,8 +38,11 @@ jobs:
       - name: Lint
         run: pnpm lint
 
+      - name: Knip
+        run: pnpm knip
+
       - name: Build
-        run: pnpm build
+        run: pnpm build:validate
 
       - name: Test
         run: pnpm test
