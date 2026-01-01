@@ -154,32 +154,13 @@ export class TeamsAdapter implements Adapter<TeamsThreadId, unknown> {
       replyToId: activity.replyToId,
     });
 
-    const message = this.parseTeamsMessage(activity, threadId);
-    this.logger?.debug("Teams parsed message", {
+    // Let Chat class handle async processing and waitUntil
+    this.chat.processMessage(
+      this,
       threadId,
-      messageId: message.id,
-      text: message.text,
-      authorUserId: message.author.userId,
-      authorUserName: message.author.userName,
-      isBot: message.author.isBot,
-      isMe: message.author.isMe,
-      rawActivity: activity,
-    });
-
-    // Run message handling in background
-    const handleTask = this.chat
-      .handleIncomingMessage(this, threadId, message)
-      .catch((err) => {
-        this.logger?.error("Message handling error", { error: err });
-      });
-
-    if (options?.waitUntil) {
-      options.waitUntil(handleTask);
-    } else {
-      handleTask.catch((err) => {
-        this.logger?.error("Message handling error", { error: err });
-      });
-    }
+      this.parseTeamsMessage(activity, threadId),
+      options,
+    );
   }
 
   private parseTeamsMessage(

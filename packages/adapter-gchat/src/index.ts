@@ -555,15 +555,25 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
     pushMessage: PubSubPushMessage,
     options?: WebhookOptions,
   ): Response {
+    // Early filter: Check event type BEFORE base64 decoding to save CPU
+    // The ce-type attribute is available in message.attributes
+    const eventType = pushMessage.message?.attributes?.["ce-type"];
+    if (eventType && eventType !== "google.workspace.chat.message.v1.created") {
+      this.logger?.debug("Skipping non-created Pub/Sub event", { eventType });
+      return new Response(JSON.stringify({ success: true }), {
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
     try {
       const notification = decodePubSubMessage(pushMessage);
-      this.logger?.info("Pub/Sub notification decoded", { notification });
+      this.logger?.debug("Pub/Sub notification decoded", {
+        eventType: notification.eventType,
+        messageId: notification.message?.name,
+      });
 
-      // Handle message events from Pub/Sub
-      if (
-        notification.eventType === "google.workspace.chat.message.v1.created" &&
-        notification.message
-      ) {
+      // Handle message.created events
+      if (notification.message) {
         this.handlePubSubMessageEvent(notification, options);
       }
 
@@ -593,43 +603,6 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
     }
 
     const message = notification.message;
-
-    // Deduplicate messages - same message can arrive via direct webhook (@mention)
-    // and Pub/Sub subscription. Use state to track processed messages.
-    const dedupeKey = `gchat:processed:${message.name}`;
-    const handleTask = (async () => {
-      const alreadyProcessed = await this.state?.get<boolean>(dedupeKey);
-      if (alreadyProcessed) {
-        this.logger?.debug("Skipping duplicate Pub/Sub message", {
-          messageId: message.name,
-        });
-        return;
-      }
-      // Mark as processed with short TTL (60s is enough since duplicates come within seconds)
-      await this.state?.set(dedupeKey, true, 60 * 1000);
-
-      await this.processPubSubMessage(notification, options);
-    })().catch((err) => {
-      this.logger?.error("Pub/Sub message handling error", { error: err });
-    });
-
-    if (options?.waitUntil) {
-      options.waitUntil(handleTask);
-    }
-  }
-
-  /**
-   * Process a Pub/Sub message after deduplication.
-   */
-  private async processPubSubMessage(
-    notification: WorkspaceEventNotification,
-    options?: WebhookOptions,
-  ): Promise<void> {
-    if (!this.chat || !notification.message) {
-      return;
-    }
-
-    const message = notification.message;
     // Extract space name from targetResource: "//chat.googleapis.com/spaces/AAAA"
     const spaceName = notification.targetResource?.replace(
       "//chat.googleapis.com/",
@@ -641,7 +614,33 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
       threadName,
     });
 
-    // Normalize bot mentions and convert to standard message format
+    // Refresh subscription if needed (runs in background)
+    const resolvedSpaceName = spaceName || message.space?.name;
+    if (resolvedSpaceName && options?.waitUntil) {
+      options.waitUntil(
+        this.ensureSpaceSubscription(resolvedSpaceName).catch((err) => {
+          this.logger?.debug("Subscription refresh failed", { error: err });
+        }),
+      );
+    }
+
+    // Let Chat class handle async processing and waitUntil
+    this.chat.processMessage(
+      this,
+      threadId,
+      this.parsePubSubMessage(notification, threadId),
+      options,
+    );
+  }
+
+  /**
+   * Parse a Pub/Sub message into the standard Message format.
+   */
+  private parsePubSubMessage(
+    notification: WorkspaceEventNotification,
+    threadId: string,
+  ): Message<unknown> {
+    const message = notification.message!;
     const text = this.normalizeBotMentions(message);
     const isBot = message.sender?.type === "BOT";
     const isMe = this.isMessageFromSelf(message);
@@ -681,21 +680,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
       isMe: parsedMessage.author.isMe,
     });
 
-    // Refresh subscription if needed (runs in background, doesn't block message handling)
-    const resolvedSpaceName = spaceName || message.space?.name;
-    if (resolvedSpaceName) {
-      const refreshTask = this.ensureSpaceSubscription(resolvedSpaceName).catch(
-        (err) => {
-          this.logger?.debug("Subscription refresh failed", { error: err });
-        },
-      );
-      if (options?.waitUntil) {
-        options.waitUntil(refreshTask);
-      }
-    }
-
-    // Process the message
-    await this.chat.handleIncomingMessage(this, threadId, parsedMessage);
+    return parsedMessage;
   }
 
   /**
@@ -712,6 +697,9 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
     }
   }
 
+  /**
+   * Handle direct webhook message events (Add-ons format).
+   */
   private handleMessageEvent(
     event: GoogleChatEvent,
     options?: WebhookOptions,
@@ -734,44 +722,13 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
       threadName,
     });
 
-    // Deduplicate messages - same message can arrive via direct webhook (@mention)
-    // and Pub/Sub subscription. Use state to track processed messages.
-    const dedupeKey = `gchat:processed:${message.name}`;
-    const handleTask = (async () => {
-      const alreadyProcessed = await this.state?.get<boolean>(dedupeKey);
-      if (alreadyProcessed) {
-        this.logger?.debug("Skipping duplicate webhook message", {
-          messageId: message.name,
-        });
-        return;
-      }
-      // Mark as processed with short TTL (60s is enough since duplicates come within seconds)
-      await this.state?.set(dedupeKey, true, 60 * 1000);
-
-      const parsedMessage = this.parseGoogleChatMessage(event, threadId);
-      this.logger?.debug("GChat parsed message", {
-        threadId,
-        messageId: parsedMessage.id,
-        text: parsedMessage.text,
-        authorUserId: parsedMessage.author.userId,
-        authorUserName: parsedMessage.author.userName,
-        isBot: parsedMessage.author.isBot,
-        isMe: parsedMessage.author.isMe,
-        rawEvent: event,
-      });
-
-      await this.chat?.handleIncomingMessage(this, threadId, parsedMessage);
-    })().catch((err) => {
-      this.logger?.error("Message handling error", { error: err });
-    });
-
-    if (options?.waitUntil) {
-      options.waitUntil(handleTask);
-    } else {
-      handleTask.catch((err) => {
-        this.logger?.error("Message handling error", { error: err });
-      });
-    }
+    // Let Chat class handle async processing and waitUntil
+    this.chat.processMessage(
+      this,
+      threadId,
+      this.parseGoogleChatMessage(event, threadId),
+      options,
+    );
   }
 
   private parseGoogleChatMessage(

@@ -250,6 +250,10 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
     }
   }
 
+  /**
+   * Handle message events from Slack.
+   * Bot message filtering (isMe) is handled centrally by the Chat class.
+   */
   private handleMessageEvent(
     event: SlackEvent,
     options?: WebhookOptions,
@@ -260,10 +264,9 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
     }
 
     // Skip message subtypes we don't handle (edits, deletes, etc.)
+    // Note: bot_message subtype is allowed through - Chat class filters via isMe
     if (event.subtype && event.subtype !== "bot_message") {
-      this.logger?.debug("Ignoring message subtype", {
-        subtype: event.subtype,
-      });
+      this.logger?.debug("Ignoring message subtype", { subtype: event.subtype });
       return;
     }
 
@@ -281,47 +284,14 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
       threadTs,
     });
 
-    // Run message handling in background (async to allow user lookup)
-    const handleTask = (async () => {
-      // Deduplicate messages - Slack sends both `message` and `app_mention` events
-      // for @mentions with the same ts (timestamp). Use state to track processed messages.
-      const dedupeKey = `slack:processed:${event.channel}:${event.ts}`;
-      const alreadyProcessed = await this.chat?.getState().get<boolean>(dedupeKey);
-      if (alreadyProcessed) {
-        this.logger?.debug("Skipping duplicate message", {
-          eventType: event.type,
-          channel: event.channel,
-          ts: event.ts,
-        });
-        return;
-      }
-      // Mark as processed with short TTL (60s is enough since duplicates come within seconds)
-      await this.chat?.getState().set(dedupeKey, true, 60 * 1000);
-
-      const message = await this.parseSlackMessage(event, threadId);
-      this.logger?.debug("Slack parsed message", {
-        threadId,
-        messageId: message.id,
-        text: message.text,
-        authorUserId: message.author.userId,
-        authorUserName: message.author.userName,
-        isBot: message.author.isBot,
-        isMe: message.author.isMe,
-        rawEvent: event,
-      });
-
-      await this.chat?.handleIncomingMessage(this, threadId, message);
-    })().catch((err) => {
-      this.logger?.error("Message handling error", { error: err });
-    });
-
-    if (options?.waitUntil) {
-      options.waitUntil(handleTask);
-    } else {
-      handleTask.catch((err) => {
-        this.logger?.error("Message handling error", { error: err });
-      });
-    }
+    // Let Chat class handle async processing, waitUntil, and isMe filtering
+    // Use factory function since parseSlackMessage is async (user lookup)
+    this.chat.processMessage(
+      this,
+      threadId,
+      () => this.parseSlackMessage(event, threadId),
+      options,
+    );
   }
 
   private async parseSlackMessage(

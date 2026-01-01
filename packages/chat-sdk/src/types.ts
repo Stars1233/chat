@@ -198,11 +198,31 @@ export interface Adapter<TThreadId = unknown, TRawMessage = unknown> {
 
 /** Internal interface for Chat instance passed to adapters */
 export interface ChatInstance {
+  /**
+   * Process an incoming message from an adapter.
+   * Handles waitUntil registration and error catching internally.
+   *
+   * @param adapter - The adapter that received the message
+   * @param threadId - The thread ID
+   * @param message - Either a parsed message, or a factory function for lazy async parsing
+   * @param options - Webhook options including waitUntil
+   */
+  processMessage(
+    adapter: Adapter,
+    threadId: string,
+    message: Message | (() => Promise<Message>),
+    options?: WebhookOptions,
+  ): void;
+
+  /**
+   * @deprecated Use processMessage instead. This method is for internal use.
+   */
   handleIncomingMessage(
     adapter: Adapter,
     threadId: string,
     message: Message,
   ): Promise<void>;
+
   getState(): StateAdapter;
   getUserName(): string;
   /** Get the configured logger, optionally with a child prefix */

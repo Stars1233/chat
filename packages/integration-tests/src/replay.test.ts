@@ -14,10 +14,13 @@ import {
   type GoogleChatAdapter,
 } from "@chat-sdk/gchat";
 import { createSlackAdapter, type SlackAdapter } from "@chat-sdk/slack";
-import { createTeamsAdapter, type TeamsAdapter } from "@chat-sdk/teams";
 import { createMemoryState } from "@chat-sdk/state-memory";
+import { createTeamsAdapter, type TeamsAdapter } from "@chat-sdk/teams";
 import { Chat } from "chat-sdk";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import gchatFixtures from "../fixtures/replay/gchat.json";
+import slackFixtures from "../fixtures/replay/slack.json";
+import teamsFixtures from "../fixtures/replay/teams.json";
 import {
   createMockGoogleChatApi,
   GCHAT_TEST_CREDENTIALS,
@@ -27,20 +30,17 @@ import {
 import {
   createMockSlackClient,
   injectMockSlackClient,
+  type MockSlackClient,
   SLACK_BOT_TOKEN,
   SLACK_SIGNING_SECRET,
-  type MockSlackClient,
 } from "./slack-utils";
 import {
   createMockBotAdapter,
   injectMockBotAdapter,
-  TEAMS_APP_PASSWORD,
   type MockBotAdapter,
+  TEAMS_APP_PASSWORD,
 } from "./teams-utils";
 import { createWaitUntilTracker } from "./test-scenarios";
-import gchatFixtures from "../fixtures/replay/gchat.json";
-import slackFixtures from "../fixtures/replay/slack.json";
-import teamsFixtures from "../fixtures/replay/teams.json";
 
 function createSignedSlackRequest(body: string): Request {
   const timestamp = Math.floor(Date.now() / 1000).toString();
@@ -68,7 +68,10 @@ function createGchatRequest(body: unknown): Request {
 function createTeamsRequest(body: unknown): Request {
   return new Request("https://example.com/api/messages", {
     method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: "Bearer test-token" },
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: "Bearer test-token",
+    },
     body: JSON.stringify(body),
   });
 }
@@ -116,7 +119,9 @@ describe("Replay Tests", () => {
       });
       await tracker.waitForAll();
       expect(mockChatApi.sentMessages).toContainEqual(
-        expect.objectContaining({ text: expect.stringContaining("Thanks for mentioning me!") }),
+        expect.objectContaining({
+          text: expect.stringContaining("Thanks for mentioning me!"),
+        }),
       );
       mockChatApi.clearMocks();
 
@@ -176,19 +181,27 @@ describe("Replay Tests", () => {
 
     it("should replay @mention and follow-up", async () => {
       // Step 1: @mention
-      await chat.webhooks.slack(createSignedSlackRequest(JSON.stringify(slackFixtures.mention)), {
-        waitUntil: tracker.waitUntil,
-      });
+      await chat.webhooks.slack(
+        createSignedSlackRequest(JSON.stringify(slackFixtures.mention)),
+        {
+          waitUntil: tracker.waitUntil,
+        },
+      );
       await tracker.waitForAll();
       expect(mockSlackClient.chat.postMessage).toHaveBeenCalledWith(
-        expect.objectContaining({ text: expect.stringContaining("Thanks for mentioning me!") }),
+        expect.objectContaining({
+          text: expect.stringContaining("Thanks for mentioning me!"),
+        }),
       );
       vi.clearAllMocks();
 
       // Step 2: Follow-up
-      await chat.webhooks.slack(createSignedSlackRequest(JSON.stringify(slackFixtures.followUp)), {
-        waitUntil: tracker.waitUntil,
-      });
+      await chat.webhooks.slack(
+        createSignedSlackRequest(JSON.stringify(slackFixtures.followUp)),
+        {
+          waitUntil: tracker.waitUntil,
+        },
+      );
       await tracker.waitForAll();
       expect(mockSlackClient.chat.postMessage).toHaveBeenCalledWith(
         expect.objectContaining({ text: "Processing..." }),
@@ -242,7 +255,9 @@ describe("Replay Tests", () => {
       });
       await tracker.waitForAll();
       expect(mockBotAdapter.sentActivities).toContainEqual(
-        expect.objectContaining({ text: expect.stringContaining("Thanks for mentioning me!") }),
+        expect.objectContaining({
+          text: expect.stringContaining("Thanks for mentioning me!"),
+        }),
       );
       mockBotAdapter.clearMocks();
 

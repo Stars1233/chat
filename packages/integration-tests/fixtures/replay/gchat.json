@@ -2,22 +2,42 @@
   "botName": "Chat SDK Demo",
   "botUserId": "users/113977916201552346146",
   "mention": {
-    "commonEventObject": { "userLocale": "en", "hostApp": "CHAT", "platform": "WEB" },
+    "commonEventObject": {
+      "userLocale": "en",
+      "hostApp": "CHAT",
+      "platform": "WEB"
+    },
     "chat": {
-      "user": { "name": "users/117994873354375860089", "displayName": "Malte Ubl", "type": "HUMAN" },
+      "user": {
+        "name": "users/117994873354375860089",
+        "displayName": "Malte Ubl",
+        "type": "HUMAN"
+      },
       "eventTime": "2025-12-31T23:47:51.749519Z",
       "messagePayload": {
         "space": { "name": "spaces/AAQAJ9CXYcg", "type": "ROOM" },
         "message": {
           "name": "spaces/AAQAJ9CXYcg/messages/kVOtO797ZPI.kVOtO797ZPI",
-          "sender": { "name": "users/117994873354375860089", "displayName": "Malte Ubl", "type": "HUMAN" },
+          "sender": {
+            "name": "users/117994873354375860089",
+            "displayName": "Malte Ubl",
+            "type": "HUMAN"
+          },
           "text": "@Chat SDK Demo hello",
-          "annotations": [{
-            "type": "USER_MENTION",
-            "startIndex": 0,
-            "length": 14,
-            "userMention": { "user": { "name": "users/113977916201552346146", "type": "BOT" }, "type": "MENTION" }
-          }],
+          "annotations": [
+            {
+              "type": "USER_MENTION",
+              "startIndex": 0,
+              "length": 14,
+              "userMention": {
+                "user": {
+                  "name": "users/113977916201552346146",
+                  "type": "BOT"
+                },
+                "type": "MENTION"
+              }
+            }
+          ],
           "thread": { "name": "spaces/AAQAJ9CXYcg/threads/kVOtO797ZPI" },
           "space": { "name": "spaces/AAQAJ9CXYcg" }
         }

@@ -16,6 +16,8 @@ import type {
 import { ConsoleLogger, LockError } from "./types";
 
 const DEFAULT_LOCK_TTL_MS = 30_000; // 30 seconds
+/** TTL for message deduplication entries */
+const DEDUPE_TTL_MS = 60_000; // 60 seconds
 
 interface MessagePattern {
   pattern: RegExp;
@@ -212,6 +214,33 @@ export class Chat<
   }
 
   // ChatInstance interface implementations
+
+  /**
+   * Process an incoming message from an adapter.
+   * Handles waitUntil registration and error catching internally.
+   * Adapters should call this instead of handleIncomingMessage directly.
+   */
+  processMessage(
+    adapter: Adapter,
+    threadId: string,
+    messageOrFactory: Message | (() => Promise<Message>),
+    options?: WebhookOptions,
+  ): void {
+    const task = (async () => {
+      const message =
+        typeof messageOrFactory === "function"
+          ? await messageOrFactory()
+          : messageOrFactory;
+      await this.handleIncomingMessage(adapter, threadId, message);
+    })().catch((err) => {
+      this.logger.error("Message processing error", { error: err, threadId });
+    });
+
+    if (options?.waitUntil) {
+      options.waitUntil(task);
+    }
+  }
+
   getState(): StateAdapter {
     return this.state;
   }
@@ -230,6 +259,12 @@ export class Chat<
   /**
    * Handle an incoming message from an adapter.
    * This is called by adapters when they receive a webhook.
+   *
+   * The Chat class handles common concerns centrally:
+   * - Deduplication: Same message may arrive multiple times (e.g., Slack sends
+   *   both `message` and `app_mention` events, GChat sends direct webhook + Pub/Sub)
+   * - Bot filtering: Messages from the bot itself are skipped
+   * - Locking: Only one instance processes a thread at a time
    */
   async handleIncomingMessage(
     adapter: Adapter,
@@ -239,6 +274,7 @@ export class Chat<
     this.logger.debug("Incoming message", {
       adapter: adapter.name,
       threadId,
+      messageId: message.id,
       text: message.text,
       author: message.author.userName,
       authorUserId: message.author.userId,
@@ -255,6 +291,19 @@ export class Chat<
       });
       return;
     }
+
+    // Deduplicate messages - same message can arrive via multiple paths
+    // (e.g., Slack message + app_mention events, GChat direct webhook + Pub/Sub)
+    const dedupeKey = `dedupe:${adapter.name}:${message.id}`;
+    const alreadyProcessed = await this.state.get<boolean>(dedupeKey);
+    if (alreadyProcessed) {
+      this.logger.debug("Skipping duplicate message", {
+        adapter: adapter.name,
+        messageId: message.id,
+      });
+      return;
+    }
+    await this.state.set(dedupeKey, true, DEDUPE_TTL_MS);
 
     // Try to acquire lock on thread
     const lock = await this.state.acquireLock(threadId, DEFAULT_LOCK_TTL_MS);

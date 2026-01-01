@@ -19,9 +19,22 @@
       "tenantId": "ed6e6740-934d-4088-a05e-caa14d8d89ee",
       "id": "19:d441d38c655c47a085215b2726e76927@thread.tacv2;messageid=1767224924615"
     },
-    "recipient": { "id": "28:57627569-c120-42a1-9e6f-7cb4b96cc8ef", "name": "Chat SDK Demo" },
-    "entities": [{ "mentioned": { "id": "28:57627569-c120-42a1-9e6f-7cb4b96cc8ef", "name": "Chat SDK Demo" }, "type": "mention" }],
-    "channelData": { "tenant": { "id": "ed6e6740-934d-4088-a05e-caa14d8d89ee" } }
+    "recipient": {
+      "id": "28:57627569-c120-42a1-9e6f-7cb4b96cc8ef",
+      "name": "Chat SDK Demo"
+    },
+    "entities": [
+      {
+        "mentioned": {
+          "id": "28:57627569-c120-42a1-9e6f-7cb4b96cc8ef",
+          "name": "Chat SDK Demo"
+        },
+        "type": "mention"
+      }
+    ],
+    "channelData": {
+      "tenant": { "id": "ed6e6740-934d-4088-a05e-caa14d8d89ee" }
+    }
   },
   "followUp": {
     "text": "Hi",
@@ -39,8 +52,13 @@
       "tenantId": "ed6e6740-934d-4088-a05e-caa14d8d89ee",
       "id": "19:d441d38c655c47a085215b2726e76927@thread.tacv2;messageid=1767224924615"
     },
-    "recipient": { "id": "28:57627569-c120-42a1-9e6f-7cb4b96cc8ef", "name": "Chat SDK Demo" },
+    "recipient": {
+      "id": "28:57627569-c120-42a1-9e6f-7cb4b96cc8ef",
+      "name": "Chat SDK Demo"
+    },
     "entities": [],
-    "channelData": { "tenant": { "id": "ed6e6740-934d-4088-a05e-caa14d8d89ee" } }
+    "channelData": {
+      "tenant": { "id": "ed6e6740-934d-4088-a05e-caa14d8d89ee" }
+    }
   }
 }

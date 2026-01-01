@@ -46,12 +46,15 @@ export function createGoogleChatEvent(options: GoogleChatEventOptions) {
     eventTime = new Date().toISOString(),
   } = options;
 
+  // Calculate the actual length of the @mention (including @ symbol)
+  const mentionLength = `@${GCHAT_BOT_NAME}`.length;
+
   const annotations = hasBotMention
     ? [
         {
           type: "USER_MENTION",
           startIndex: 0,
-          length: 4,
+          length: mentionLength,
           userMention: {
             user: {
               name: "users/bot-user-id",
