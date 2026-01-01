@@ -6,58 +6,81 @@ import {
   defaultEmojiResolver,
   EmojiResolver,
   emoji,
+  getEmoji,
 } from "./emoji";
 
 describe("EmojiResolver", () => {
   describe("fromSlack", () => {
-    it("should convert Slack emoji to normalized format", () => {
+    it("should convert Slack emoji to normalized EmojiValue", () => {
       const resolver = new EmojiResolver();
-      expect(resolver.fromSlack("+1")).toBe("thumbs_up");
-      expect(resolver.fromSlack("thumbsup")).toBe("thumbs_up");
-      expect(resolver.fromSlack("-1")).toBe("thumbs_down");
-      expect(resolver.fromSlack("heart")).toBe("heart");
-      expect(resolver.fromSlack("fire")).toBe("fire");
+      expect(resolver.fromSlack("+1").name).toBe("thumbs_up");
+      expect(resolver.fromSlack("thumbsup").name).toBe("thumbs_up");
+      expect(resolver.fromSlack("-1").name).toBe("thumbs_down");
+      expect(resolver.fromSlack("heart").name).toBe("heart");
+      expect(resolver.fromSlack("fire").name).toBe("fire");
     });
 
     it("should handle colons around emoji names", () => {
       const resolver = new EmojiResolver();
-      expect(resolver.fromSlack(":+1:")).toBe("thumbs_up");
-      expect(resolver.fromSlack(":fire:")).toBe("fire");
+      expect(resolver.fromSlack(":+1:").name).toBe("thumbs_up");
+      expect(resolver.fromSlack(":fire:").name).toBe("fire");
     });
 
     it("should be case-insensitive", () => {
       const resolver = new EmojiResolver();
-      expect(resolver.fromSlack("FIRE")).toBe("fire");
-      expect(resolver.fromSlack("Heart")).toBe("heart");
+      expect(resolver.fromSlack("FIRE").name).toBe("fire");
+      expect(resolver.fromSlack("Heart").name).toBe("heart");
     });
 
-    it("should return raw emoji if no mapping exists", () => {
+    it("should return EmojiValue with raw name if no mapping exists", () => {
       const resolver = new EmojiResolver();
-      expect(resolver.fromSlack("custom_emoji")).toBe("custom_emoji");
+      const result = resolver.fromSlack("custom_emoji");
+      expect(result.name).toBe("custom_emoji");
+      expect(result.toString()).toBe("{{emoji:custom_emoji}}");
     });
   });
 
   describe("fromGChat", () => {
-    it("should convert GChat unicode emoji to normalized format", () => {
+    it("should convert GChat unicode emoji to normalized EmojiValue", () => {
       const resolver = new EmojiResolver();
-      expect(resolver.fromGChat("👍")).toBe("thumbs_up");
-      expect(resolver.fromGChat("👎")).toBe("thumbs_down");
-      expect(resolver.fromGChat("❤️")).toBe("heart");
-      expect(resolver.fromGChat("🔥")).toBe("fire");
-      expect(resolver.fromGChat("🚀")).toBe("rocket");
+      expect(resolver.fromGChat("👍").name).toBe("thumbs_up");
+      expect(resolver.fromGChat("👎").name).toBe("thumbs_down");
+      expect(resolver.fromGChat("❤️").name).toBe("heart");
+      expect(resolver.fromGChat("🔥").name).toBe("fire");
+      expect(resolver.fromGChat("🚀").name).toBe("rocket");
     });
 
     it("should handle multiple unicode variants", () => {
       const resolver = new EmojiResolver();
-      expect(resolver.fromGChat("❤")).toBe("heart");
-      expect(resolver.fromGChat("❤️")).toBe("heart");
-      expect(resolver.fromGChat("✅")).toBe("check");
-      expect(resolver.fromGChat("✔️")).toBe("check");
+      expect(resolver.fromGChat("❤").name).toBe("heart");
+      expect(resolver.fromGChat("❤️").name).toBe("heart");
+      expect(resolver.fromGChat("✅").name).toBe("check");
+      expect(resolver.fromGChat("✔️").name).toBe("check");
     });
 
-    it("should return raw emoji if no mapping exists", () => {
+    it("should return EmojiValue with raw emoji as name if no mapping exists", () => {
       const resolver = new EmojiResolver();
-      expect(resolver.fromGChat("🦄")).toBe("🦄");
+      const result = resolver.fromGChat("🦄");
+      expect(result.name).toBe("🦄");
+      expect(result.toString()).toBe("{{emoji:🦄}}");
+    });
+  });
+
+  describe("fromTeams", () => {
+    it("should convert Teams reaction types to normalized EmojiValue", () => {
+      const resolver = new EmojiResolver();
+      expect(resolver.fromTeams("like").name).toBe("thumbs_up");
+      expect(resolver.fromTeams("heart").name).toBe("heart");
+      expect(resolver.fromTeams("laugh").name).toBe("laugh");
+      expect(resolver.fromTeams("surprised").name).toBe("surprised");
+      expect(resolver.fromTeams("sad").name).toBe("sad");
+      expect(resolver.fromTeams("angry").name).toBe("angry");
+    });
+
+    it("should return EmojiValue with raw name if no mapping exists", () => {
+      const resolver = new EmojiResolver();
+      const result = resolver.fromTeams("custom_reaction");
+      expect(result.name).toBe("custom_reaction");
     });
   });
 
@@ -125,8 +148,8 @@ describe("EmojiResolver", () => {
         unicorn: { slack: "unicorn_face", gchat: "🦄" },
       });
 
-      expect(resolver.fromSlack("unicorn_face")).toBe("unicorn");
-      expect(resolver.fromGChat("🦄")).toBe("unicorn");
+      expect(resolver.fromSlack("unicorn_face").name).toBe("unicorn");
+      expect(resolver.fromGChat("🦄").name).toBe("unicorn");
       expect(resolver.toSlack("unicorn")).toBe("unicorn_face");
       expect(resolver.toGChat("unicorn")).toBe("🦄");
     });
@@ -137,7 +160,7 @@ describe("EmojiResolver", () => {
         fire: { slack: "flames", gchat: "🔥" },
       });
 
-      expect(resolver.fromSlack("flames")).toBe("fire");
+      expect(resolver.fromSlack("flames").name).toBe("fire");
       expect(resolver.toSlack("fire")).toBe("flames");
     });
   });
@@ -145,7 +168,7 @@ describe("EmojiResolver", () => {
   describe("defaultEmojiResolver", () => {
     it("should be a pre-configured resolver instance", () => {
       expect(defaultEmojiResolver).toBeInstanceOf(EmojiResolver);
-      expect(defaultEmojiResolver.fromSlack("+1")).toBe("thumbs_up");
+      expect(defaultEmojiResolver.fromSlack("+1").name).toBe("thumbs_up");
     });
   });
 
@@ -273,18 +296,40 @@ describe("EmojiResolver", () => {
 });
 
 describe("emoji helper", () => {
-  it("should provide placeholders for well-known emoji", () => {
-    expect(emoji.thumbs_up).toBe("{{emoji:thumbs_up}}");
-    expect(emoji.fire).toBe("{{emoji:fire}}");
-    expect(emoji.rocket).toBe("{{emoji:rocket}}");
-    expect(emoji["100"]).toBe("{{emoji:100}}");
+  it("should provide EmojiValue objects for well-known emoji", () => {
+    expect(emoji.thumbs_up.name).toBe("thumbs_up");
+    expect(emoji.fire.name).toBe("fire");
+    expect(emoji.rocket.name).toBe("rocket");
+    expect(emoji["100"].name).toBe("100");
   });
 
-  it("should have a custom() method for custom emoji", () => {
-    expect(emoji.custom("unicorn")).toBe("{{emoji:unicorn}}");
-    expect(emoji.custom("custom_team_emoji")).toBe(
-      "{{emoji:custom_team_emoji}}",
-    );
+  it("should convert to placeholder string via toString()", () => {
+    expect(emoji.thumbs_up.toString()).toBe("{{emoji:thumbs_up}}");
+    expect(emoji.fire.toString()).toBe("{{emoji:fire}}");
+    expect(`${emoji.rocket}`).toBe("{{emoji:rocket}}");
+  });
+
+  it("should have object identity (same emoji returns same object)", () => {
+    expect(emoji.thumbs_up).toBe(emoji.thumbs_up);
+    expect(emoji.fire).toBe(emoji.fire);
+    // getEmoji also returns the same singleton
+    expect(getEmoji("thumbs_up")).toBe(emoji.thumbs_up);
+  });
+
+  it("should have a custom() method that returns EmojiValue", () => {
+    const unicorn = emoji.custom("unicorn");
+    expect(unicorn.name).toBe("unicorn");
+    expect(unicorn.toString()).toBe("{{emoji:unicorn}}");
+
+    const custom = emoji.custom("custom_team_emoji");
+    expect(custom.name).toBe("custom_team_emoji");
+    expect(`${custom}`).toBe("{{emoji:custom_team_emoji}}");
+  });
+
+  it("should return same object from custom() for same name", () => {
+    const first = emoji.custom("test_emoji");
+    const second = emoji.custom("test_emoji");
+    expect(first).toBe(second);
   });
 });
 
@@ -327,42 +372,54 @@ describe("convertEmojiPlaceholders", () => {
 });
 
 describe("createEmoji", () => {
-  it("should create emoji helper with well-known emoji", () => {
+  it("should create emoji helper with well-known EmojiValue objects", () => {
     const e = createEmoji();
-    expect(e.thumbs_up).toBe("{{emoji:thumbs_up}}");
-    expect(e.fire).toBe("{{emoji:fire}}");
-    expect(e.rocket).toBe("{{emoji:rocket}}");
+    expect(e.thumbs_up.name).toBe("thumbs_up");
+    expect(e.fire.name).toBe("fire");
+    expect(e.rocket.name).toBe("rocket");
+    expect(`${e.thumbs_up}`).toBe("{{emoji:thumbs_up}}");
   });
 
-  it("should include custom() method", () => {
+  it("should include custom() method returning EmojiValue", () => {
     const e = createEmoji();
-    expect(e.custom("unicorn")).toBe("{{emoji:unicorn}}");
+    const unicorn = e.custom("unicorn");
+    expect(unicorn.name).toBe("unicorn");
+    expect(unicorn.toString()).toBe("{{emoji:unicorn}}");
   });
 
-  it("should add custom emoji to the helper", () => {
+  it("should add custom emoji to the helper as EmojiValue objects", () => {
     const e = createEmoji({
       unicorn: { slack: "unicorn_face", gchat: "🦄" },
       company_logo: { slack: "company", gchat: "🏢" },
     });
 
-    // Custom emoji are accessible
-    expect(e.unicorn).toBe("{{emoji:unicorn}}");
-    expect(e.company_logo).toBe("{{emoji:company_logo}}");
+    // Custom emoji are accessible as EmojiValue objects
+    expect(e.unicorn.name).toBe("unicorn");
+    expect(e.company_logo.name).toBe("company_logo");
+    expect(`${e.unicorn}`).toBe("{{emoji:unicorn}}");
+    expect(`${e.company_logo}`).toBe("{{emoji:company_logo}}");
 
     // Well-known emoji still work
-    expect(e.thumbs_up).toBe("{{emoji:thumbs_up}}");
+    expect(e.thumbs_up.name).toBe("thumbs_up");
   });
 
   it("should automatically register custom emoji with default resolver", () => {
     const e = createEmoji({
-      unicorn: { slack: "unicorn_face", gchat: "🦄" },
+      custom_test: { slack: "custom_slack", gchat: "🎯" },
     });
 
-    const text = `${e.unicorn} Magic!`;
+    const text = `${e.custom_test} Magic!`;
     // No need to manually extend resolver - createEmoji does it automatically
     expect(convertEmojiPlaceholders(text, "slack")).toBe(
-      ":unicorn_face: Magic!",
+      ":custom_slack: Magic!",
     );
-    expect(convertEmojiPlaceholders(text, "gchat")).toBe("🦄 Magic!");
+    expect(convertEmojiPlaceholders(text, "gchat")).toBe("🎯 Magic!");
+  });
+
+  it("should return same EmojiValue singleton as emoji helper", () => {
+    const e = createEmoji();
+    // Both should return the same frozen singleton object
+    expect(e.thumbs_up).toBe(emoji.thumbs_up);
+    expect(e.fire).toBe(emoji.fire);
   });
 });

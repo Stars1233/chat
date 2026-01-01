@@ -20,16 +20,22 @@ class ServerlessCloudAdapter extends CloudAdapter {
 import type {
   Adapter,
   ChatInstance,
+  EmojiValue,
   FetchOptions,
   FormattedContent,
   Logger,
   Message,
   PostableMessage,
   RawMessage,
+  ReactionEvent,
   ThreadInfo,
   WebhookOptions,
 } from "chat-sdk";
-import { convertEmojiPlaceholders, NotImplementedError } from "chat-sdk";
+import {
+  convertEmojiPlaceholders,
+  defaultEmojiResolver,
+  NotImplementedError,
+} from "chat-sdk";
 import { TeamsFormatConverter } from "./markdown";
 
 export interface TeamsAdapterConfig {
@@ -141,6 +147,12 @@ export class TeamsAdapter implements Adapter<TeamsThreadId, unknown> {
 
     const activity = context.activity;
 
+    // Handle message reactions
+    if (activity.type === ActivityTypes.MessageReaction) {
+      this.handleReactionActivity(activity, options);
+      return;
+    }
+
     // Only handle message activities
     if (activity.type !== ActivityTypes.Message) {
       this.logger?.debug("Ignoring non-message activity", {
@@ -162,6 +174,87 @@ export class TeamsAdapter implements Adapter<TeamsThreadId, unknown> {
       this.parseTeamsMessage(activity, threadId),
       options,
     );
+  }
+
+  /**
+   * Handle Teams reaction events (reactionsAdded/reactionsRemoved).
+   */
+  private handleReactionActivity(
+    activity: Activity,
+    options?: WebhookOptions,
+  ): void {
+    if (!this.chat) return;
+
+    // Extract the message ID from conversation ID
+    // Format: "19:xxx@thread.tacv2;messageid=1767297849909"
+    const conversationId = activity.conversation?.id || "";
+    const messageIdMatch = conversationId.match(/messageid=(\d+)/);
+    const messageId = messageIdMatch?.[1] || activity.replyToId || "";
+
+    // Build thread ID (strip the messageid part for the thread)
+    const baseConversationId = conversationId.split(";")[0] || conversationId;
+    const threadId = this.encodeThreadId({
+      conversationId: baseConversationId,
+      serviceUrl: activity.serviceUrl || "",
+    });
+
+    const user = {
+      userId: activity.from?.id || "unknown",
+      userName: activity.from?.name || "unknown",
+      fullName: activity.from?.name,
+      isBot: false,
+      isMe: this.isMessageFromSelf(activity),
+    };
+
+    // Process added reactions
+    const reactionsAdded = activity.reactionsAdded || [];
+    for (const reaction of reactionsAdded) {
+      const rawEmoji = reaction.type || "";
+      const emojiValue = defaultEmojiResolver.fromTeams(rawEmoji);
+
+      const event: Omit<ReactionEvent, "adapter"> = {
+        emoji: emojiValue,
+        rawEmoji,
+        added: true,
+        user,
+        messageId,
+        threadId,
+        raw: activity,
+      };
+
+      this.logger?.debug("Processing Teams reaction added", {
+        emoji: emojiValue.name,
+        rawEmoji,
+        messageId,
+      });
+
+      this.chat.processReaction({ ...event, adapter: this }, options);
+    }
+
+    // Process removed reactions
+    const reactionsRemoved = activity.reactionsRemoved || [];
+    for (const reaction of reactionsRemoved) {
+      const rawEmoji = reaction.type || "";
+      const emojiValue = defaultEmojiResolver.fromTeams(rawEmoji);
+
+      const event: Omit<ReactionEvent, "adapter"> = {
+        emoji: emojiValue,
+        rawEmoji,
+        added: false,
+        user,
+        messageId,
+        threadId,
+        raw: activity,
+      };
+
+      this.logger?.debug("Processing Teams reaction removed", {
+        emoji: emojiValue.name,
+        rawEmoji,
+        messageId,
+      });
+
+      this.chat.processReaction({ ...event, adapter: this }, options);
+    }
   }
 
   private parseTeamsMessage(
@@ -315,7 +408,7 @@ export class TeamsAdapter implements Adapter<TeamsThreadId, unknown> {
   async addReaction(
     _threadId: string,
     _messageId: string,
-    _emoji: string,
+    _emoji: EmojiValue | string,
   ): Promise<void> {
     throw new NotImplementedError(
       "Teams Bot Framework does not expose reaction APIs",
@@ -326,7 +419,7 @@ export class TeamsAdapter implements Adapter<TeamsThreadId, unknown> {
   async removeReaction(
     _threadId: string,
     _messageId: string,
-    _emoji: string,
+    _emoji: EmojiValue | string,
   ): Promise<void> {
     throw new NotImplementedError(
       "Teams Bot Framework does not expose reaction APIs",

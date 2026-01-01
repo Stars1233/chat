@@ -1,10 +1,50 @@
 import type {
   CustomEmojiMap,
-  Emoji,
   EmojiFormats,
   EmojiMapConfig,
+  EmojiValue,
   WellKnownEmoji,
 } from "./types";
+
+// Re-export EmojiValue for convenience
+export type { EmojiValue } from "./types";
+
+// =============================================================================
+// EmojiValue - Immutable singleton emoji objects with object identity
+// =============================================================================
+
+/** Internal emoji registry for singleton instances */
+const emojiRegistry = new Map<string, EmojiValue>();
+
+/**
+ * Get or create an immutable singleton EmojiValue.
+ *
+ * Always returns the same frozen object for the same name,
+ * enabling `===` comparison for emoji identity.
+ *
+ * @example
+ * ```typescript
+ * const e1 = getEmoji("thumbs_up");
+ * const e2 = getEmoji("thumbs_up");
+ * console.log(e1 === e2); // true - same object
+ * ```
+ */
+export function getEmoji(name: string): EmojiValue {
+  let emojiValue = emojiRegistry.get(name);
+  if (!emojiValue) {
+    emojiValue = Object.freeze({
+      name,
+      toString: () => `{{emoji:${name}}}`,
+      toJSON: () => `{{emoji:${name}}}`,
+    });
+    emojiRegistry.set(name, emojiValue);
+  }
+  return emojiValue;
+}
+
+// =============================================================================
+// Emoji Map - Platform-specific formats
+// =============================================================================
 
 /**
  * Default emoji map for well-known emoji.
@@ -167,49 +207,72 @@ export class EmojiResolver {
   }
 
   /**
-   * Convert a Slack emoji name to normalized format.
-   * Returns the raw emoji if no mapping exists.
+   * Convert a Slack emoji name to normalized EmojiValue.
+   * Returns an EmojiValue for the raw emoji if no mapping exists.
    */
-  fromSlack(slackEmoji: string): Emoji | string {
+  fromSlack(slackEmoji: string): EmojiValue {
     // Remove colons if present (e.g., ":+1:" -> "+1")
     const cleaned = slackEmoji.replace(/^:|:$/g, "").toLowerCase();
-    return this.slackToNormalized.get(cleaned) ?? slackEmoji;
+    const normalized = this.slackToNormalized.get(cleaned) ?? slackEmoji;
+    return getEmoji(normalized);
   }
 
   /**
-   * Convert a Google Chat unicode emoji to normalized format.
-   * Returns the raw emoji if no mapping exists.
+   * Convert a Google Chat unicode emoji to normalized EmojiValue.
+   * Returns an EmojiValue for the raw emoji if no mapping exists.
    */
-  fromGChat(gchatEmoji: string): Emoji | string {
-    return this.gchatToNormalized.get(gchatEmoji) ?? gchatEmoji;
+  fromGChat(gchatEmoji: string): EmojiValue {
+    const normalized = this.gchatToNormalized.get(gchatEmoji) ?? gchatEmoji;
+    return getEmoji(normalized);
   }
 
   /**
-   * Convert a normalized emoji to Slack format.
+   * Convert a Teams reaction type to normalized EmojiValue.
+   * Teams uses specific names: like, heart, laugh, surprised, sad, angry
+   * Returns an EmojiValue for the raw reaction if no mapping exists.
+   */
+  fromTeams(teamsReaction: string): EmojiValue {
+    const teamsMap: Record<string, string> = {
+      like: "thumbs_up",
+      heart: "heart",
+      laugh: "laugh",
+      surprised: "surprised",
+      sad: "sad",
+      angry: "angry",
+    };
+    const normalized = teamsMap[teamsReaction] ?? teamsReaction;
+    return getEmoji(normalized);
+  }
+
+  /**
+   * Convert a normalized emoji (or EmojiValue) to Slack format.
    * Returns the first Slack format if multiple exist.
    */
-  toSlack(emoji: Emoji | string): string {
-    const formats = this.emojiMap[emoji];
-    if (!formats) return emoji;
+  toSlack(emoji: EmojiValue | string): string {
+    const name = typeof emoji === "string" ? emoji : emoji.name;
+    const formats = this.emojiMap[name];
+    if (!formats) return name;
     return Array.isArray(formats.slack) ? formats.slack[0] : formats.slack;
   }
 
   /**
-   * Convert a normalized emoji to Google Chat format.
+   * Convert a normalized emoji (or EmojiValue) to Google Chat format.
    * Returns the first GChat format if multiple exist.
    */
-  toGChat(emoji: Emoji | string): string {
-    const formats = this.emojiMap[emoji];
-    if (!formats) return emoji;
+  toGChat(emoji: EmojiValue | string): string {
+    const name = typeof emoji === "string" ? emoji : emoji.name;
+    const formats = this.emojiMap[name];
+    if (!formats) return name;
     return Array.isArray(formats.gchat) ? formats.gchat[0] : formats.gchat;
   }
 
   /**
-   * Check if an emoji (in any format) matches a normalized emoji name.
+   * Check if an emoji (in any format) matches a normalized emoji name or EmojiValue.
    */
-  matches(rawEmoji: string, normalized: Emoji | string): boolean {
-    const formats = this.emojiMap[normalized];
-    if (!formats) return rawEmoji === normalized;
+  matches(rawEmoji: string, normalized: EmojiValue | string): boolean {
+    const name = typeof normalized === "string" ? normalized : normalized.name;
+    const formats = this.emojiMap[name];
+    if (!formats) return rawEmoji === name;
 
     const slackFormats = Array.isArray(formats.slack)
       ? formats.slack
@@ -275,23 +338,29 @@ export function convertEmojiPlaceholders(
   });
 }
 
-/** Type for emoji placeholder strings */
-type EmojiPlaceholder<T extends string> = `{{emoji:${T}}}`;
+// =============================================================================
+// Emoji Helper Types
+// =============================================================================
 
-/** Base emoji object with well-known emoji */
+/** Base emoji object with well-known emoji as EmojiValue singletons */
 type BaseEmojiHelper = {
-  [K in WellKnownEmoji]: EmojiPlaceholder<K>;
+  [K in WellKnownEmoji]: EmojiValue;
 } & {
-  custom: (name: string) => string;
+  /** Create an EmojiValue for a custom emoji name */
+  custom: (name: string) => EmojiValue;
 };
 
 /** Extended emoji object including custom emoji from module augmentation */
 type ExtendedEmojiHelper = BaseEmojiHelper & {
-  [K in keyof CustomEmojiMap]: EmojiPlaceholder<K & string>;
+  [K in keyof CustomEmojiMap]: EmojiValue;
 };
 
 /**
  * Create a type-safe emoji helper with custom emoji.
+ *
+ * Returns immutable singleton EmojiValue objects that support:
+ * - Object identity comparison (`event.emoji === emoji.thumbs_up`)
+ * - Template string interpolation (`${emoji.thumbs_up}` → "{{emoji:thumbs_up}}")
  *
  * Custom emoji are automatically registered with the default resolver,
  * so placeholders will convert correctly in messages.
@@ -312,7 +381,10 @@ type ExtendedEmojiHelper = BaseEmojiHelper & {
  *   company_logo: { slack: "company", gchat: "🏢" },
  * });
  *
- * // Now you get type-safe access to custom emoji that auto-convert
+ * // Object identity works for comparisons
+ * if (event.emoji === emoji.unicorn) { ... }
+ *
+ * // Template strings work for messages
  * await thread.post(`${emoji.unicorn} Magic!`);
  * // Slack: ":unicorn_face: Magic!"
  * // GChat: "🦄 Magic!"
@@ -325,132 +397,58 @@ export function createEmoji<
   >,
 >(
   customEmoji?: T,
-): BaseEmojiHelper & { [K in keyof T]: EmojiPlaceholder<K & string> } {
-  const base: BaseEmojiHelper = {
+): BaseEmojiHelper & { [K in keyof T]: EmojiValue } {
+  // All well-known emoji names
+  const wellKnownEmoji: WellKnownEmoji[] = [
     // Reactions & Gestures
-    thumbs_up: "{{emoji:thumbs_up}}",
-    thumbs_down: "{{emoji:thumbs_down}}",
-    clap: "{{emoji:clap}}",
-    wave: "{{emoji:wave}}",
-    pray: "{{emoji:pray}}",
-    muscle: "{{emoji:muscle}}",
-    ok_hand: "{{emoji:ok_hand}}",
-    point_up: "{{emoji:point_up}}",
-    point_down: "{{emoji:point_down}}",
-    point_left: "{{emoji:point_left}}",
-    point_right: "{{emoji:point_right}}",
-    raised_hands: "{{emoji:raised_hands}}",
-    shrug: "{{emoji:shrug}}",
-    facepalm: "{{emoji:facepalm}}",
+    "thumbs_up", "thumbs_down", "clap", "wave", "pray", "muscle",
+    "ok_hand", "point_up", "point_down", "point_left", "point_right",
+    "raised_hands", "shrug", "facepalm",
     // Emotions & Faces
-    heart: "{{emoji:heart}}",
-    smile: "{{emoji:smile}}",
-    laugh: "{{emoji:laugh}}",
-    thinking: "{{emoji:thinking}}",
-    sad: "{{emoji:sad}}",
-    cry: "{{emoji:cry}}",
-    angry: "{{emoji:angry}}",
-    love_eyes: "{{emoji:love_eyes}}",
-    cool: "{{emoji:cool}}",
-    wink: "{{emoji:wink}}",
-    surprised: "{{emoji:surprised}}",
-    worried: "{{emoji:worried}}",
-    confused: "{{emoji:confused}}",
-    neutral: "{{emoji:neutral}}",
-    sleeping: "{{emoji:sleeping}}",
-    sick: "{{emoji:sick}}",
-    mind_blown: "{{emoji:mind_blown}}",
-    relieved: "{{emoji:relieved}}",
-    grimace: "{{emoji:grimace}}",
-    rolling_eyes: "{{emoji:rolling_eyes}}",
-    hug: "{{emoji:hug}}",
-    zany: "{{emoji:zany}}",
+    "heart", "smile", "laugh", "thinking", "sad", "cry", "angry",
+    "love_eyes", "cool", "wink", "surprised", "worried", "confused",
+    "neutral", "sleeping", "sick", "mind_blown", "relieved", "grimace",
+    "rolling_eyes", "hug", "zany",
     // Status & Symbols
-    check: "{{emoji:check}}",
-    x: "{{emoji:x}}",
-    question: "{{emoji:question}}",
-    exclamation: "{{emoji:exclamation}}",
-    warning: "{{emoji:warning}}",
-    stop: "{{emoji:stop}}",
-    info: "{{emoji:info}}",
-    "100": "{{emoji:100}}",
-    fire: "{{emoji:fire}}",
-    star: "{{emoji:star}}",
-    sparkles: "{{emoji:sparkles}}",
-    lightning: "{{emoji:lightning}}",
-    boom: "{{emoji:boom}}",
-    eyes: "{{emoji:eyes}}",
+    "check", "x", "question", "exclamation", "warning", "stop", "info",
+    "100", "fire", "star", "sparkles", "lightning", "boom", "eyes",
     // Status Indicators
-    green_circle: "{{emoji:green_circle}}",
-    yellow_circle: "{{emoji:yellow_circle}}",
-    red_circle: "{{emoji:red_circle}}",
-    blue_circle: "{{emoji:blue_circle}}",
-    white_circle: "{{emoji:white_circle}}",
-    black_circle: "{{emoji:black_circle}}",
+    "green_circle", "yellow_circle", "red_circle", "blue_circle",
+    "white_circle", "black_circle",
     // Objects & Tools
-    rocket: "{{emoji:rocket}}",
-    party: "{{emoji:party}}",
-    confetti: "{{emoji:confetti}}",
-    balloon: "{{emoji:balloon}}",
-    gift: "{{emoji:gift}}",
-    trophy: "{{emoji:trophy}}",
-    medal: "{{emoji:medal}}",
-    lightbulb: "{{emoji:lightbulb}}",
-    gear: "{{emoji:gear}}",
-    wrench: "{{emoji:wrench}}",
-    hammer: "{{emoji:hammer}}",
-    bug: "{{emoji:bug}}",
-    link: "{{emoji:link}}",
-    lock: "{{emoji:lock}}",
-    unlock: "{{emoji:unlock}}",
-    key: "{{emoji:key}}",
-    pin: "{{emoji:pin}}",
-    memo: "{{emoji:memo}}",
-    clipboard: "{{emoji:clipboard}}",
-    calendar: "{{emoji:calendar}}",
-    clock: "{{emoji:clock}}",
-    hourglass: "{{emoji:hourglass}}",
-    bell: "{{emoji:bell}}",
-    megaphone: "{{emoji:megaphone}}",
-    speech_bubble: "{{emoji:speech_bubble}}",
-    email: "{{emoji:email}}",
-    inbox: "{{emoji:inbox}}",
-    outbox: "{{emoji:outbox}}",
-    package: "{{emoji:package}}",
-    folder: "{{emoji:folder}}",
-    file: "{{emoji:file}}",
-    chart_up: "{{emoji:chart_up}}",
-    chart_down: "{{emoji:chart_down}}",
-    coffee: "{{emoji:coffee}}",
-    pizza: "{{emoji:pizza}}",
-    beer: "{{emoji:beer}}",
+    "rocket", "party", "confetti", "balloon", "gift", "trophy", "medal",
+    "lightbulb", "gear", "wrench", "hammer", "bug", "link", "lock",
+    "unlock", "key", "pin", "memo", "clipboard", "calendar", "clock",
+    "hourglass", "bell", "megaphone", "speech_bubble", "email", "inbox",
+    "outbox", "package", "folder", "file", "chart_up", "chart_down",
+    "coffee", "pizza", "beer",
     // Arrows & Directions
-    arrow_up: "{{emoji:arrow_up}}",
-    arrow_down: "{{emoji:arrow_down}}",
-    arrow_left: "{{emoji:arrow_left}}",
-    arrow_right: "{{emoji:arrow_right}}",
-    refresh: "{{emoji:refresh}}",
+    "arrow_up", "arrow_down", "arrow_left", "arrow_right", "refresh",
     // Nature & Weather
-    sun: "{{emoji:sun}}",
-    cloud: "{{emoji:cloud}}",
-    rain: "{{emoji:rain}}",
-    snow: "{{emoji:snow}}",
-    rainbow: "{{emoji:rainbow}}",
-    // Custom
-    custom: (name: string): string => `{{emoji:${name}}}`,
+    "sun", "cloud", "rain", "snow", "rainbow",
+  ];
+
+  // Build the emoji helper object with EmojiValue singletons
+  const helper: Record<string, EmojiValue | ((name: string) => EmojiValue)> = {
+    custom: (name: string): EmojiValue => getEmoji(name),
   };
 
+  // Add all well-known emoji
+  for (const name of wellKnownEmoji) {
+    helper[name] = getEmoji(name);
+  }
+
+  // Add custom emoji if provided
   if (customEmoji) {
-    // Add custom emoji to the helper object
     for (const key of Object.keys(customEmoji)) {
-      (base as unknown as Record<string, string>)[key] = `{{emoji:${key}}}`;
+      helper[key] = getEmoji(key);
     }
     // Extend the default resolver so placeholders convert correctly
     defaultEmojiResolver.extend(customEmoji as EmojiMapConfig);
   }
 
-  return base as BaseEmojiHelper & {
-    [K in keyof T]: EmojiPlaceholder<K & string>;
+  return helper as BaseEmojiHelper & {
+    [K in keyof T]: EmojiValue;
   };
 }
 

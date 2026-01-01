@@ -3,7 +3,7 @@ import type {
   Adapter,
   ChatConfig,
   ChatInstance,
-  Emoji,
+  EmojiValue,
   Logger,
   LogLevel,
   MentionHandler,
@@ -27,9 +27,12 @@ interface MessagePattern {
   handler: MessageHandler;
 }
 
+/** Filter can be EmojiValue objects, emoji names, or raw emoji formats */
+type EmojiFilter = EmojiValue | string;
+
 interface ReactionPattern {
   /** If specified, only these emoji trigger the handler. Empty means all emoji. */
-  emoji: (Emoji | string)[];
+  emoji: EmojiFilter[];
   handler: ReactionHandler;
 }
 
@@ -221,24 +224,26 @@ export class Chat<
    *
    * @example
    * ```typescript
-   * // Handle specific emoji
-   * chat.onReaction(["thumbs_up", "heart"], async (event) => {
-   *   console.log(`${event.user.userName} reacted with ${event.emoji}`);
+   * // Handle specific emoji using EmojiValue objects (recommended)
+   * chat.onReaction([emoji.thumbs_up, emoji.heart], async (event) => {
+   *   if (event.emoji === emoji.thumbs_up) {
+   *     console.log("Thumbs up!");
+   *   }
    * });
    *
    * // Handle all reactions
    * chat.onReaction(async (event) => {
-   *   console.log(`${event.added ? "Added" : "Removed"} ${event.emoji}`);
+   *   console.log(`${event.added ? "Added" : "Removed"} ${event.emoji.name}`);
    * });
    * ```
    *
-   * @param emojiOrHandler - Either an array of emoji to filter, or the handler
+   * @param emojiOrHandler - Either an array of emoji to filter (EmojiValue or string), or the handler
    * @param handler - The handler (if emoji filter is provided)
    */
   onReaction(handler: ReactionHandler): void;
-  onReaction(emoji: (Emoji | string)[], handler: ReactionHandler): void;
+  onReaction(emoji: EmojiFilter[], handler: ReactionHandler): void;
   onReaction(
-    emojiOrHandler: (Emoji | string)[] | ReactionHandler,
+    emojiOrHandler: EmojiFilter[] | ReactionHandler,
     handler?: ReactionHandler,
   ): void {
     if (typeof emojiOrHandler === "function") {
@@ -249,7 +254,9 @@ export class Chat<
       // Specific emoji filter
       this.reactionHandlers.push({ emoji: emojiOrHandler, handler });
       this.logger.debug("Registered reaction handler", {
-        emoji: emojiOrHandler,
+        emoji: emojiOrHandler.map((e) =>
+          typeof e === "string" ? e : e.name,
+        ),
       });
     }
   }
@@ -335,17 +342,23 @@ export class Chat<
     }
 
     // Run matching handlers
-    for (const { emoji, handler } of this.reactionHandlers) {
+    for (const { emoji: emojiFilter, handler } of this.reactionHandlers) {
       // If no emoji filter, run handler for all reactions
-      if (emoji.length === 0) {
+      if (emojiFilter.length === 0) {
         await handler(event);
         continue;
       }
 
       // Check if the reaction matches any of the specified emoji
-      const matches = emoji.some(
-        (e) => e === event.emoji || e === event.rawEmoji,
-      );
+      const matches = emojiFilter.some((filter) => {
+        // EmojiValue object identity comparison (recommended)
+        if (filter === event.emoji) return true;
+
+        // String comparison: check against emoji name or rawEmoji
+        const filterName = typeof filter === "string" ? filter : filter.name;
+        return filterName === event.emoji.name || filterName === event.rawEmoji;
+      });
+
       if (matches) {
         await handler(event);
       }

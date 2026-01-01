@@ -3,6 +3,7 @@ import { WebClient } from "@slack/web-api";
 import type {
   Adapter,
   ChatInstance,
+  EmojiValue,
   FetchOptions,
   FormattedContent,
   Logger,
@@ -16,6 +17,7 @@ import type {
 import {
   convertEmojiPlaceholders,
   defaultEmojiResolver,
+  getEmoji,
   RateLimitError,
 } from "chat-sdk";
 import { SlackFormatConverter } from "./markdown";
@@ -508,10 +510,10 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
   async addReaction(
     threadId: string,
     messageId: string,
-    emoji: string,
+    emoji: EmojiValue | string,
   ): Promise<void> {
     const { channel } = this.decodeThreadId(threadId);
-    // Convert normalized emoji to Slack format, strip colons
+    // Convert emoji (EmojiValue or string) to Slack format, strip colons
     const slackEmoji = defaultEmojiResolver.toSlack(emoji);
     const name = slackEmoji.replace(/:/g, "");
 
@@ -529,10 +531,10 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
   async removeReaction(
     threadId: string,
     messageId: string,
-    emoji: string,
+    emoji: EmojiValue | string,
   ): Promise<void> {
     const { channel } = this.decodeThreadId(threadId);
-    // Convert normalized emoji to Slack format, strip colons
+    // Convert emoji (EmojiValue or string) to Slack format, strip colons
     const slackEmoji = defaultEmojiResolver.toSlack(emoji);
     const name = slackEmoji.replace(/:/g, "");
 

@@ -154,14 +154,14 @@ export interface Adapter<TThreadId = unknown, TRawMessage = unknown> {
   addReaction(
     threadId: string,
     messageId: string,
-    emoji: string,
+    emoji: EmojiValue | string,
   ): Promise<void>;
 
   /** Remove a reaction from a message */
   removeReaction(
     threadId: string,
     messageId: string,
-    emoji: string,
+    emoji: EmojiValue | string,
   ): Promise<void>;
 
   /** Show typing indicator */
@@ -423,9 +423,9 @@ export interface SentMessage<TRawMessage = unknown>
   /** Delete this message */
   delete(): Promise<void>;
   /** Add a reaction to this message */
-  addReaction(emoji: string): Promise<void>;
+  addReaction(emoji: EmojiValue | string): Promise<void>;
   /** Remove a reaction from this message */
-  removeReaction(emoji: string): Promise<void>;
+  removeReaction(emoji: EmojiValue | string): Promise<void>;
 }
 
 // =============================================================================
@@ -658,11 +658,37 @@ export type Emoji = WellKnownEmoji | keyof CustomEmojiMap;
 export type EmojiMapConfig = Partial<Record<Emoji, EmojiFormats>>;
 
 /**
+ * Immutable emoji value object with object identity.
+ *
+ * These objects are singletons - the same emoji name always returns
+ * the same frozen object instance, enabling `===` comparison.
+ *
+ * @example
+ * ```typescript
+ * // Object identity comparison works
+ * if (event.emoji === emoji.thumbs_up) {
+ *   console.log("User gave a thumbs up!");
+ * }
+ *
+ * // Works in template strings via toString()
+ * await thread.post(`${emoji.thumbs_up} Great job!`);
+ * ```
+ */
+export interface EmojiValue {
+  /** The normalized emoji name (e.g., "thumbs_up") */
+  readonly name: string;
+  /** Returns the placeholder string for message formatting */
+  toString(): string;
+  /** Returns the placeholder string (for JSON.stringify) */
+  toJSON(): string;
+}
+
+/**
  * Reaction event fired when a user adds or removes a reaction.
  */
 export interface ReactionEvent<TRawMessage = unknown> {
-  /** The normalized emoji identifier */
-  emoji: Emoji | string;
+  /** The normalized emoji as an EmojiValue singleton (enables `===` comparison) */
+  emoji: EmojiValue;
   /** The raw platform-specific emoji (e.g., "+1" for Slack, "👍" for GChat) */
   rawEmoji: string;
   /** Whether the reaction was added (true) or removed (false) */

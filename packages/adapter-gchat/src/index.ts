@@ -1,6 +1,7 @@
 import type {
   Adapter,
   ChatInstance,
+  EmojiValue,
   FetchOptions,
   FormattedContent,
   Logger,
@@ -15,6 +16,7 @@ import type {
 import {
   convertEmojiPlaceholders,
   defaultEmojiResolver,
+  getEmoji,
   RateLimitError,
 } from "chat-sdk";
 import { type chat_v1, google } from "googleapis";
@@ -942,9 +944,9 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
   async addReaction(
     _threadId: string,
     messageId: string,
-    emoji: string,
+    emoji: EmojiValue | string,
   ): Promise<void> {
-    // Convert normalized emoji to GChat unicode format
+    // Convert emoji (EmojiValue or string) to GChat unicode format
     const gchatEmoji = defaultEmojiResolver.toGChat(emoji);
 
     try {
@@ -962,9 +964,9 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
   async removeReaction(
     _threadId: string,
     messageId: string,
-    emoji: string,
+    emoji: EmojiValue | string,
   ): Promise<void> {
-    // Convert normalized emoji to GChat unicode format
+    // Convert emoji (EmojiValue or string) to GChat unicode format
     const gchatEmoji = defaultEmojiResolver.toGChat(emoji);
 
     try {

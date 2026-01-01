@@ -6,8 +6,10 @@ export {
   createEmoji,
   DEFAULT_EMOJI_MAP,
   defaultEmojiResolver,
-  EmojiResolver,
   emoji,
+  EmojiResolver,
+  type EmojiValue,
+  getEmoji,
 } from "./emoji";
 // Re-export mdast types for adapters
 export type {
