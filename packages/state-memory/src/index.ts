@@ -22,19 +22,32 @@ export class MemoryStateAdapter implements StateAdapter {
   private locks = new Map<string, MemoryLock>();
   private cache = new Map<string, CachedValue>();
   private connected = false;
+  private connectPromise: Promise<void> | null = null;
 
   async connect(): Promise<void> {
-    if (process.env.NODE_ENV === "production") {
-      console.warn(
-        "[chat-sdk] MemoryStateAdapter is not recommended for production. " +
-          "Consider using @chat-sdk/state-redis instead.",
-      );
+    if (this.connected) {
+      return;
     }
-    this.connected = true;
+
+    // Reuse existing connection attempt to avoid race conditions
+    if (!this.connectPromise) {
+      this.connectPromise = Promise.resolve().then(() => {
+        if (process.env.NODE_ENV === "production") {
+          console.warn(
+            "[chat-sdk] MemoryStateAdapter is not recommended for production. " +
+              "Consider using @chat-sdk/state-redis instead.",
+          );
+        }
+        this.connected = true;
+      });
+    }
+
+    await this.connectPromise;
   }
 
   async disconnect(): Promise<void> {
     this.connected = false;
+    this.connectPromise = null;
     this.subscriptions.clear();
     this.locks.clear();
   }

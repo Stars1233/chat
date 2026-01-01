@@ -18,6 +18,7 @@ export class RedisStateAdapter implements StateAdapter {
   private client: RedisClientType;
   private keyPrefix: string;
   private connected = false;
+  private connectPromise: Promise<void> | null = null;
 
   constructor(options: RedisStateAdapterOptions) {
     this.client = createClient({ url: options.url });
@@ -38,16 +39,25 @@ export class RedisStateAdapter implements StateAdapter {
   }
 
   async connect(): Promise<void> {
-    if (!this.connected) {
-      await this.client.connect();
-      this.connected = true;
+    if (this.connected) {
+      return;
     }
+
+    // Reuse existing connection attempt to avoid race conditions
+    if (!this.connectPromise) {
+      this.connectPromise = this.client.connect().then(() => {
+        this.connected = true;
+      });
+    }
+
+    await this.connectPromise;
   }
 
   async disconnect(): Promise<void> {
     if (this.connected) {
       await this.client.quit();
       this.connected = false;
+      this.connectPromise = null;
     }
   }
 

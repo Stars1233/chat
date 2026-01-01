@@ -47,6 +47,7 @@ function createMockAdapter(name: string): Adapter {
 function createMockState(): StateAdapter {
   const subscriptions = new Set<string>();
   const locks = new Map<string, Lock>();
+  const cache = new Map<string, unknown>();
 
   return {
     connect: vi.fn().mockResolvedValue(undefined),
@@ -79,6 +80,15 @@ function createMockState(): StateAdapter {
       locks.delete(lock.threadId);
     }),
     extendLock: vi.fn().mockResolvedValue(true),
+    get: vi.fn().mockImplementation(async (key: string) => {
+      return cache.get(key) ?? null;
+    }),
+    set: vi.fn().mockImplementation(async (key: string, value: unknown) => {
+      cache.set(key, value);
+    }),
+    delete: vi.fn().mockImplementation(async (key: string) => {
+      cache.delete(key);
+    }),
   };
 }
 
