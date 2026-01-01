@@ -64,8 +64,8 @@ bot.onSubscribedMessage(async (thread, message) => {
   await thread.post(`${emoji.check} You said: ${message.text}`);
 });
 
-// Handle emoji reactions
-bot.onReaction(["thumbs_up", "heart", "fire"], async (event) => {
+// Handle emoji reactions (type-safe emoji values)
+bot.onReaction([emoji.thumbs_up, emoji.heart, emoji.fire], async (event) => {
   if (!event.added) return; // Only respond to added reactions
   await event.adapter.addReaction(event.threadId, event.messageId, event.emoji);
 });
