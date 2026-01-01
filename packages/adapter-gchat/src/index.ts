@@ -659,6 +659,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
 
   /**
    * Handle reaction events received via Pub/Sub (Workspace Events).
+   * Fetches the message to get thread context for proper reply threading.
    */
   private handlePubSubReactionEvent(
     notification: WorkspaceEventNotification,
@@ -686,12 +687,6 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
       "",
     );
 
-    // Build thread ID - use message name as thread since we don't have thread info
-    const threadId = this.encodeThreadId({
-      spaceName: spaceName || "",
-      threadName: messageName,
-    });
-
     // Check if reaction is from this bot
     const isMe =
       this.botUserId !== undefined && reaction.user?.name === this.botUserId;
@@ -699,25 +694,71 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
     // Determine if this is an add or remove
     const added = notification.eventType.includes("created");
 
-    // Build reaction event
-    const reactionEvent: Omit<ReactionEvent, "adapter"> = {
-      emoji: normalizedEmoji,
-      rawEmoji,
-      added,
-      user: {
-        userId: reaction.user?.name || "unknown",
-        userName: reaction.user?.displayName || "unknown",
-        fullName: reaction.user?.displayName || "unknown",
-        isBot: reaction.user?.type === "BOT",
-        isMe,
-      },
-      messageId: messageName,
-      threadId,
-      raw: notification,
+    // We need to fetch the message to get its thread context
+    // This is done lazily when the reaction is processed
+    const chat = this.chat;
+    const buildReactionEvent = async (): Promise<
+      Omit<ReactionEvent, "adapter">
+    > => {
+      let threadId: string;
+
+      // Fetch the message to get its thread name
+      if (messageName) {
+        try {
+          const messageResponse = await this.chatApi.spaces.messages.get({
+            name: messageName,
+          });
+          const threadName = messageResponse.data.thread?.name;
+          threadId = this.encodeThreadId({
+            spaceName: spaceName || "",
+            threadName: threadName ?? undefined,
+          });
+          this.logger?.debug("Fetched thread context for reaction", {
+            messageName,
+            threadName,
+            threadId,
+          });
+        } catch (error) {
+          this.logger?.warn("Failed to fetch message for thread context", {
+            messageName,
+            error,
+          });
+          // Fall back to space-only thread ID
+          threadId = this.encodeThreadId({
+            spaceName: spaceName || "",
+          });
+        }
+      } else {
+        threadId = this.encodeThreadId({
+          spaceName: spaceName || "",
+        });
+      }
+
+      return {
+        emoji: normalizedEmoji,
+        rawEmoji,
+        added,
+        user: {
+          userId: reaction.user?.name || "unknown",
+          userName: reaction.user?.displayName || "unknown",
+          fullName: reaction.user?.displayName || "unknown",
+          isBot: reaction.user?.type === "BOT",
+          isMe,
+        },
+        messageId: messageName,
+        threadId,
+        raw: notification,
+      };
     };
 
-    // Process reaction
-    this.chat.processReaction({ ...reactionEvent, adapter: this }, options);
+    // Process reaction with lazy thread resolution
+    const processTask = buildReactionEvent().then((reactionEvent) => {
+      chat.processReaction({ ...reactionEvent, adapter: this }, options);
+    });
+
+    if (options?.waitUntil) {
+      options.waitUntil(processTask);
+    }
   }
 
   /**
