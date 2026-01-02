@@ -1,7 +1,7 @@
 {
   "botName": "Chat SDK Demo",
   "botUserId": "28:57627569-c120-42a1-9e6f-7cb4b96cc8ef",
-  "_comment": "Teams DM is implemented but dmMessage fixture is null since DM wasn't working during recording. Re-record to capture a real DM message.",
+  "dmConversationId": "a:17NditBRO5pbPlIimLiU0g7vfMqIYTPwqILZJq-TOhzzKiAmv2i6Oerr-QPUpuznpKMZinowF80qU8SFPCsvZlg3EpJU8FYt3rO-iSCFfYzIIk2STWat73naOa8x5LdSv",
   "mention": {
     "text": "<at>Chat SDK Demo</at> Hey",
     "textFormat": "plain",
@@ -47,8 +47,8 @@
     "text": "dm me",
     "textFormat": "plain",
     "type": "message",
-    "timestamp": "2026-01-02T18:03:47.1833425Z",
-    "id": "1767377027135",
+    "timestamp": "2026-01-02T18:27:44.6315648Z",
+    "id": "1767378464588",
     "channelId": "msteams",
     "serviceUrl": "https://smba.trafficmanager.net/amer/ed6e6740-934d-4088-a05e-caa14d8d89ee/",
     "from": {
@@ -74,5 +74,32 @@
       }
     }
   },
-  "dmMessage": null
+  "dmMessage": {
+    "text": "Hey",
+    "textFormat": "plain",
+    "type": "message",
+    "timestamp": "2026-01-02T18:28:24.3788393Z",
+    "id": "1767378504354",
+    "channelId": "msteams",
+    "serviceUrl": "https://smba.trafficmanager.net/amer/ed6e6740-934d-4088-a05e-caa14d8d89ee/",
+    "from": {
+      "id": "29:198PbJuwlbYy4Gp7p3PZrunMBts-QmZieTANExeuaryFy4cfQknJFVwlT8esy8B9zQNy3qcVqoBZKj2oYDP6HHQ",
+      "name": "Malte Ubl",
+      "aadObjectId": "7a9b12a6-4f02-43f1-b6f9-fd10e047f903"
+    },
+    "conversation": {
+      "conversationType": "personal",
+      "tenantId": "ed6e6740-934d-4088-a05e-caa14d8d89ee",
+      "id": "a:17NditBRO5pbPlIimLiU0g7vfMqIYTPwqILZJq-TOhzzKiAmv2i6Oerr-QPUpuznpKMZinowF80qU8SFPCsvZlg3EpJU8FYt3rO-iSCFfYzIIk2STWat73naOa8x5LdSv"
+    },
+    "recipient": {
+      "id": "28:57627569-c120-42a1-9e6f-7cb4b96cc8ef",
+      "name": "Chat SDK Demo"
+    },
+    "channelData": {
+      "tenant": {
+        "id": "ed6e6740-934d-4088-a05e-caa14d8d89ee"
+      }
+    }
+  }
 }

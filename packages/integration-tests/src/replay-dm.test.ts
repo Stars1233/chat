@@ -384,7 +384,6 @@ describe("DM Replay Tests", () => {
             await dmThread.post("Hello via DM!");
             await thread.post("I've sent you a DM!");
           } catch (e) {
-            console.error("Teams openDM failed:", (e as Error).message);
             await thread.post(`Sorry, couldn't send DM: ${(e as Error).message}`);
           }
         }
@@ -417,27 +416,11 @@ describe("DM Replay Tests", () => {
       expect(capturedMentionMessage).not.toBeNull();
       expect(capturedMentionMessage?.text).toContain("Hey");
 
-      // Debug: check if createConversationAsync is being called
-      console.log(
-        "createConversationAsync mock calls before DM:",
-        mockBotAdapter.createConversationAsync.mock.calls.length,
-      );
-
       // Step 2: User requests DM in subscribed thread
       await chat.webhooks.teams(createTeamsRequest(teamsFixtures.dmRequest), {
         waitUntil: tracker.waitUntil,
       });
       await tracker.waitForAll();
-
-      // Debug: check after
-      console.log(
-        "createConversationAsync mock calls after DM:",
-        mockBotAdapter.createConversationAsync.mock.calls.length,
-      );
-      console.log(
-        "createdConversations:",
-        JSON.stringify(mockBotAdapter.createdConversations),
-      );
 
       expect(capturedDmRequestMessage).not.toBeNull();
       expect(capturedDmRequestMessage?.text).toContain("dm me");

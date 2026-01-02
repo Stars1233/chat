@@ -861,10 +861,10 @@ export class TeamsAdapter implements Adapter<TeamsThreadId, unknown> {
       },
       async (turnContext: TurnContext) => {
         // Capture the conversation ID from the new context
-        conversationId = turnContext.activity.conversation?.id || "";
+        conversationId = turnContext?.activity?.conversation?.id || "";
         this.logger?.debug("Teams: conversation created in callback", {
           conversationId,
-          activityId: turnContext.activity.id,
+          activityId: turnContext?.activity?.id,
         });
       },
     );
