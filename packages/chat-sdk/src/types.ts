@@ -4,6 +4,7 @@
 
 import type { Root } from "mdast";
 import type { CardElement } from "./cards";
+import type { CardJSXElement } from "./jsx-runtime";
 
 // =============================================================================
 // Logging
@@ -380,7 +381,7 @@ export interface Thread<TRawMessage = unknown> {
   /**
    * Post a message to this thread.
    *
-   * @param message - String or PostableMessage to send
+   * @param message - String, PostableMessage, or JSX Card element to send
    * @returns A SentMessage with methods to edit, delete, or add reactions
    *
    * @example
@@ -393,9 +394,18 @@ export interface Thread<TRawMessage = unknown> {
    *
    * // With emoji
    * await thread.post(`${emoji.thumbs_up} Great job!`);
+   *
+   * // JSX Card (with @jsxImportSource chat-sdk)
+   * await thread.post(
+   *   <Card title="Welcome!">
+   *     <Text>Hello world</Text>
+   *   </Card>
+   * );
    * ```
    */
-  post(message: string | PostableMessage): Promise<SentMessage<TRawMessage>>;
+  post(
+    message: string | PostableMessage | CardJSXElement,
+  ): Promise<SentMessage<TRawMessage>>;
 
   /**
    * Show typing indicator in the thread.
@@ -527,8 +537,10 @@ export interface MessageMetadata {
 
 export interface SentMessage<TRawMessage = unknown>
   extends Message<TRawMessage> {
-  /** Edit this message */
-  edit(newContent: string | PostableMessage): Promise<SentMessage<TRawMessage>>;
+  /** Edit this message with text, a PostableMessage, or a JSX Card element */
+  edit(
+    newContent: string | PostableMessage | CardJSXElement,
+  ): Promise<SentMessage<TRawMessage>>;
   /** Delete this message */
   delete(): Promise<void>;
   /** Add a reaction to this message */

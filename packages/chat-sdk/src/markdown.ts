@@ -298,7 +298,9 @@ export abstract class BaseFormatConverter implements FormatConverter {
       case "text":
         return child.content;
       case "fields":
-        return child.children.map((f) => `**${f.label}**: ${f.value}`).join("\n");
+        return child.children
+          .map((f) => `**${f.label}**: ${f.value}`)
+          .join("\n");
       case "actions":
         return `[${child.children.map((b) => b.label).join("] [")}]`;
       case "section":

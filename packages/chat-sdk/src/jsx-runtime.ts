@@ -34,14 +34,22 @@ import type { CardChild, CardElement } from "./cards";
 // Symbol to identify our JSX elements before they're processed
 const JSX_ELEMENT = Symbol.for("chat-sdk.jsx.element");
 
-interface JSXElement {
+/**
+ * Represents a JSX element from the chat-sdk JSX runtime.
+ * This is the type returned when using JSX syntax with chat-sdk components.
+ */
+export interface CardJSXElement {
   $$typeof: typeof JSX_ELEMENT;
   type: CardComponentFunction;
   props: Record<string, unknown>;
   children: unknown[];
 }
 
-type CardComponentFunction = (props: Record<string, unknown>) => CardElement | CardChild;
+// Internal alias for backwards compatibility
+type JSXElement = CardJSXElement;
+
+// biome-ignore lint/suspicious/noExplicitAny: Card builder functions have varying signatures
+type CardComponentFunction = (...args: any[]) => CardElement | CardChild;
 
 /**
  * Check if a value is a JSX element from our runtime.
@@ -91,21 +99,74 @@ function processChildren(children: unknown): CardChild[] {
 
 /**
  * Resolve a JSX element by calling its component function.
+ * Transforms JSX props into the format each builder function expects.
  */
-function resolveJSXElement(element: JSXElement): CardElement | CardChild | null {
+function resolveJSXElement(
+  element: JSXElement,
+): CardElement | CardChild | null {
   const { type, props, children } = element;
 
   // Process children first
   const processedChildren = processChildren(children);
 
-  // Merge children into props
-  const fullProps = {
-    ...props,
-    children: processedChildren.length === 1 ? processedChildren[0] : processedChildren,
-  };
+  // Get the function name to determine how to call it
+  const fnName = type.name;
 
-  // Call the component function
-  return type(fullProps);
+  // Transform props based on builder function signature
+  switch (fnName) {
+    case "Text": {
+      // Text(content: string, options?: { style })
+      // JSX children become the content string
+      const content =
+        processedChildren.length > 0
+          ? String(processedChildren[0])
+          : ((props.children as string) ?? "");
+      return type(content, { style: props.style });
+    }
+
+    case "Section":
+    case "Actions":
+    case "Fields": {
+      // These take array as first argument: Section(children), Actions(children), Fields(children)
+      return type(processedChildren);
+    }
+
+    case "Button": {
+      // Button({ id, label, style, value })
+      // JSX children become the label
+      const label =
+        processedChildren.length > 0
+          ? String(processedChildren[0])
+          : ((props.label as string) ?? "");
+      return type({
+        id: props.id as string,
+        label,
+        style: props.style,
+        value: props.value,
+      });
+    }
+
+    case "Image":
+    case "Field": {
+      // Image({ url, alt }), Field({ label, value })
+      // No children, just props
+      return type(props);
+    }
+
+    case "Divider": {
+      // Divider() - no args
+      return type();
+    }
+
+    default: {
+      // Card({ title, subtitle, imageUrl, children })
+      // Pass props with processed children
+      return type({
+        ...props,
+        children: processedChildren,
+      });
+    }
+  }
 }
 
 /**
@@ -139,9 +200,18 @@ export function jsxs(
     $$typeof: JSX_ELEMENT,
     type,
     props: restProps,
-    children: Array.isArray(children) ? children : children != null ? [children] : [],
+    children: Array.isArray(children)
+      ? children
+      : children != null
+        ? [children]
+        : [],
   };
 }
+
+/**
+ * Development JSX factory (same as jsx, but called in dev mode).
+ */
+export const jsxDEV = jsx;
 
 /**
  * Fragment support (flattens children).
@@ -157,7 +227,12 @@ export function Fragment(props: { children?: unknown }): CardChild[] {
 export function toCardElement(jsxElement: unknown): CardElement | null {
   if (isJSXElement(jsxElement)) {
     const resolved = resolveJSXElement(jsxElement);
-    if (resolved && typeof resolved === "object" && "type" in resolved && resolved.type === "card") {
+    if (
+      resolved &&
+      typeof resolved === "object" &&
+      "type" in resolved &&
+      resolved.type === "card"
+    ) {
       return resolved as CardElement;
     }
   }
@@ -190,7 +265,10 @@ export function isJSX(value: unknown): boolean {
     typeof (value as { $$typeof: unknown }).$$typeof === "symbol"
   ) {
     const symbolStr = (value as { $$typeof: symbol }).$$typeof.toString();
-    return symbolStr.includes("react.element") || symbolStr.includes("react.transitional.element");
+    return (
+      symbolStr.includes("react.element") ||
+      symbolStr.includes("react.transitional.element")
+    );
   }
   return false;
 }
@@ -198,8 +276,10 @@ export function isJSX(value: unknown): boolean {
 // Re-export for JSX namespace
 export namespace JSX {
   export interface Element extends JSXElement {}
-  export interface IntrinsicElements {}
+  // biome-ignore lint/complexity/noBannedTypes: Required for JSX namespace
+  export type IntrinsicElements = {};
   export interface ElementChildrenAttribute {
+    // biome-ignore lint/complexity/noBannedTypes: Required for JSX children attribute
     children: {};
   }
 }

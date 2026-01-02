@@ -152,7 +152,9 @@ function convertImageToElement(element: ImageElement): AdaptiveCardElement {
   };
 }
 
-function convertDividerToElement(_element: DividerElement): AdaptiveCardElement {
+function convertDividerToElement(
+  _element: DividerElement,
+): AdaptiveCardElement {
   // Adaptive Cards don't have a native divider, use a separator container
   return {
     type: "Container",

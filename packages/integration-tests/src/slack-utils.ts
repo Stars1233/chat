@@ -196,9 +196,7 @@ export interface SlackBlockActionsOptions {
 /**
  * Create a Slack block_actions payload (form-urlencoded)
  */
-export function createSlackBlockActionsPayload(
-  options: SlackBlockActionsOptions,
-) {
+function createSlackBlockActionsPayload(options: SlackBlockActionsOptions) {
   const {
     actionId,
     actionValue,

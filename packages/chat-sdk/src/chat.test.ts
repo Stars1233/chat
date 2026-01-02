@@ -43,12 +43,14 @@ function createMockAdapter(name: string): Adapter {
     }),
     parseMessage: vi.fn(),
     renderFormatted: vi.fn((_content: FormattedContent) => "formatted"),
-    openDM: vi.fn().mockImplementation((userId: string) =>
-      Promise.resolve(`${name}:D${userId}:`),
-    ),
-    isDM: vi.fn().mockImplementation((threadId: string) =>
-      threadId.includes(":D"),
-    ),
+    openDM: vi
+      .fn()
+      .mockImplementation((userId: string) =>
+        Promise.resolve(`${name}:D${userId}:`),
+      ),
+    isDM: vi
+      .fn()
+      .mockImplementation((threadId: string) => threadId.includes(":D")),
   };
 }
 
@@ -359,7 +361,7 @@ describe("Chat", () => {
 
       expect(capturedThread).not.toBeNull();
       // In subscribed context, isSubscribed() should short-circuit to true
-      const isSubscribed = await capturedThread!.isSubscribed();
+      const isSubscribed = await capturedThread?.isSubscribed();
       expect(isSubscribed).toBe(true);
     });
 
@@ -380,7 +382,7 @@ describe("Chat", () => {
       );
 
       expect(capturedThread).not.toBeNull();
-      const isSubscribed = await capturedThread!.isSubscribed();
+      const isSubscribed = await capturedThread?.isSubscribed();
       expect(isSubscribed).toBe(false);
     });
   });
@@ -646,9 +648,11 @@ describe("Chat", () => {
     });
 
     it("should allow posting from reaction thread", async () => {
-      const handler = vi.fn().mockImplementation(async (event: ReactionEvent) => {
-        await event.thread.post("Thanks for the reaction!");
-      });
+      const handler = vi
+        .fn()
+        .mockImplementation(async (event: ReactionEvent) => {
+          await event.thread.post("Thanks for the reaction!");
+        });
       chat.onReaction(handler);
 
       const event: Omit<ReactionEvent, "thread"> = {
@@ -913,7 +917,7 @@ describe("Chat", () => {
       );
 
       expect(capturedThread).not.toBeNull();
-      expect(capturedThread!.isDM).toBe(false);
+      expect(capturedThread?.isDM).toBe(false);
     });
 
     it("should use adapter isDM method for detection", async () => {

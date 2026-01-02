@@ -105,7 +105,9 @@ describe("cardToAdaptiveCard", () => {
 
   it("converts image elements", () => {
     const card = Card({
-      children: [Image({ url: "https://example.com/img.png", alt: "My image" })],
+      children: [
+        Image({ url: "https://example.com/img.png", alt: "My image" }),
+      ],
     });
     const adaptive = cardToAdaptiveCard(card);
 
@@ -153,21 +155,21 @@ describe("cardToAdaptiveCard", () => {
     expect(adaptive.body).toHaveLength(0);
     expect(adaptive.actions).toHaveLength(3);
 
-    expect(adaptive.actions![0]).toEqual({
+    expect(adaptive.actions?.[0]).toEqual({
       type: "Action.Submit",
       title: "Approve",
       data: { actionId: "approve", value: undefined },
       style: "positive",
     });
 
-    expect(adaptive.actions![1]).toEqual({
+    expect(adaptive.actions?.[1]).toEqual({
       type: "Action.Submit",
       title: "Reject",
       data: { actionId: "reject", value: "data-123" },
       style: "destructive",
     });
 
-    expect(adaptive.actions![2]).toEqual({
+    expect(adaptive.actions?.[2]).toEqual({
       type: "Action.Submit",
       title: "Skip",
       data: { actionId: "skip", value: undefined },
@@ -232,7 +234,7 @@ describe("cardToAdaptiveCard", () => {
 
     // Actions at card level
     expect(adaptive.actions).toHaveLength(1);
-    expect(adaptive.actions![0].title).toBe("Track Package");
+    expect(adaptive.actions?.[0].title).toBe("Track Package");
   });
 });
 

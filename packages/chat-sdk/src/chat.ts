@@ -630,7 +630,9 @@ export class Chat<
       throw new Error(`Adapter "${String(adapterName)}" not found`);
     }
     if (!adapter.openDM) {
-      throw new Error(`Adapter "${String(adapterName)}" does not support openDM`);
+      throw new Error(
+        `Adapter "${String(adapterName)}" does not support openDM`,
+      );
     }
 
     const threadId = await adapter.openDM(userId);

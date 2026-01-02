@@ -1,19 +1,38 @@
 // Main exports
 export { Chat } from "./chat";
-// Card builders
-export {
-  Actions,
-  Button,
-  Card,
-  Divider,
-  Field,
-  Fields,
-  fromReactElement,
-  Image,
-  isCardElement,
-  Section,
-  Text as CardText,
+
+// Card builders - import then re-export to ensure values are properly exported
+import {
+  Actions as _Actions,
+  Button as _Button,
+  Card as _Card,
+  CardText as _CardText,
+  Divider as _Divider,
+  Field as _Field,
+  Fields as _Fields,
+  fromReactElement as _fromReactElement,
+  Image as _Image,
+  isCardElement as _isCardElement,
+  Section as _Section,
 } from "./cards";
+import {
+  isJSX as _isJSX,
+  toCardElement as _toCardElement,
+  type CardJSXElement,
+} from "./jsx-runtime";
+export const Actions = _Actions;
+export const Button = _Button;
+export const Card = _Card;
+export const CardText = _CardText;
+export const Divider = _Divider;
+export const Field = _Field;
+export const Fields = _Fields;
+export const fromReactElement = _fromReactElement;
+export const Image = _Image;
+export const isCardElement = _isCardElement;
+export const isJSX = _isJSX;
+export const Section = _Section;
+export const toCardElement = _toCardElement;
 // Card types
 export type {
   ActionsElement,
@@ -31,6 +50,8 @@ export type {
   TextElement,
   TextStyle,
 } from "./cards";
+// JSX types
+export type { CardJSXElement };
 // Emoji utilities
 export {
   convertEmojiPlaceholders,

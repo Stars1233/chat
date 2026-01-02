@@ -672,8 +672,16 @@ describe("Teams Integration", () => {
       );
 
       expect(sentWithAttachments).toBeDefined();
-      const attachments = (sentWithAttachments as { attachments: Array<{ name?: string; contentType?: string }> }).attachments;
-      expect(attachments.some((a) => a.name === "test.txt" && a.contentType === "text/plain")).toBe(true);
+      const attachments = (
+        sentWithAttachments as {
+          attachments: Array<{ name?: string; contentType?: string }>;
+        }
+      ).attachments;
+      expect(
+        attachments.some(
+          (a) => a.name === "test.txt" && a.contentType === "text/plain",
+        ),
+      ).toBe(true);
     });
   });
 });

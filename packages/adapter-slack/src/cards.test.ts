@@ -91,7 +91,9 @@ describe("cardToBlockKit", () => {
 
   it("converts image elements", () => {
     const card = Card({
-      children: [Image({ url: "https://example.com/img.png", alt: "My image" })],
+      children: [
+        Image({ url: "https://example.com/img.png", alt: "My image" }),
+      ],
     });
     const blocks = cardToBlockKit(card);
 

@@ -22,8 +22,8 @@ import {
   isCardElement,
   RateLimitError,
 } from "chat-sdk";
-import { cardToFallbackText, cardToGoogleCard } from "./cards";
 import { type chat_v1, google } from "googleapis";
+import { cardToFallbackText, cardToGoogleCard } from "./cards";
 import { GoogleChatFormatConverter } from "./markdown";
 import {
   createSpaceSubscription,
@@ -572,7 +572,12 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
         text: messagePayload.message.text?.slice(0, 50),
       });
       this.handleMessageEvent(event, options);
-    } else if (!addedPayload && !removedPayload && !buttonClickedPayload && !invokedFunction) {
+    } else if (
+      !addedPayload &&
+      !removedPayload &&
+      !buttonClickedPayload &&
+      !invokedFunction
+    ) {
       this.logger?.debug("Non-message event received", {
         hasChat: !!event.chat,
         hasCommonEventObject: !!event.commonEventObject,
@@ -873,7 +878,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
     }
 
     // Get value from parameters
-    const value = commonEvent?.parameters?.["value"];
+    const value = commonEvent?.parameters?.value;
 
     // Get space and message info from buttonClickedPayload
     const space = buttonPayload?.space;
@@ -891,7 +896,9 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
       threadName,
     });
 
-    const actionEvent: Omit<ActionEvent, "thread"> & { adapter: GoogleChatAdapter } = {
+    const actionEvent: Omit<ActionEvent, "thread"> & {
+      adapter: GoogleChatAdapter;
+    } = {
       actionId,
       value,
       user: {
@@ -1084,7 +1091,9 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
   /**
    * Extract card element from a PostableMessage if present.
    */
-  private extractCard(message: PostableMessage): import("chat-sdk").CardElement | null {
+  private extractCard(
+    message: PostableMessage,
+  ): import("chat-sdk").CardElement | null {
     if (isCardElement(message)) {
       return message;
     }
@@ -1142,7 +1151,9 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
             }
             const tokenResult = await auth.getAccessToken();
             const token =
-              typeof tokenResult === "string" ? tokenResult : tokenResult?.token;
+              typeof tokenResult === "string"
+                ? tokenResult
+                : tokenResult?.token;
             if (!token) {
               throw new Error("Failed to get access token");
             }
@@ -1628,10 +1639,9 @@ export function createGoogleChatAdapter(
   return new GoogleChatAdapter(config);
 }
 
-export { GoogleChatFormatConverter } from "./markdown";
-
 // Re-export card converter for advanced use
 export { cardToFallbackText, cardToGoogleCard } from "./cards";
+export { GoogleChatFormatConverter } from "./markdown";
 
 export {
   type CreateSpaceSubscriptionOptions,

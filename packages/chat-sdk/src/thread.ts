@@ -1,4 +1,5 @@
 import type { Root } from "mdast";
+import { type CardJSXElement, isJSX, toCardElement } from "./jsx-runtime";
 import {
   paragraph,
   parseMarkdown,
@@ -114,11 +115,25 @@ export class ThreadImpl implements Thread {
     await this.state.unsubscribe(this.id);
   }
 
-  async post(message: string | PostableMessage): Promise<SentMessage> {
-    const rawMessage = await this.adapter.postMessage(this.id, message);
+  async post(
+    message: string | PostableMessage | CardJSXElement,
+  ): Promise<SentMessage> {
+    // Auto-convert JSX elements to CardElement
+    let postable: string | PostableMessage = message as
+      | string
+      | PostableMessage;
+    if (isJSX(message)) {
+      const card = toCardElement(message);
+      if (!card) {
+        throw new Error("Invalid JSX element: must be a Card element");
+      }
+      postable = card;
+    }
+
+    const rawMessage = await this.adapter.postMessage(this.id, postable);
 
     // Create a SentMessage with edit/delete capabilities
-    return this.createSentMessage(rawMessage.id, message);
+    return this.createSentMessage(rawMessage.id, postable);
   }
 
   async startTyping(): Promise<void> {
@@ -165,9 +180,22 @@ export class ThreadImpl implements Thread {
       },
       attachments,
 
-      async edit(newContent: string | PostableMessage): Promise<SentMessage> {
-        await adapter.editMessage(threadId, messageId, newContent);
-        return self.createSentMessage(messageId, newContent);
+      async edit(
+        newContent: string | PostableMessage | CardJSXElement,
+      ): Promise<SentMessage> {
+        // Auto-convert JSX elements to CardElement
+        let postable: string | PostableMessage = newContent as
+          | string
+          | PostableMessage;
+        if (isJSX(newContent)) {
+          const card = toCardElement(newContent);
+          if (!card) {
+            throw new Error("Invalid JSX element: must be a Card element");
+          }
+          postable = card;
+        }
+        await adapter.editMessage(threadId, messageId, postable);
+        return self.createSentMessage(messageId, postable);
       },
 
       async delete(): Promise<void> {

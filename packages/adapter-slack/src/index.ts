@@ -354,7 +354,9 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
 
     // Process each action (usually just one, but can be multiple)
     for (const action of payload.actions) {
-      const actionEvent: Omit<ActionEvent, "thread"> & { adapter: SlackAdapter } = {
+      const actionEvent: Omit<ActionEvent, "thread"> & {
+        adapter: SlackAdapter;
+      } = {
         actionId: action.action_id,
         value: action.value,
         user: {
@@ -723,7 +725,9 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
   /**
    * Extract card element from a PostableMessage if present.
    */
-  private extractCard(message: PostableMessage): import("chat-sdk").CardElement | null {
+  private extractCard(
+    message: PostableMessage,
+  ): import("chat-sdk").CardElement | null {
     if (isCardElement(message)) {
       return message;
     }
@@ -776,7 +780,7 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
           mimeType: file.mimeType,
         });
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        // biome-ignore lint/suspicious/noExplicitAny: Slack API types don't match actual usage
         const uploadArgs: any = {
           channel_id: channel,
           filename: file.filename,
@@ -1183,11 +1187,10 @@ export function createSlackAdapter(config: SlackAdapterConfig): SlackAdapter {
   return new SlackAdapter(config);
 }
 
+// Re-export card converter for advanced use
+export { cardToBlockKit, cardToFallbackText } from "./cards";
 // Re-export format converter for advanced use
 export {
   SlackFormatConverter,
   SlackFormatConverter as SlackMarkdownConverter,
 } from "./markdown";
-
-// Re-export card converter for advanced use
-export { cardToBlockKit, cardToFallbackText } from "./cards";

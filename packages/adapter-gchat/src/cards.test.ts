@@ -87,7 +87,9 @@ describe("cardToGoogleCard", () => {
 
   it("converts image elements", () => {
     const card = Card({
-      children: [Image({ url: "https://example.com/img.png", alt: "My image" })],
+      children: [
+        Image({ url: "https://example.com/img.png", alt: "My image" }),
+      ],
     });
     const gchatCard = cardToGoogleCard(card);
 
@@ -134,9 +136,9 @@ describe("cardToGoogleCard", () => {
 
     const buttonList = widgets[0].buttonList;
     expect(buttonList).toBeDefined();
-    expect(buttonList!.buttons).toHaveLength(3);
+    expect(buttonList?.buttons).toHaveLength(3);
 
-    expect(buttonList!.buttons[0]).toEqual({
+    expect(buttonList?.buttons[0]).toEqual({
       text: "Approve",
       onClick: {
         action: {
@@ -147,7 +149,7 @@ describe("cardToGoogleCard", () => {
       color: { red: 0.2, green: 0.5, blue: 0.9 }, // primary blue
     });
 
-    expect(buttonList!.buttons[1]).toEqual({
+    expect(buttonList?.buttons[1]).toEqual({
       text: "Reject",
       onClick: {
         action: {
@@ -158,7 +160,7 @@ describe("cardToGoogleCard", () => {
       color: { red: 0.9, green: 0.2, blue: 0.2 }, // danger red
     });
 
-    expect(buttonList!.buttons[2]).toEqual({
+    expect(buttonList?.buttons[2]).toEqual({
       text: "Skip",
       onClick: {
         action: {

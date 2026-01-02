@@ -1,15 +1,17 @@
+/** @jsxImportSource chat-sdk */
+// @ts-nocheck - TypeScript doesn't understand custom JSX runtimes with per-file pragmas
 import { createRedisState } from "@chat-sdk/state-redis";
 import {
-  Chat,
-  emoji,
-  Card,
-  CardText,
-  Button,
   Actions,
-  Section,
-  Fields,
-  Field,
+  Button,
+  Card,
+  Chat,
   Divider,
+  emoji,
+  Field,
+  Fields,
+  Section,
+  CardText as Text,
 } from "chat-sdk";
 import { buildAdapters } from "./adapters";
 
@@ -29,26 +31,29 @@ bot.onNewMention(async (thread, _message) => {
   await thread.subscribe();
   await thread.startTyping();
 
-  // Send a rich card with action buttons
+  // Send a rich card with action buttons using JSX syntax
   await thread.post(
-    Card({
-      title: `${emoji.wave} Welcome!`,
-      subtitle: `Connected via ${thread.adapter.name}`,
-      children: [
-        CardText("I'm now listening to this thread. Try these actions:"),
-        Divider(),
-        Fields([
-          Field({ label: "DM Support", value: thread.isDM ? "Yes" : "No" }),
-          Field({ label: "Platform", value: thread.adapter.name }),
-        ]),
-        Divider(),
-        Actions([
-          Button({ id: "hello", label: "Say Hello", style: "primary" }),
-          Button({ id: "info", label: "Show Info" }),
-          Button({ id: "goodbye", label: "Goodbye", style: "danger" }),
-        ]),
-      ],
-    }),
+    <Card
+      title={`${emoji.wave} Welcome!`}
+      subtitle={`Connected via ${thread.adapter.name}`}
+    >
+      <Text>I'm now listening to this thread. Try these actions:</Text>
+      <Divider />
+      <Fields>
+        <Field label="DM Support" value={thread.isDM ? "Yes" : "No"} />
+        <Field label="Platform" value={thread.adapter.name} />
+      </Fields>
+      <Divider />
+      <Actions>
+        <Button id="hello" style="primary">
+          Say Hello
+        </Button>
+        <Button id="info">Show Info</Button>
+        <Button id="goodbye" style="danger">
+          Goodbye
+        </Button>
+      </Actions>
+    </Card>,
   );
 });
 
@@ -59,22 +64,21 @@ bot.onAction("hello", async (event) => {
 
 bot.onAction("info", async (event) => {
   await event.thread.post(
-    Card({
-      title: "Bot Information",
-      children: [
-        Fields([
-          Field({ label: "User", value: event.user.fullName }),
-          Field({ label: "User ID", value: event.user.userId }),
-          Field({ label: "Platform", value: event.adapter.name }),
-          Field({ label: "Thread ID", value: event.threadId }),
-        ]),
-      ],
-    }),
+    <Card title="Bot Information">
+      <Fields>
+        <Field label="User" value={event.user.fullName} />
+        <Field label="User ID" value={event.user.userId} />
+        <Field label="Platform" value={event.adapter.name} />
+        <Field label="Thread ID" value={event.threadId} />
+      </Fields>
+    </Card>,
   );
 });
 
 bot.onAction("goodbye", async (event) => {
-  await event.thread.post(`${emoji.wave} Goodbye, ${event.user.fullName}! See you later.`);
+  await event.thread.post(
+    `${emoji.wave} Goodbye, ${event.user.fullName}! See you later.`,
+  );
 });
 
 // Helper to delay execution
@@ -84,19 +88,16 @@ const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 bot.onNewMessage(/help/i, async (thread, message) => {
   const platforms = Object.keys(adapters).join(", ") || "none configured";
   await thread.post(
-    Card({
-      title: `${emoji.question} Help`,
-      children: [
-        CardText(`Hi ${message.author.userName}! Here's how I can help:`),
-        Divider(),
-        Section([
-          CardText(`${emoji.star} **Mention me** to start a conversation`),
-          CardText(`${emoji.eyes} I'll respond to messages in threads where I'm mentioned`),
-          CardText(`${emoji.fire} React to my messages and I'll react back!`),
-          CardText(`${emoji.rocket} Active platforms: ${platforms}`),
-        ]),
-      ],
-    }),
+    <Card title={`${emoji.question} Help`}>
+      <Text>{`Hi ${message.author.userName}! Here's how I can help:`}</Text>
+      <Divider />
+      <Section>
+        <Text>{`${emoji.star} **Mention me** to start a conversation`}</Text>
+        <Text>{`${emoji.eyes} I'll respond to messages in threads where I'm mentioned`}</Text>
+        <Text>{`${emoji.fire} React to my messages and I'll react back!`}</Text>
+        <Text>{`${emoji.rocket} Active platforms: ${platforms}`}</Text>
+      </Section>
+    </Card>,
   );
 });
 
@@ -105,17 +106,17 @@ bot.onSubscribedMessage(async (thread, message) => {
   // Check if message has attachments
   if (message.attachments && message.attachments.length > 0) {
     const attachmentInfo = message.attachments
-      .map((a) => `- ${a.name || "unnamed"} (${a.type}, ${a.mimeType || "unknown"})`)
+      .map(
+        (a) =>
+          `- ${a.name || "unnamed"} (${a.type}, ${a.mimeType || "unknown"})`,
+      )
       .join("\n");
 
     await thread.post(
-      Card({
-        title: `${emoji.eyes} Attachments Received`,
-        children: [
-          CardText(`You sent ${message.attachments.length} file(s):`),
-          CardText(attachmentInfo),
-        ],
-      }),
+      <Card title={`${emoji.eyes} Attachments Received`}>
+        <Text>{`You sent ${message.attachments.length} file(s):`}</Text>
+        <Text>{attachmentInfo}</Text>
+      </Card>,
     );
     return;
   }
@@ -147,5 +148,9 @@ bot.onReaction(["thumbs_up", "heart", "fire", "rocket"], async (event) => {
 
   // React to the same message with the same emoji
   // Adapters auto-convert normalized emoji to platform-specific format
-  await event.adapter.addReaction(event.threadId, event.messageId, event.emoji);
+  await event.adapter.addReaction(
+    event.threadId,
+    event.messageId,
+    emoji.raised_hands,
+  );
 });

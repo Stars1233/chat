@@ -24,24 +24,18 @@ export interface SlackBlock {
   [key: string]: unknown;
 }
 
-export interface SlackTextObject {
+interface SlackTextObject {
   type: "plain_text" | "mrkdwn";
   text: string;
   emoji?: boolean;
 }
 
-export interface SlackButtonElement {
+interface SlackButtonElement {
   type: "button";
   text: SlackTextObject;
   action_id: string;
   value?: string;
   style?: "primary" | "danger";
-}
-
-export interface SlackImageElement {
-  type: "image";
-  image_url: string;
-  alt_text: string;
 }
 
 /**
@@ -242,9 +236,7 @@ function childToFallbackText(child: CardChild): string | null {
     case "text":
       return child.content;
     case "fields":
-      return child.children
-        .map((f) => `${f.label}: ${f.value}`)
-        .join("\n");
+      return child.children.map((f) => `${f.label}: ${f.value}`).join("\n");
     case "actions":
       return `[${child.children.map((b) => b.label).join("] [")}]`;
     case "section":

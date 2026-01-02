@@ -240,21 +240,22 @@ export class TeamsAdapter implements Adapter<TeamsThreadId, unknown> {
       serviceUrl: activity.serviceUrl || "",
     });
 
-    const actionEvent: Omit<ActionEvent, "thread"> & { adapter: TeamsAdapter } = {
-      actionId: actionData.actionId,
-      value: actionData.value,
-      user: {
-        userId: activity.from?.id || "unknown",
-        userName: activity.from?.name || "unknown",
-        fullName: activity.from?.name || "unknown",
-        isBot: false,
-        isMe: false,
-      },
-      messageId: activity.replyToId || activity.id || "",
-      threadId,
-      adapter: this,
-      raw: activity,
-    };
+    const actionEvent: Omit<ActionEvent, "thread"> & { adapter: TeamsAdapter } =
+      {
+        actionId: actionData.actionId,
+        value: actionData.value,
+        user: {
+          userId: activity.from?.id || "unknown",
+          userName: activity.from?.name || "unknown",
+          fullName: activity.from?.name || "unknown",
+          isBot: false,
+          isMe: false,
+        },
+        messageId: activity.replyToId || activity.id || "",
+        threadId,
+        adapter: this,
+        raw: activity,
+      };
 
     this.logger?.debug("Processing Teams adaptive card action", {
       actionId: actionData.actionId,
@@ -383,7 +384,10 @@ export class TeamsAdapter implements Adapter<TeamsThreadId, unknown> {
         edited: false,
       },
       attachments: (activity.attachments || [])
-        .filter((att) => att.contentType !== "application/vnd.microsoft.card.adaptive")
+        .filter(
+          (att) =>
+            att.contentType !== "application/vnd.microsoft.card.adaptive",
+        )
         .map((att) => this.createAttachment(att)),
     };
   }
@@ -442,9 +446,8 @@ export class TeamsAdapter implements Adapter<TeamsThreadId, unknown> {
 
     // Check for files to upload
     const files = this.extractFiles(message);
-    const fileAttachments = files.length > 0
-      ? await this.filesToAttachments(files)
-      : [];
+    const fileAttachments =
+      files.length > 0 ? await this.filesToAttachments(files) : [];
 
     // Check if message contains a card
     const card = this.extractCard(message);
@@ -524,7 +527,9 @@ export class TeamsAdapter implements Adapter<TeamsThreadId, unknown> {
   /**
    * Extract card element from a PostableMessage if present.
    */
-  private extractCard(message: PostableMessage): import("chat-sdk").CardElement | null {
+  private extractCard(
+    message: PostableMessage,
+  ): import("chat-sdk").CardElement | null {
     if (isCardElement(message)) {
       return message;
     }
@@ -909,7 +914,6 @@ export function createTeamsAdapter(config: TeamsAdapterConfig): TeamsAdapter {
   return new TeamsAdapter(config);
 }
 
-export { TeamsFormatConverter } from "./markdown";
-
 // Re-export card converter for advanced use
 export { cardToAdaptiveCard, cardToFallbackText } from "./cards";
+export { TeamsFormatConverter } from "./markdown";

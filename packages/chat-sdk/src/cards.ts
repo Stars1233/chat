@@ -130,11 +130,7 @@ export type CardChild =
   | FieldsElement;
 
 /** Union of all element types (including nested children) */
-type AnyCardElement =
-  | CardChild
-  | CardElement
-  | ButtonElement
-  | FieldElement;
+type AnyCardElement = CardChild | CardElement | ButtonElement | FieldElement;
 
 /** Root card element */
 export interface CardElement {
@@ -211,6 +207,18 @@ export function Text(
     style: options.style,
   };
 }
+
+/**
+ * Alias for Text that avoids conflicts with DOM's global Text constructor.
+ * Use this when importing in environments where `Text` would conflict.
+ *
+ * @example
+ * ```ts
+ * import { CardText } from "chat-sdk";
+ * CardText("Hello, world!")
+ * ```
+ */
+export const CardText = Text;
 
 /**
  * Create an Image element.
@@ -364,7 +372,10 @@ function isReactElement(value: unknown): value is ReactElement {
     return false;
   }
   const symbolStr = maybeElement.$$typeof.toString();
-  return symbolStr.includes("react.element") || symbolStr.includes("react.transitional.element");
+  return (
+    symbolStr.includes("react.element") ||
+    symbolStr.includes("react.transitional.element")
+  );
 }
 
 /**
@@ -433,7 +444,9 @@ export function fromReactElement(element: unknown): AnyCardElement | null {
   }
 
   // Convert children recursively
-  const convertedChildren = props.children ? convertChildren(props.children) : [];
+  const convertedChildren = props.children
+    ? convertChildren(props.children)
+    : [];
 
   // Helper to filter for CardChild elements
   const isCardChild = (el: AnyCardElement): el is CardChild =>
@@ -468,14 +481,18 @@ export function fromReactElement(element: unknown): AnyCardElement | null {
       return Section(convertedChildren.filter(isCardChild));
 
     case "Actions":
-      return Actions(convertedChildren.filter((c): c is ButtonElement => c.type === "button"));
+      return Actions(
+        convertedChildren.filter(
+          (c): c is ButtonElement => c.type === "button",
+        ),
+      );
 
     case "Button": {
       // JSX: <Button id="x" style="primary">Label</Button>
       const label = extractTextContent(props.children);
       return Button({
         id: props.id as string,
-        label: props.label as string | undefined ?? label,
+        label: (props.label as string | undefined) ?? label,
         style: props.style as ButtonStyle | undefined,
         value: props.value as string | undefined,
       });
@@ -488,7 +505,9 @@ export function fromReactElement(element: unknown): AnyCardElement | null {
       });
 
     case "Fields":
-      return Fields(convertedChildren.filter((c): c is FieldElement => c.type === "field"));
+      return Fields(
+        convertedChildren.filter((c): c is FieldElement => c.type === "field"),
+      );
 
     default:
       return null;
