@@ -138,12 +138,14 @@ describe("cardToGoogleCard", () => {
     expect(buttonList).toBeDefined();
     expect(buttonList?.buttons).toHaveLength(3);
 
+    // Without endpointUrl, function is the action ID (backward compatible)
+    // actionId is always in parameters for HTTP endpoint compatibility
     expect(buttonList?.buttons[0]).toEqual({
       text: "Approve",
       onClick: {
         action: {
           function: "approve",
-          parameters: [],
+          parameters: [{ key: "actionId", value: "approve" }],
         },
       },
       color: { red: 0.2, green: 0.5, blue: 0.9 }, // primary blue
@@ -154,7 +156,10 @@ describe("cardToGoogleCard", () => {
       onClick: {
         action: {
           function: "reject",
-          parameters: [{ key: "value", value: "data-123" }],
+          parameters: [
+            { key: "actionId", value: "reject" },
+            { key: "value", value: "data-123" },
+          ],
         },
       },
       color: { red: 0.9, green: 0.2, blue: 0.2 }, // danger red
@@ -165,7 +170,48 @@ describe("cardToGoogleCard", () => {
       onClick: {
         action: {
           function: "skip",
-          parameters: [],
+          parameters: [{ key: "actionId", value: "skip" }],
+        },
+      },
+    });
+  });
+
+  it("uses endpointUrl as function when provided", () => {
+    const card = Card({
+      children: [
+        Actions([
+          Button({ id: "approve", label: "Approve" }),
+          Button({ id: "reject", label: "Reject", value: "data-123" }),
+        ]),
+      ],
+    });
+    const gchatCard = cardToGoogleCard(card, {
+      endpointUrl: "https://example.com/api/webhooks/gchat",
+    });
+
+    const widgets = gchatCard.card.sections[0].widgets;
+    const buttonList = widgets[0].buttonList;
+
+    // With endpointUrl, function should be the URL, actionId in parameters
+    expect(buttonList?.buttons[0]).toEqual({
+      text: "Approve",
+      onClick: {
+        action: {
+          function: "https://example.com/api/webhooks/gchat",
+          parameters: [{ key: "actionId", value: "approve" }],
+        },
+      },
+    });
+
+    expect(buttonList?.buttons[1]).toEqual({
+      text: "Reject",
+      onClick: {
+        action: {
+          function: "https://example.com/api/webhooks/gchat",
+          parameters: [
+            { key: "actionId", value: "reject" },
+            { key: "value", value: "data-123" },
+          ],
         },
       },
     });

@@ -640,18 +640,13 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
     const invokedFunction = event.commonEventObject?.invokedFunction;
     if (buttonClickedPayload || invokedFunction) {
       this.handleCardClick(event, options);
-      // Google Chat expects an actionResponse for card clicks
-      // Return UPDATE_MESSAGE with no card to acknowledge without changing the card
-      return new Response(
-        JSON.stringify({
-          actionResponse: {
-            type: "UPDATE_MESSAGE",
-          },
-        }),
-        {
-          headers: { "Content-Type": "application/json" },
-        },
-      );
+      // For HTTP endpoint apps (Workspace Add-ons), return empty JSON to acknowledge.
+      // The RenderActions format expects cards in google.apps.card.v1 format,
+      // actionResponse is for the older Google Chat API format.
+      // Returning {} acknowledges the action without changing the card.
+      return new Response(JSON.stringify({}), {
+        headers: { "Content-Type": "application/json" },
+      });
     }
 
     // Check for message payload in the Add-ons format
