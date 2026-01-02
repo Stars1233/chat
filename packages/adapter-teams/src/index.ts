@@ -172,6 +172,16 @@ export class TeamsAdapter implements Adapter<TeamsThreadId, unknown> {
       return;
     }
 
+    // Check if this message activity is actually a button click (Action.Submit)
+    // Teams sends Action.Submit as a message with value.actionId
+    const actionValue = activity.value as
+      | { actionId?: string; value?: string }
+      | undefined;
+    if (actionValue?.actionId) {
+      this.handleMessageAction(activity, actionValue, options);
+      return;
+    }
+
     const threadId = this.encodeThreadId({
       conversationId: activity.conversation?.id || "",
       serviceUrl: activity.serviceUrl || "",
@@ -185,6 +195,49 @@ export class TeamsAdapter implements Adapter<TeamsThreadId, unknown> {
       this.parseTeamsMessage(activity, threadId),
       options,
     );
+  }
+
+  /**
+   * Handle Action.Submit button clicks sent as message activities.
+   * Teams sends these with type "message" and value.actionId.
+   */
+  private handleMessageAction(
+    activity: Activity,
+    actionValue: { actionId?: string; value?: string },
+    options?: WebhookOptions,
+  ): void {
+    if (!this.chat || !actionValue.actionId) return;
+
+    const threadId = this.encodeThreadId({
+      conversationId: activity.conversation?.id || "",
+      serviceUrl: activity.serviceUrl || "",
+    });
+
+    const actionEvent: Omit<ActionEvent, "thread"> & { adapter: TeamsAdapter } =
+      {
+        actionId: actionValue.actionId,
+        value: actionValue.value,
+        user: {
+          userId: activity.from?.id || "unknown",
+          userName: activity.from?.name || "unknown",
+          fullName: activity.from?.name || "unknown",
+          isBot: false,
+          isMe: false,
+        },
+        messageId: activity.replyToId || activity.id || "",
+        threadId,
+        adapter: this,
+        raw: activity,
+      };
+
+    this.logger?.debug("Processing Teams message action (Action.Submit)", {
+      actionId: actionValue.actionId,
+      value: actionValue.value,
+      messageId: actionEvent.messageId,
+      threadId,
+    });
+
+    this.chat.processAction(actionEvent, options);
   }
 
   /**

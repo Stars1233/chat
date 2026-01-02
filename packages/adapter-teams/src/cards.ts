@@ -5,17 +5,25 @@
  * @see https://adaptivecards.io/
  */
 
-import type {
-  ActionsElement,
-  ButtonElement,
-  CardChild,
-  CardElement,
-  DividerElement,
-  FieldsElement,
-  ImageElement,
-  SectionElement,
-  TextElement,
+import {
+  type ActionsElement,
+  type ButtonElement,
+  type CardChild,
+  type CardElement,
+  convertEmojiPlaceholders,
+  type DividerElement,
+  type FieldsElement,
+  type ImageElement,
+  type SectionElement,
+  type TextElement,
 } from "chat-sdk";
+
+/**
+ * Convert emoji placeholders in text to Teams format.
+ */
+function convertEmoji(text: string): string {
+  return convertEmojiPlaceholders(text, "teams");
+}
 
 // Adaptive Card types (simplified)
 export interface AdaptiveCard {
@@ -53,7 +61,7 @@ export function cardToAdaptiveCard(card: CardElement): AdaptiveCard {
   if (card.title) {
     body.push({
       type: "TextBlock",
-      text: card.title,
+      text: convertEmoji(card.title),
       weight: "bolder",
       size: "large",
       wrap: true,
@@ -64,7 +72,7 @@ export function cardToAdaptiveCard(card: CardElement): AdaptiveCard {
   if (card.subtitle) {
     body.push({
       type: "TextBlock",
-      text: card.subtitle,
+      text: convertEmoji(card.subtitle),
       isSubtle: true,
       wrap: true,
     });
@@ -130,7 +138,7 @@ function convertChildToAdaptive(child: CardChild): ConvertResult {
 function convertTextToElement(element: TextElement): AdaptiveCardElement {
   const textBlock: AdaptiveCardElement = {
     type: "TextBlock",
-    text: element.content,
+    text: convertEmoji(element.content),
     wrap: true,
   };
 
@@ -175,7 +183,7 @@ function convertActionsToElements(element: ActionsElement): ConvertResult {
 function convertButtonToAction(button: ButtonElement): AdaptiveCardAction {
   const action: AdaptiveCardAction = {
     type: "Action.Submit",
-    title: button.label,
+    title: convertEmoji(button.label),
     data: {
       actionId: button.id,
       value: button.value,
@@ -217,8 +225,8 @@ function convertSectionToElements(element: SectionElement): ConvertResult {
 function convertFieldsToElement(element: FieldsElement): AdaptiveCardElement {
   // Use FactSet for key-value pairs
   const facts = element.children.map((field) => ({
-    title: field.label,
-    value: field.value,
+    title: convertEmoji(field.label),
+    value: convertEmoji(field.value),
   }));
 
   return {
@@ -235,11 +243,11 @@ export function cardToFallbackText(card: CardElement): string {
   const parts: string[] = [];
 
   if (card.title) {
-    parts.push(`**${card.title}**`);
+    parts.push(`**${convertEmoji(card.title)}**`);
   }
 
   if (card.subtitle) {
-    parts.push(card.subtitle);
+    parts.push(convertEmoji(card.subtitle));
   }
 
   for (const child of card.children) {
@@ -255,11 +263,13 @@ export function cardToFallbackText(card: CardElement): string {
 function childToFallbackText(child: CardChild): string | null {
   switch (child.type) {
     case "text":
-      return child.content;
+      return convertEmoji(child.content);
     case "fields":
-      return child.children.map((f) => `**${f.label}**: ${f.value}`).join("\n");
+      return child.children
+        .map((f) => `**${convertEmoji(f.label)}**: ${convertEmoji(f.value)}`)
+        .join("\n");
     case "actions":
-      return `[${child.children.map((b) => b.label).join("] [")}]`;
+      return `[${child.children.map((b) => convertEmoji(b.label)).join("] [")}]`;
     case "section":
       return child.children
         .map((c) => childToFallbackText(c))
