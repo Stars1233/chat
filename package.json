@@ -2,6 +2,15 @@
   "name": "chat-sdk-monorepo",
   "private": true,
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vercel-labs/chat.git"
+  },
+  "homepage": "https://github.com/vercel-labs/chat#readme",
+  "bugs": {
+    "url": "https://github.com/vercel-labs/chat/issues"
+  },
+  "license": "MIT",
   "scripts": {
     "build": "turbo build",
     "build:validate": "SLACK_BOT_TOKEN=xoxb-mock SLACK_SIGNING_SECRET=mock TEAMS_APP_ID=mock TEAMS_APP_PASSWORD=mock TEAMS_APP_TENANT_ID=mock GOOGLE_CHAT_CREDENTIALS='{\"type\":\"service_account\",\"project_id\":\"mock\",\"private_key\":\"-----BEGIN RSA PRIVATE KEY-----\\nMOCK\\n-----END RSA PRIVATE KEY-----\",\"client_email\":\"mock@mock.iam.gserviceaccount.com\"}' REDIS_URL=redis://localhost:6379 RECORDING_ENABLED=false turbo build",

@@ -32,3 +32,5 @@ tsup.config.bundled*.mjs
 recording.json
 recording*.json
 todo/
+# Turborepo
+.turbo

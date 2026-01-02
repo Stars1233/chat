@@ -85,15 +85,15 @@ $ pnpm changeset
    - Packages are published to npm
    - Git tags are created
 
-### Linked Packages
+### Fixed Versioning
 
-All packages in this monorepo are **linked** (configured in `.changeset/config.json`):
+All packages in this monorepo use **fixed versioning** (configured in `.changeset/config.json`):
 
 ```json
-"linked": [["chat", "@chat-adapter/*"]]
+"fixed": [["chat", "@chat-adapter/*"]]
 ```
 
-This means when any package gets a minor or major bump, all linked packages are bumped together to keep versions in sync.
+This means **all packages always have the same version number**. When any package is released, all packages are released together with the same version bump.
 
 ## Required Secrets
 
@@ -153,8 +153,8 @@ The changeset config is in `.changeset/config.json`:
 {
   "changelog": "@changesets/cli/changelog",
   "commit": false,
-  "fixed": [],
-  "linked": [["chat", "@chat-adapter/*"]],
+  "fixed": [["chat", "@chat-adapter/*"]],
+  "linked": [],
   "access": "public",
   "baseBranch": "main",
   "updateInternalDependencies": "patch",
@@ -166,7 +166,7 @@ The changeset config is in `.changeset/config.json`:
 |--------|-------|-------------|
 | `access` | `"public"` | Publish scoped packages publicly |
 | `baseBranch` | `"main"` | Branch to compare against |
-| `linked` | `[["chat", "@chat-adapter/*"]]` | Keep versions in sync |
+| `fixed` | `[["chat", "@chat-adapter/*"]]` | All packages always have same version |
 | `ignore` | `["example-nextjs-chat", ...]` | Don't publish these packages |
 | `updateInternalDependencies` | `"patch"` | Auto-bump dependents on patch releases |
 

@@ -34,6 +34,15 @@
     "typescript": "^5.7.2",
     "vitest": "^2.1.8"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vercel-labs/chat.git",
+    "directory": "packages/adapter-gchat"
+  },
+  "homepage": "https://github.com/vercel-labs/chat#readme",
+  "bugs": {
+    "url": "https://github.com/vercel-labs/chat/issues"
+  },
   "publishConfig": {
     "access": "public"
   },
