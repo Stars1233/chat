@@ -231,6 +231,8 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
   private impersonateUser?: string;
   /** In-progress subscription creations to prevent duplicate requests */
   private pendingSubscriptions = new Map<string, Promise<void>>();
+  /** Chat API client with impersonation for user-context operations (DMs, etc.) */
+  private impersonatedChatApi?: chat_v1.Chat;
 
   constructor(config: GoogleChatAdapterConfig) {
     this.userName = config.userName || "bot";
@@ -239,11 +241,13 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
 
     let auth: Parameters<typeof google.chat>[0]["auth"];
 
-    // Scopes needed for full bot functionality including reactions
+    // Scopes needed for full bot functionality including reactions and DMs
+    // Note: chat.spaces.create requires domain-wide delegation to work
     const scopes = [
       "https://www.googleapis.com/auth/chat.bot",
       "https://www.googleapis.com/auth/chat.messages.reactions.create",
       "https://www.googleapis.com/auth/chat.messages.reactions",
+      "https://www.googleapis.com/auth/chat.spaces.create",
     ];
 
     if ("credentials" in config && config.credentials) {
@@ -276,6 +280,35 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
 
     this.authClient = auth;
     this.chatApi = google.chat({ version: "v1", auth });
+
+    // Create impersonated Chat API for user-context operations (DMs)
+    // Domain-wide delegation requires setting the `subject` claim to the impersonated user
+    if (this.impersonateUser) {
+      if (this.credentials) {
+        const impersonatedAuth = new google.auth.JWT({
+          email: this.credentials.client_email,
+          key: this.credentials.private_key,
+          scopes: [
+            "https://www.googleapis.com/auth/chat.spaces",
+            "https://www.googleapis.com/auth/chat.spaces.create",
+          ],
+          subject: this.impersonateUser,
+        });
+        this.impersonatedChatApi = google.chat({ version: "v1", auth: impersonatedAuth });
+      } else if (this.useADC) {
+        // ADC with impersonation (requires clientOptions.subject support)
+        const impersonatedAuth = new google.auth.GoogleAuth({
+          scopes: [
+            "https://www.googleapis.com/auth/chat.spaces",
+            "https://www.googleapis.com/auth/chat.spaces.create",
+          ],
+          clientOptions: {
+            subject: this.impersonateUser,
+          },
+        });
+        this.impersonatedChatApi = google.chat({ version: "v1", auth: impersonatedAuth });
+      }
+    }
   }
 
   async initialize(chat: ChatInstance): Promise<void> {
@@ -1361,14 +1394,32 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
    * Open a direct message conversation with a user.
    * Returns a thread ID that can be used to post messages.
    *
+   * NOTE: This method requires domain-wide delegation with the `chat.spaces` and
+   * `chat.spaces.create` scopes. The `impersonateUser` config must be set to a
+   * user email that has access to create DM spaces with the target user.
+   *
    * @param userId - The user's resource name (e.g., "users/123456")
    */
   async openDM(userId: string): Promise<string> {
+    // Use impersonated API if available (required for DMs with domain-wide delegation)
+    const chatApi = this.impersonatedChatApi || this.chatApi;
+
+    if (!this.impersonatedChatApi) {
+      this.logger?.warn(
+        "openDM called without impersonation - this may fail. " +
+          "Set 'impersonateUser' in adapter config for domain-wide delegation."
+      );
+    }
+
     try {
-      this.logger?.debug("GChat API: spaces.setup (DM)", { userId });
+      this.logger?.debug("GChat API: spaces.setup (DM)", {
+        userId,
+        hasImpersonation: !!this.impersonatedChatApi,
+        impersonateUser: this.impersonateUser,
+      });
 
       // Create a DM space with the user
-      const response = await this.chatApi.spaces.setup({
+      const response = await chatApi.spaces.setup({
         requestBody: {
           space: {
             spaceType: "DIRECT_MESSAGE",

@@ -251,11 +251,15 @@ Create icon files (32x32 `outline.png` and 192x192 `color.png`), then zip all th
    - **App name**: Your bot's display name
    - **Avatar URL**: URL to your bot's avatar image
    - **Description**: What your bot does
-   - **Interactive features**: Enable **Receive 1:1 messages** and **Join spaces and group conversations**
+   - **Interactive features**:
+     - Enable **Receive 1:1 messages**
+     - Enable **Join spaces and group conversations**
    - **Connection settings**: Select **App URL**
    - **App URL**: `https://your-domain.com/api/webhooks/gchat`
    - **Visibility**: Choose who can discover and install your app
 4. Click **Save**
+
+**Important for button clicks**: The same App URL receives both message events and interactive events (card button clicks). Google Chat sends CARD_CLICKED events to this URL when users click buttons in cards. The SDK's `onAction()` handler will automatically receive these events.
 
 ### 6. (Optional) Set Up Pub/Sub for All Messages
 
@@ -301,24 +305,27 @@ By default, Google Chat only sends webhooks for @mentions. To receive ALL messag
 
 #### 6d. Enable Domain-Wide Delegation
 
-To create Workspace Events subscriptions, you need domain-wide delegation:
+To create Workspace Events subscriptions and initiate DMs, you need domain-wide delegation:
 
 1. Go to your **Service Account** → **Details**
-2. Expand **Advanced settings**
-3. Copy the **Client ID** (numeric)
-4. Go to [Google Admin Console](https://admin.google.com)
-5. Go to **Security** → **Access and data control** → **API controls**
-6. Click **Manage Domain Wide Delegation**
-7. Click **Add new**
-8. Enter:
-   - **Client ID**: The numeric ID from step 3
-   - **OAuth Scopes**:
+2. Check **Enable Google Workspace Domain-wide Delegation**
+3. Expand **Advanced settings**
+4. Copy the **Client ID** (numeric)
+5. Go to [Google Admin Console](https://admin.google.com)
+6. Go to **Security** → **Access and data control** → **API controls**
+7. Click **Manage Domain Wide Delegation**
+8. Click **Add new**
+9. Enter:
+   - **Client ID**: The numeric ID from step 4
+   - **OAuth Scopes** (all on one line, comma-separated):
      ```
-     https://www.googleapis.com/auth/chat.spaces.readonly,https://www.googleapis.com/auth/chat.messages.readonly
+     https://www.googleapis.com/auth/chat.spaces.readonly,https://www.googleapis.com/auth/chat.messages.readonly,https://www.googleapis.com/auth/chat.spaces,https://www.googleapis.com/auth/chat.spaces.create
      ```
-9. Click **Authorize**
+10. Click **Authorize**
 
-Set `GOOGLE_CHAT_IMPERSONATE_USER` to an admin user email in your domain (e.g., `admin@yourdomain.com`).
+**Note**: Scope changes can take up to 24 hours to propagate. If you're getting "Insufficient Permission" errors after adding scopes, wait and try again.
+
+Set `GOOGLE_CHAT_IMPERSONATE_USER` to an admin user email in your domain (e.g., `admin@yourdomain.com`). This user will be impersonated when creating DM spaces and Workspace Events subscriptions.
 
 ### 7. Add Bot to a Space
 
@@ -403,6 +410,19 @@ If deploying from the monorepo root:
 - Ensure domain-wide delegation is configured
 - Verify the OAuth scopes are exactly as specified
 - Check that the impersonated user has access to the spaces
+
+### Google Chat: "Insufficient Permission" for DMs (openDM)
+- DMs require domain-wide delegation with `chat.spaces` and `chat.spaces.create` scopes
+- Add these scopes to your domain-wide delegation configuration in Google Admin Console
+- Set `GOOGLE_CHAT_IMPERSONATE_USER` to an admin email in your domain
+- Scope changes can take up to 24 hours to propagate - wait and retry
+
+### Google Chat: Button clicks (CARD_CLICKED) not received
+- Verify "Interactive features" is enabled in the Google Chat app configuration
+- Check that the App URL is correctly set and accessible
+- Button clicks go to the same webhook URL as messages
+- Check your logs for the raw webhook payload to debug
+- Ensure your button elements have valid `id` attributes (these become the `actionId`)
 
 ### Redis connection errors
 - Verify `REDIS_URL` is correct
