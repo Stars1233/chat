@@ -5,17 +5,25 @@
  * @see https://developers.google.com/chat/api/reference/rest/v1/cards
  */
 
-import type {
-  ActionsElement,
-  ButtonElement,
-  CardChild,
-  CardElement,
-  DividerElement,
-  FieldsElement,
-  ImageElement,
-  SectionElement,
-  TextElement,
+import {
+  type ActionsElement,
+  type ButtonElement,
+  type CardChild,
+  type CardElement,
+  convertEmojiPlaceholders,
+  type DividerElement,
+  type FieldsElement,
+  type ImageElement,
+  type SectionElement,
+  type TextElement,
 } from "chat-sdk";
+
+/**
+ * Convert emoji placeholders in text to GChat format (Unicode).
+ */
+function convertEmoji(text: string): string {
+  return convertEmojiPlaceholders(text, "gchat");
+}
 
 // Google Chat Card v2 types (simplified)
 export interface GoogleChatCard {
@@ -76,10 +84,10 @@ export function cardToGoogleCard(
   let header: GoogleChatCardHeader | undefined;
   if (card.title || card.subtitle || card.imageUrl) {
     header = {
-      title: card.title || "",
+      title: convertEmoji(card.title || ""),
     };
     if (card.subtitle) {
-      header.subtitle = card.subtitle;
+      header.subtitle = convertEmoji(card.subtitle);
     }
     if (card.imageUrl) {
       header.imageUrl = card.imageUrl;
@@ -160,14 +168,14 @@ function convertChildToWidgets(child: CardChild): GoogleChatWidget[] {
 }
 
 function convertTextToWidget(element: TextElement): GoogleChatWidget {
-  let text = element.content;
+  let text = convertEmoji(element.content);
 
   // Apply style using Google Chat formatting
   if (element.style === "bold") {
     text = `*${text}*`;
   } else if (element.style === "muted") {
     // GChat doesn't have muted, use regular text
-    text = element.content;
+    text = convertEmoji(element.content);
   }
 
   return {
@@ -200,7 +208,7 @@ function convertActionsToWidget(element: ActionsElement): GoogleChatWidget {
 
 function convertButtonToGoogleButton(button: ButtonElement): GoogleChatButton {
   const googleButton: GoogleChatButton = {
-    text: button.label,
+    text: convertEmoji(button.label),
     onClick: {
       action: {
         function: button.id,
@@ -235,8 +243,8 @@ function convertFieldsToWidgets(element: FieldsElement): GoogleChatWidget[] {
   // Convert fields to decorated text widgets
   return element.children.map((field) => ({
     decoratedText: {
-      topLabel: field.label,
-      text: field.value,
+      topLabel: convertEmoji(field.label),
+      text: convertEmoji(field.value),
     },
   }));
 }
@@ -249,11 +257,11 @@ export function cardToFallbackText(card: CardElement): string {
   const parts: string[] = [];
 
   if (card.title) {
-    parts.push(`*${card.title}*`);
+    parts.push(`*${convertEmoji(card.title)}*`);
   }
 
   if (card.subtitle) {
-    parts.push(card.subtitle);
+    parts.push(convertEmoji(card.subtitle));
   }
 
   for (const child of card.children) {
@@ -269,11 +277,13 @@ export function cardToFallbackText(card: CardElement): string {
 function childToFallbackText(child: CardChild): string | null {
   switch (child.type) {
     case "text":
-      return child.content;
+      return convertEmoji(child.content);
     case "fields":
-      return child.children.map((f) => `*${f.label}*: ${f.value}`).join("\n");
+      return child.children
+        .map((f) => `*${convertEmoji(f.label)}*: ${convertEmoji(f.value)}`)
+        .join("\n");
     case "actions":
-      return `[${child.children.map((b) => b.label).join("] [")}]`;
+      return `[${child.children.map((b) => convertEmoji(b.label)).join("] [")}]`;
     case "section":
       return child.children
         .map((c) => childToFallbackText(c))

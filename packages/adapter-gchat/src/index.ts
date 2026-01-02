@@ -23,7 +23,7 @@ import {
   RateLimitError,
 } from "chat-sdk";
 import { type chat_v1, google } from "googleapis";
-import { cardToFallbackText, cardToGoogleCard } from "./cards";
+import { cardToGoogleCard } from "./cards";
 import { GoogleChatFormatConverter } from "./markdown";
 import {
   createSpaceSubscription,
@@ -561,6 +561,18 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
     const invokedFunction = event.commonEventObject?.invokedFunction;
     if (buttonClickedPayload || invokedFunction) {
       this.handleCardClick(event, options);
+      // Google Chat expects an actionResponse for card clicks
+      // Return UPDATE_MESSAGE with no card to acknowledge without changing the card
+      return new Response(
+        JSON.stringify({
+          actionResponse: {
+            type: "UPDATE_MESSAGE",
+          },
+        }),
+        {
+          headers: { "Content-Type": "application/json" },
+        },
+      );
     }
 
     // Check for message payload in the Add-ons format
@@ -572,12 +584,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
         text: messagePayload.message.text?.slice(0, 50),
       });
       this.handleMessageEvent(event, options);
-    } else if (
-      !addedPayload &&
-      !removedPayload &&
-      !buttonClickedPayload &&
-      !invokedFunction
-    ) {
+    } else if (!addedPayload && !removedPayload) {
       this.logger?.debug("Non-message event received", {
         hasChat: !!event.chat,
         hasCommonEventObject: !!event.commonEventObject,
@@ -1020,7 +1027,6 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
       if (card) {
         // Render card as Google Chat Card
         const googleCard = cardToGoogleCard(card);
-        const fallbackText = cardToFallbackText(card);
 
         this.logger?.debug("GChat API: spaces.messages.create (card)", {
           spaceName,
@@ -1033,7 +1039,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
             ? "REPLY_MESSAGE_FALLBACK_TO_NEW_THREAD"
             : undefined,
           requestBody: {
-            text: fallbackText,
+            // Don't include text - GChat shows both text and card if text is present
             cardsV2: [googleCard],
             thread: threadName ? { name: threadName } : undefined,
           },
@@ -1186,7 +1192,6 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
       if (card) {
         // Render card as Google Chat Card
         const googleCard = cardToGoogleCard(card);
-        const fallbackText = cardToFallbackText(card);
 
         this.logger?.debug("GChat API: spaces.messages.update (card)", {
           messageId,
@@ -1194,9 +1199,9 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
 
         const response = await this.chatApi.spaces.messages.update({
           name: messageId,
-          updateMask: "text,cardsV2",
+          updateMask: "cardsV2",
           requestBody: {
-            text: fallbackText,
+            // Don't include text - GChat shows both text and card if text is present
             cardsV2: [googleCard],
           },
         });

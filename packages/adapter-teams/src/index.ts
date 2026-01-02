@@ -40,7 +40,7 @@ import {
   isCardElement,
   NotImplementedError,
 } from "chat-sdk";
-import { cardToAdaptiveCard, cardToFallbackText } from "./cards";
+import { cardToAdaptiveCard } from "./cards";
 import { TeamsFormatConverter } from "./markdown";
 
 export interface TeamsAdapterConfig {
@@ -509,11 +509,10 @@ export class TeamsAdapter implements Adapter<TeamsThreadId, unknown> {
     if (card) {
       // Render card as Adaptive Card
       const adaptiveCard = cardToAdaptiveCard(card);
-      const fallbackText = cardToFallbackText(card);
 
       activity = {
         type: ActivityTypes.Message,
-        text: fallbackText,
+        // Don't include text - Teams shows both text and card if text is present
         attachments: [
           {
             contentType: "application/vnd.microsoft.card.adaptive",
@@ -658,12 +657,11 @@ export class TeamsAdapter implements Adapter<TeamsThreadId, unknown> {
     if (card) {
       // Render card as Adaptive Card
       const adaptiveCard = cardToAdaptiveCard(card);
-      const fallbackText = cardToFallbackText(card);
 
       activity = {
         id: messageId,
         type: ActivityTypes.Message,
-        text: fallbackText,
+        // Don't include text - Teams shows both text and card if text is present
         attachments: [
           {
             contentType: "application/vnd.microsoft.card.adaptive",
