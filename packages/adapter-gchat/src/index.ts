@@ -1124,7 +1124,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
         raw: response.data,
       };
     } catch (error) {
-      this.handleGoogleChatError(error);
+      this.handleGoogleChatError(error, "postMessage");
     }
   }
 
@@ -1280,7 +1280,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
         raw: response.data,
       };
     } catch (error) {
-      this.handleGoogleChatError(error);
+      this.handleGoogleChatError(error, "editMessage");
     }
   }
 
@@ -1296,7 +1296,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
         ok: true,
       });
     } catch (error) {
-      this.handleGoogleChatError(error);
+      this.handleGoogleChatError(error, "deleteMessage");
     }
   }
 
@@ -1328,7 +1328,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
         }
       );
     } catch (error) {
-      this.handleGoogleChatError(error);
+      this.handleGoogleChatError(error, "addReaction");
     }
   }
 
@@ -1382,7 +1382,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
         }
       );
     } catch (error) {
-      this.handleGoogleChatError(error);
+      this.handleGoogleChatError(error, "removeReaction");
     }
   }
 
@@ -1446,7 +1446,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
 
       return this.encodeThreadId({ spaceName });
     } catch (error) {
-      this.handleGoogleChatError(error);
+      this.handleGoogleChatError(error, "openDM");
     }
   }
 
@@ -1501,7 +1501,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
         };
       });
     } catch (error) {
-      this.handleGoogleChatError(error);
+      this.handleGoogleChatError(error, "fetchMessages");
     }
   }
 
@@ -1526,7 +1526,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
         },
       };
     } catch (error) {
-      this.handleGoogleChatError(error);
+      this.handleGoogleChatError(error, "fetchThread");
     }
   }
 
@@ -1675,8 +1675,16 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
     return false;
   }
 
-  private handleGoogleChatError(error: unknown): never {
-    const gError = error as { code?: number; message?: string };
+  private handleGoogleChatError(error: unknown, context?: string): never {
+    const gError = error as { code?: number; message?: string; errors?: unknown };
+
+    // Log the error at error level for visibility
+    this.logger?.error(`GChat API error${context ? ` (${context})` : ""}`, {
+      code: gError.code,
+      message: gError.message,
+      errors: gError.errors,
+      error,
+    });
 
     if (gError.code === 429) {
       throw new RateLimitError(

@@ -307,25 +307,39 @@ By default, Google Chat only sends webhooks for @mentions. To receive ALL messag
 
 To create Workspace Events subscriptions and initiate DMs, you need domain-wide delegation:
 
-1. Go to your **Service Account** → **Details**
-2. Check **Enable Google Workspace Domain-wide Delegation**
-3. Expand **Advanced settings**
-4. Copy the **Client ID** (numeric)
-5. Go to [Google Admin Console](https://admin.google.com)
-6. Go to **Security** → **Access and data control** → **API controls**
-7. Click **Manage Domain Wide Delegation**
-8. Click **Add new**
-9. Enter:
-   - **Client ID**: The numeric ID from step 4
+**Step 1: Enable delegation on the Service Account (GCP Console)**
+
+1. Go to [IAM & Admin → Service Accounts](https://console.cloud.google.com/iam-admin/serviceaccounts)
+2. Click on your service account
+3. Go to **Details** tab
+4. Check **Enable Google Workspace Domain-wide Delegation**
+5. Click **Save**
+6. Go to **Advanced settings** (or click on the service account again)
+7. Copy the **Client ID** - this is a **numeric ID** (e.g., `123456789012345678901`), NOT the email address
+
+**Step 2: Authorize the Client ID (Google Admin Console)**
+
+1. Go to [Google Admin Console](https://admin.google.com)
+2. Go to **Security** → **Access and data control** → **API controls**
+3. Click **Manage Domain Wide Delegation**
+4. Click **Add new**
+5. Enter:
+   - **Client ID**: The numeric ID from Step 1 (e.g., `123456789012345678901`)
    - **OAuth Scopes** (all on one line, comma-separated):
      ```
      https://www.googleapis.com/auth/chat.spaces.readonly,https://www.googleapis.com/auth/chat.messages.readonly,https://www.googleapis.com/auth/chat.spaces,https://www.googleapis.com/auth/chat.spaces.create
      ```
-10. Click **Authorize**
+6. Click **Authorize**
 
-**Note**: Scope changes can take up to 24 hours to propagate. If you're getting "Insufficient Permission" errors after adding scopes, wait and try again.
+**Step 3: Set environment variable**
 
 Set `GOOGLE_CHAT_IMPERSONATE_USER` to an admin user email in your domain (e.g., `admin@yourdomain.com`). This user will be impersonated when creating DM spaces and Workspace Events subscriptions.
+
+**Troubleshooting Domain-Wide Delegation:**
+
+- **"unauthorized_client"**: The Client ID is not registered in Google Admin Console, or domain-wide delegation is not enabled on the service account
+- **"Insufficient Permission"**: The scopes are missing from the domain-wide delegation configuration
+- Scope changes can take up to 24 hours to propagate
 
 ### 7. Add Bot to a Space
 
