@@ -50,12 +50,14 @@ class Recorder {
     this.enabled = process.env.RECORDING_ENABLED === "true";
     this.sessionId =
       process.env.RECORDING_SESSION_ID ||
-      `session-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      `session-${new Date().toISOString()}-${Math.random()
+        .toString(36)
+        .slice(2, 8)}`;
 
     if (this.enabled && process.env.REDIS_URL) {
       this.redis = createClient({ url: process.env.REDIS_URL });
       this.redis.on("error", (err) =>
-        console.error("[recorder] Redis error:", err),
+        console.error("[recorder] Redis error:", err)
       );
       console.log(`[recorder] Recording enabled, session: ${this.sessionId}`);
     }
@@ -114,7 +116,7 @@ class Recorder {
     method: string,
     args: unknown,
     response?: unknown,
-    error?: Error,
+    error?: Error
   ): Promise<void> {
     if (!this.isEnabled || !this.redis) return;
 
@@ -196,7 +198,7 @@ export const recorder = new Recorder();
 export function withRecording<T extends object>(
   adapter: T,
   platform: string,
-  methodsToRecord: string[],
+  methodsToRecord: string[]
 ): T {
   if (!recorder.isEnabled) return adapter;
 
@@ -224,7 +226,7 @@ export function withRecording<T extends object>(
               prop as string,
               args,
               response,
-              error,
+              error
             );
           }
         };
