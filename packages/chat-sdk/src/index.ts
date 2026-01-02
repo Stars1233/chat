@@ -1,5 +1,36 @@
 // Main exports
 export { Chat } from "./chat";
+// Card builders
+export {
+  Actions,
+  Button,
+  Card,
+  Divider,
+  Field,
+  Fields,
+  fromReactElement,
+  Image,
+  isCardElement,
+  Section,
+  Text as CardText,
+} from "./cards";
+// Card types
+export type {
+  ActionsElement,
+  ButtonElement,
+  ButtonOptions,
+  ButtonStyle,
+  CardChild,
+  CardElement,
+  CardOptions,
+  DividerElement,
+  FieldElement,
+  FieldsElement,
+  ImageElement,
+  SectionElement,
+  TextElement,
+  TextStyle,
+} from "./cards";
 // Emoji utilities
 export {
   convertEmojiPlaceholders,
@@ -54,6 +85,8 @@ export {
 } from "./markdown";
 // Types
 export type {
+  ActionEvent,
+  ActionHandler,
   Adapter,
   Attachment,
   Author,
@@ -64,6 +97,7 @@ export type {
   EmojiFormats,
   EmojiMapConfig,
   FetchOptions,
+  FileUpload,
   FormattedContent,
   Lock,
   Logger,
@@ -73,6 +107,7 @@ export type {
   MessageHandler,
   MessageMetadata,
   PostableAst,
+  PostableCard,
   PostableMarkdown,
   PostableMessage,
   PostableRaw,

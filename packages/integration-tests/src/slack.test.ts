@@ -5,6 +5,7 @@ import { Chat } from "chat-sdk";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createMockSlackClient,
+  createSlackBlockActionsRequest,
   createSlackEvent,
   createSlackWebhookRequest,
   getSlackThreadId,
@@ -666,6 +667,180 @@ describe("Slack Integration", () => {
         `@${SLACK_BOT_USER_ID} Thread 2 start`,
         "Thread 2 message",
       ]);
+    });
+  });
+
+  describe("file uploads", () => {
+    it("should upload files when posting a message with files", async () => {
+      chat.onNewMention(async (thread) => {
+        await thread.post({
+          markdown: "Here's your file:",
+          files: [
+            {
+              data: Buffer.from("test file content"),
+              filename: "test.txt",
+              mimeType: "text/plain",
+            },
+          ],
+        });
+      });
+
+      const event = createSlackEvent({
+        type: "app_mention",
+        text: `@${SLACK_BOT_USERNAME} send file`,
+        userId: "U_USER_123",
+        messageTs: "1234567890.111111",
+        threadTs: TEST_THREAD_TS,
+        channel: TEST_CHANNEL,
+      });
+
+      await chat.webhooks.slack(createSlackWebhookRequest(event), {
+        waitUntil: tracker.waitUntil,
+      });
+      await tracker.waitForAll();
+
+      expect(mockClient.files.uploadV2).toHaveBeenCalledWith(
+        expect.objectContaining({
+          channel_id: TEST_CHANNEL,
+          filename: "test.txt",
+        }),
+      );
+      expect(mockClient.chat.postMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          text: expect.stringContaining("Here's your file:"),
+        }),
+      );
+    });
+
+    it("should upload multiple files", async () => {
+      chat.onNewMention(async (thread) => {
+        await thread.post({
+          markdown: "Multiple files:",
+          files: [
+            { data: Buffer.from("file1"), filename: "file1.txt" },
+            { data: Buffer.from("file2"), filename: "file2.txt" },
+          ],
+        });
+      });
+
+      const event = createSlackEvent({
+        type: "app_mention",
+        text: `@${SLACK_BOT_USERNAME} send files`,
+        userId: "U_USER_123",
+        messageTs: "1234567890.111111",
+        threadTs: TEST_THREAD_TS,
+        channel: TEST_CHANNEL,
+      });
+
+      await chat.webhooks.slack(createSlackWebhookRequest(event), {
+        waitUntil: tracker.waitUntil,
+      });
+      await tracker.waitForAll();
+
+      expect(mockClient.files.uploadV2).toHaveBeenCalledTimes(2);
+    });
+
+    it("should handle files-only messages (no text)", async () => {
+      chat.onNewMention(async (thread) => {
+        await thread.post({
+          markdown: "",
+          files: [{ data: Buffer.from("content"), filename: "doc.pdf" }],
+        });
+      });
+
+      const event = createSlackEvent({
+        type: "app_mention",
+        text: `@${SLACK_BOT_USERNAME} file only`,
+        userId: "U_USER_123",
+        messageTs: "1234567890.111111",
+        threadTs: TEST_THREAD_TS,
+        channel: TEST_CHANNEL,
+      });
+
+      await chat.webhooks.slack(createSlackWebhookRequest(event), {
+        waitUntil: tracker.waitUntil,
+      });
+      await tracker.waitForAll();
+
+      expect(mockClient.files.uploadV2).toHaveBeenCalled();
+    });
+  });
+
+  describe("action handling", () => {
+    it("should handle block_actions from card buttons", async () => {
+      const handlerMock = vi.fn();
+      chat.onAction("approve", async (event) => {
+        handlerMock(event.actionId, event.value, event.user.userId);
+        await event.thread.post("Action received!");
+      });
+
+      const request = createSlackBlockActionsRequest({
+        actionId: "approve",
+        actionValue: "order-123",
+        userId: "U_USER_123",
+        messageTs: TEST_THREAD_TS,
+        channel: TEST_CHANNEL,
+      });
+
+      const response = await chat.webhooks.slack(request, {
+        waitUntil: tracker.waitUntil,
+      });
+      expect(response.status).toBe(200);
+
+      await tracker.waitForAll();
+
+      expect(handlerMock).toHaveBeenCalledWith(
+        "approve",
+        "order-123",
+        "U_USER_123",
+      );
+      expect(mockClient.chat.postMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          text: "Action received!",
+        }),
+      );
+    });
+
+    it("should not call handler for non-matching action IDs", async () => {
+      const handlerMock = vi.fn();
+      chat.onAction("approve", async () => {
+        handlerMock();
+      });
+
+      const request = createSlackBlockActionsRequest({
+        actionId: "reject",
+        userId: "U_USER_123",
+        messageTs: TEST_THREAD_TS,
+        channel: TEST_CHANNEL,
+      });
+
+      await chat.webhooks.slack(request, {
+        waitUntil: tracker.waitUntil,
+      });
+      await tracker.waitForAll();
+
+      expect(handlerMock).not.toHaveBeenCalled();
+    });
+
+    it("should call catch-all action handler", async () => {
+      const handlerMock = vi.fn();
+      chat.onAction(async (event) => {
+        handlerMock(event.actionId);
+      });
+
+      const request = createSlackBlockActionsRequest({
+        actionId: "any-action",
+        userId: "U_USER_123",
+        messageTs: TEST_THREAD_TS,
+        channel: TEST_CHANNEL,
+      });
+
+      await chat.webhooks.slack(request, {
+        waitUntil: tracker.waitUntil,
+      });
+      await tracker.waitForAll();
+
+      expect(handlerMock).toHaveBeenCalledWith("any-action");
     });
   });
 });

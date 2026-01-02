@@ -24,12 +24,15 @@ interface ThreadImplConfig {
   initialMessage?: Message;
   /** If true, thread is known to be subscribed (for short-circuit optimization) */
   isSubscribedContext?: boolean;
+  /** Whether this is a direct message conversation */
+  isDM?: boolean;
 }
 
 export class ThreadImpl implements Thread {
   readonly id: string;
   readonly adapter: Adapter;
   readonly channelId: string;
+  readonly isDM: boolean;
 
   private state: StateAdapter;
   private _recentMessages: Message[] = [];
@@ -39,6 +42,7 @@ export class ThreadImpl implements Thread {
     this.id = config.id;
     this.adapter = config.adapter;
     this.channelId = config.channelId;
+    this.isDM = config.isDM ?? false;
     this.state = config.state;
     this._isSubscribedContext = config.isSubscribedContext ?? false;
 

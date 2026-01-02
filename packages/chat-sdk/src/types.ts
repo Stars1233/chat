@@ -3,6 +3,7 @@
  */
 
 import type { Root } from "mdast";
+import type { CardElement } from "./cards";
 
 // =============================================================================
 // Logging
@@ -194,6 +195,28 @@ export interface Adapter<TThreadId = unknown, TRawMessage = unknown> {
    * (e.g., Google Chat Workspace Events).
    */
   onThreadSubscribe?(threadId: string): Promise<void>;
+
+  /**
+   * Open a direct message conversation with a user.
+   *
+   * @param userId - The platform-specific user ID
+   * @returns The thread ID for the DM conversation
+   *
+   * @example
+   * ```typescript
+   * const dmThreadId = await adapter.openDM("U123456");
+   * await adapter.postMessage(dmThreadId, "Hello!");
+   * ```
+   */
+  openDM?(userId: string): Promise<string>;
+
+  /**
+   * Check if a thread is a direct message conversation.
+   *
+   * @param threadId - The thread ID to check
+   * @returns True if the thread is a DM, false otherwise
+   */
+  isDM?(threadId: string): boolean;
 }
 
 /** Internal interface for Chat instance passed to adapters */
@@ -232,6 +255,18 @@ export interface ChatInstance {
    */
   processReaction(
     event: Omit<ReactionEvent, "adapter" | "thread"> & { adapter?: Adapter },
+    options?: WebhookOptions,
+  ): void;
+
+  /**
+   * Process an incoming action event (button click) from an adapter.
+   * Handles waitUntil registration and error catching internally.
+   *
+   * @param event - The action event (without thread field, will be added)
+   * @param options - Webhook options including waitUntil
+   */
+  processAction(
+    event: Omit<ActionEvent, "thread"> & { adapter: Adapter },
     options?: WebhookOptions,
   ): void;
 
@@ -300,6 +335,8 @@ export interface Thread<TRawMessage = unknown> {
   readonly adapter: Adapter;
   /** Channel/conversation ID */
   readonly channelId: string;
+  /** Whether this is a direct message conversation */
+  readonly isDM: boolean;
 
   /** Recently fetched messages (cached) */
   recentMessages: Message<TRawMessage>[];
@@ -387,6 +424,8 @@ export interface ThreadInfo {
   id: string;
   channelId: string;
   channelName?: string;
+  /** Whether this is a direct message conversation */
+  isDM?: boolean;
   /** Platform-specific metadata */
   metadata: Record<string, unknown>;
 }
@@ -509,18 +548,24 @@ export interface SentMessage<TRawMessage = unknown>
  * - `{ raw: string }` - Explicit raw text, passed through as-is
  * - `{ markdown: string }` - Markdown text, converted to platform format
  * - `{ ast: Root }` - mdast AST, converted to platform format
+ * - `{ card: CardElement }` - Rich card with buttons (Block Kit / Adaptive Cards / GChat Cards)
+ * - `CardElement` - Direct card element
  */
 export type PostableMessage =
   | string
   | PostableRaw
   | PostableMarkdown
-  | PostableAst;
+  | PostableAst
+  | PostableCard
+  | CardElement;
 
 export interface PostableRaw {
   /** Raw text passed through as-is to the platform */
   raw: string;
   /** File/image attachments */
   attachments?: Attachment[];
+  /** Files to upload */
+  files?: FileUpload[];
 }
 
 export interface PostableMarkdown {
@@ -528,6 +573,8 @@ export interface PostableMarkdown {
   markdown: string;
   /** File/image attachments */
   attachments?: Attachment[];
+  /** Files to upload */
+  files?: FileUpload[];
 }
 
 export interface PostableAst {
@@ -535,17 +582,53 @@ export interface PostableAst {
   ast: Root;
   /** File/image attachments */
   attachments?: Attachment[];
+  /** Files to upload */
+  files?: FileUpload[];
+}
+
+export interface PostableCard {
+  /** Rich card element */
+  card: CardElement;
+  /** Fallback text for platforms/clients that can't render cards */
+  fallbackText?: string;
+  /** Files to upload */
+  files?: FileUpload[];
 }
 
 export interface Attachment {
-  type: "image" | "file";
-  /** URL to the file (for linking) */
+  /** Type of attachment */
+  type: "image" | "file" | "video" | "audio";
+  /** URL to the file (for linking/downloading) */
   url?: string;
-  /** Binary data (for uploading) */
+  /** Binary data (for uploading or if already fetched) */
   data?: Buffer | Blob;
   /** Filename */
   name?: string;
   /** MIME type */
+  mimeType?: string;
+  /** File size in bytes */
+  size?: number;
+  /** Image/video width (if applicable) */
+  width?: number;
+  /** Image/video height (if applicable) */
+  height?: number;
+  /**
+   * Fetch the attachment data.
+   * For platforms that require authentication (like Slack private URLs),
+   * this method handles the auth automatically.
+   */
+  fetchData?: () => Promise<Buffer>;
+}
+
+/**
+ * File to upload with a message.
+ */
+export interface FileUpload {
+  /** Binary data */
+  data: Buffer | Blob | ArrayBuffer;
+  /** Filename */
+  filename: string;
+  /** MIME type (optional, will be inferred from filename if not provided) */
   mimeType?: string;
 }
 
@@ -861,6 +944,64 @@ export interface ReactionEvent<TRawMessage = unknown> {
  * ```
  */
 export type ReactionHandler = (event: ReactionEvent) => Promise<void>;
+
+// =============================================================================
+// Action Events (Button Clicks)
+// =============================================================================
+
+/**
+ * Action event fired when a user clicks a button in a card.
+ *
+ * @example
+ * ```typescript
+ * chat.onAction("approve", async (event) => {
+ *   await event.thread.post(`Order ${event.value} approved by ${event.user.userName}`);
+ * });
+ * ```
+ */
+export interface ActionEvent<TRawMessage = unknown> {
+  /** The action ID from the button (matches Button's `id` prop) */
+  actionId: string;
+  /** Optional value/payload from the button */
+  value?: string;
+  /** User who clicked the button */
+  user: Author;
+  /** The thread where the action occurred */
+  thread: Thread<TRawMessage>;
+  /** The message ID containing the card */
+  messageId: string;
+  /** The thread ID */
+  threadId: string;
+  /** The adapter that received the event */
+  adapter: Adapter;
+  /** Platform-specific raw event data */
+  raw: unknown;
+}
+
+/**
+ * Handler for action events (button clicks in cards).
+ *
+ * @example
+ * ```typescript
+ * // Handle specific action
+ * chat.onAction("approve", async (event) => {
+ *   await event.thread.post("Approved!");
+ * });
+ *
+ * // Handle multiple actions
+ * chat.onAction(["approve", "reject"], async (event) => {
+ *   if (event.actionId === "approve") {
+ *     // ...
+ *   }
+ * });
+ *
+ * // Handle all actions (catch-all)
+ * chat.onAction(async (event) => {
+ *   console.log(`Action: ${event.actionId}`);
+ * });
+ * ```
+ */
+export type ActionHandler = (event: ActionEvent) => Promise<void>;
 
 // =============================================================================
 // Errors

@@ -1,0 +1,1 @@
+- Adapter independent channel names

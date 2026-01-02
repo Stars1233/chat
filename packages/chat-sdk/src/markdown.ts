@@ -22,6 +22,7 @@ import remarkGfm from "remark-gfm";
 import remarkParse from "remark-parse";
 import remarkStringify from "remark-stringify";
 import { unified } from "unified";
+import type { CardChild, CardElement } from "./cards";
 
 // Re-export types for adapters
 export type {
@@ -228,11 +229,16 @@ export abstract class BaseFormatConverter implements FormatConverter {
   }
 
   /**
-   * Convert a PostableMessage to platform format.
+   * Convert a PostableMessage to platform format (text only).
    * - string: passed through as raw text (no conversion)
    * - { raw: string }: passed through as raw text (no conversion)
    * - { markdown: string }: converted from markdown to platform format
    * - { ast: Root }: converted from AST to platform format
+   * - { card: CardElement }: returns fallback text (cards should be handled by adapter)
+   * - CardElement: returns fallback text (cards should be handled by adapter)
+   *
+   * Note: For cards, adapters should check for card content first and render
+   * them using platform-specific card APIs, using this method only for fallback.
    */
   renderPostable(message: PostableMessageInput): string {
     if (typeof message === "string") {
@@ -247,16 +253,72 @@ export abstract class BaseFormatConverter implements FormatConverter {
     if ("ast" in message) {
       return this.fromAst(message.ast);
     }
+    if ("card" in message) {
+      // Card with fallback text or generate from card content
+      return message.fallbackText || this.cardToFallbackText(message.card);
+    }
+    if ("type" in message && message.type === "card") {
+      // Direct CardElement
+      return this.cardToFallbackText(message);
+    }
     // Should never reach here with proper typing
     throw new Error("Invalid PostableMessage format");
+  }
+
+  /**
+   * Generate fallback text from a card element.
+   * Override in subclasses for platform-specific formatting.
+   */
+  protected cardToFallbackText(card: CardElement): string {
+    const parts: string[] = [];
+
+    if (card.title) {
+      parts.push(`**${card.title}**`);
+    }
+
+    if (card.subtitle) {
+      parts.push(card.subtitle);
+    }
+
+    for (const child of card.children) {
+      const text = this.cardChildToFallbackText(child);
+      if (text) {
+        parts.push(text);
+      }
+    }
+
+    return parts.join("\n");
+  }
+
+  /**
+   * Convert card child element to fallback text.
+   */
+  protected cardChildToFallbackText(child: CardChild): string | null {
+    switch (child.type) {
+      case "text":
+        return child.content;
+      case "fields":
+        return child.children.map((f) => `**${f.label}**: ${f.value}`).join("\n");
+      case "actions":
+        return `[${child.children.map((b) => b.label).join("] [")}]`;
+      case "section":
+        return child.children
+          .map((c) => this.cardChildToFallbackText(c))
+          .filter(Boolean)
+          .join("\n");
+      default:
+        return null;
+    }
   }
 }
 
 /**
- * Type for PostableMessage input (simplified version without attachments for rendering)
+ * Type for PostableMessage input (for rendering to text)
  */
 type PostableMessageInput =
   | string
   | { raw: string }
   | { markdown: string }
-  | { ast: Root };
+  | { ast: Root }
+  | { card: CardElement; fallbackText?: string }
+  | CardElement;

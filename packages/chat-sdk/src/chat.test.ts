@@ -3,6 +3,7 @@ import { Chat } from "./chat";
 import { getEmoji } from "./emoji";
 import { parseMarkdown } from "./markdown";
 import type {
+  ActionEvent,
   Adapter,
   FormattedContent,
   Lock,
@@ -42,6 +43,12 @@ function createMockAdapter(name: string): Adapter {
     }),
     parseMessage: vi.fn(),
     renderFormatted: vi.fn((_content: FormattedContent) => "formatted"),
+    openDM: vi.fn().mockImplementation((userId: string) =>
+      Promise.resolve(`${name}:D${userId}:`),
+    ),
+    isDM: vi.fn().mockImplementation((threadId: string) =>
+      threadId.includes(":D"),
+    ),
   };
 }
 
@@ -669,6 +676,259 @@ describe("Chat", () => {
         "slack:C123:1234.5678",
         "Thanks for the reaction!",
       );
+    });
+  });
+
+  describe("Actions", () => {
+    it("should call onAction handler for all actions", async () => {
+      const handler = vi.fn().mockResolvedValue(undefined);
+      chat.onAction(handler);
+
+      const event: Omit<ActionEvent, "thread"> = {
+        actionId: "approve",
+        value: "order-123",
+        user: {
+          userId: "U123",
+          userName: "user",
+          fullName: "Test User",
+          isBot: false,
+          isMe: false,
+        },
+        messageId: "msg-1",
+        threadId: "slack:C123:1234.5678",
+        adapter: mockAdapter,
+        raw: {},
+      };
+
+      chat.processAction(event);
+      await new Promise((r) => setTimeout(r, 10));
+
+      expect(handler).toHaveBeenCalled();
+      const receivedEvent = handler.mock.calls[0][0] as ActionEvent;
+      expect(receivedEvent.actionId).toBe("approve");
+      expect(receivedEvent.value).toBe("order-123");
+      expect(receivedEvent.thread).toBeDefined();
+    });
+
+    it("should call onAction handler for specific action IDs", async () => {
+      const handler = vi.fn().mockResolvedValue(undefined);
+      chat.onAction(["approve", "reject"], handler);
+
+      const approveEvent: Omit<ActionEvent, "thread"> = {
+        actionId: "approve",
+        user: {
+          userId: "U123",
+          userName: "user",
+          fullName: "Test User",
+          isBot: false,
+          isMe: false,
+        },
+        messageId: "msg-1",
+        threadId: "slack:C123:1234.5678",
+        adapter: mockAdapter,
+        raw: {},
+      };
+
+      const skipEvent: Omit<ActionEvent, "thread"> = {
+        actionId: "skip",
+        user: {
+          userId: "U123",
+          userName: "user",
+          fullName: "Test User",
+          isBot: false,
+          isMe: false,
+        },
+        messageId: "msg-1",
+        threadId: "slack:C123:1234.5678",
+        adapter: mockAdapter,
+        raw: {},
+      };
+
+      chat.processAction(approveEvent);
+      chat.processAction(skipEvent);
+      await new Promise((r) => setTimeout(r, 10));
+
+      expect(handler).toHaveBeenCalledTimes(1);
+      const receivedEvent = handler.mock.calls[0][0] as ActionEvent;
+      expect(receivedEvent.actionId).toBe("approve");
+    });
+
+    it("should call onAction handler for single action ID", async () => {
+      const handler = vi.fn().mockResolvedValue(undefined);
+      chat.onAction("approve", handler);
+
+      const event: Omit<ActionEvent, "thread"> = {
+        actionId: "approve",
+        user: {
+          userId: "U123",
+          userName: "user",
+          fullName: "Test User",
+          isBot: false,
+          isMe: false,
+        },
+        messageId: "msg-1",
+        threadId: "slack:C123:1234.5678",
+        adapter: mockAdapter,
+        raw: {},
+      };
+
+      chat.processAction(event);
+      await new Promise((r) => setTimeout(r, 10));
+
+      expect(handler).toHaveBeenCalled();
+    });
+
+    it("should skip actions from self", async () => {
+      const handler = vi.fn().mockResolvedValue(undefined);
+      chat.onAction(handler);
+
+      const event: Omit<ActionEvent, "thread"> = {
+        actionId: "approve",
+        user: {
+          userId: "BOT",
+          userName: "testbot",
+          fullName: "Test Bot",
+          isBot: true,
+          isMe: true,
+        },
+        messageId: "msg-1",
+        threadId: "slack:C123:1234.5678",
+        adapter: mockAdapter,
+        raw: {},
+      };
+
+      chat.processAction(event);
+      await new Promise((r) => setTimeout(r, 10));
+
+      expect(handler).not.toHaveBeenCalled();
+    });
+
+    it("should include thread property in ActionEvent", async () => {
+      const handler = vi.fn().mockResolvedValue(undefined);
+      chat.onAction(handler);
+
+      const event: Omit<ActionEvent, "thread"> = {
+        actionId: "approve",
+        user: {
+          userId: "U123",
+          userName: "user",
+          fullName: "Test User",
+          isBot: false,
+          isMe: false,
+        },
+        messageId: "msg-1",
+        threadId: "slack:C123:1234.5678",
+        adapter: mockAdapter,
+        raw: {},
+      };
+
+      chat.processAction(event);
+      await new Promise((r) => setTimeout(r, 10));
+
+      expect(handler).toHaveBeenCalled();
+      const receivedEvent = handler.mock.calls[0][0] as ActionEvent;
+      expect(receivedEvent.thread).toBeDefined();
+      expect(receivedEvent.thread.id).toBe("slack:C123:1234.5678");
+      expect(typeof receivedEvent.thread.post).toBe("function");
+    });
+
+    it("should allow posting from action thread", async () => {
+      const handler = vi.fn().mockImplementation(async (event: ActionEvent) => {
+        await event.thread.post("Action received!");
+      });
+      chat.onAction(handler);
+
+      const event: Omit<ActionEvent, "thread"> = {
+        actionId: "approve",
+        user: {
+          userId: "U123",
+          userName: "user",
+          fullName: "Test User",
+          isBot: false,
+          isMe: false,
+        },
+        messageId: "msg-1",
+        threadId: "slack:C123:1234.5678",
+        adapter: mockAdapter,
+        raw: {},
+      };
+
+      chat.processAction(event);
+      await new Promise((r) => setTimeout(r, 20));
+
+      expect(handler).toHaveBeenCalled();
+      expect(mockAdapter.postMessage).toHaveBeenCalledWith(
+        "slack:C123:1234.5678",
+        "Action received!",
+      );
+    });
+  });
+
+  describe("openDM", () => {
+    it("should open a DM via the adapter", async () => {
+      const thread = await chat.openDM("slack", "U123456");
+
+      expect(mockAdapter.openDM).toHaveBeenCalledWith("U123456");
+      expect(thread).toBeDefined();
+      expect(thread.id).toBe("slack:DU123456:");
+    });
+
+    it("should throw error for unknown adapter", async () => {
+      await expect(
+        (chat as Chat<Record<string, Adapter>>).openDM("unknown", "U123456"),
+      ).rejects.toThrow('Adapter "unknown" not found');
+    });
+
+    it("should allow posting to DM thread", async () => {
+      const thread = await chat.openDM("slack", "U123456");
+      await thread.post("Hello via DM!");
+
+      expect(mockAdapter.postMessage).toHaveBeenCalledWith(
+        "slack:DU123456:",
+        "Hello via DM!",
+      );
+    });
+  });
+
+  describe("isDM", () => {
+    it("should return true for DM threads", async () => {
+      const thread = await chat.openDM("slack", "U123456");
+
+      expect(thread.isDM).toBe(true);
+    });
+
+    it("should return false for non-DM threads", async () => {
+      let capturedThread: { isDM: boolean } | null = null;
+      const handler = vi.fn().mockImplementation(async (thread) => {
+        capturedThread = thread;
+      });
+      chat.onNewMention(handler);
+
+      const message = createTestMessage("Hey @slack-bot help");
+
+      await chat.handleIncomingMessage(
+        mockAdapter,
+        "slack:C123:1234.5678",
+        message,
+      );
+
+      expect(capturedThread).not.toBeNull();
+      expect(capturedThread!.isDM).toBe(false);
+    });
+
+    it("should use adapter isDM method for detection", async () => {
+      const handler = vi.fn().mockResolvedValue(undefined);
+      chat.onNewMention(handler);
+
+      const message = createTestMessage("Hey @slack-bot help");
+
+      await chat.handleIncomingMessage(
+        mockAdapter,
+        "slack:C123:1234.5678",
+        message,
+      );
+
+      expect(mockAdapter.isDM).toHaveBeenCalledWith("slack:C123:1234.5678");
     });
   });
 });

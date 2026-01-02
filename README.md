@@ -8,6 +8,10 @@ A unified SDK for building chat bots across Slack, Microsoft Teams, and Google C
 - Mention-based thread subscriptions
 - Reaction handling with type-safe emoji
 - Cross-platform emoji helper for consistent rendering
+- **Rich cards with buttons** - TSX or object-based cards
+- **Action callbacks** - Handle button clicks across platforms
+- **File uploads** - Send files with messages
+- **DM support** - Initiate direct messages programmatically
 - Message deduplication for platform quirks
 - Serverless-ready with pluggable state backends
 
@@ -155,6 +159,178 @@ const myEmoji = createEmoji({
 const message = `${myEmoji.unicorn} Magic! ${myEmoji.company_logo}`;
 // Slack: ":unicorn_face: Magic! :company:"
 // GChat: "🦄 Magic! 🏢"
+```
+
+## Rich Cards with Buttons
+
+Send interactive cards with buttons that work across all platforms. Cards automatically convert to Block Kit (Slack), Adaptive Cards (Teams), and Google Chat Cards.
+
+Configure your `tsconfig.json` to use the chat-sdk JSX runtime:
+
+```json
+{
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "jsxImportSource": "chat-sdk"
+  }
+}
+```
+
+Then use JSX syntax:
+
+```tsx
+import { Card, CardText, Button, Actions, Section, Fields, Field, Divider, Image } from "chat-sdk";
+
+// Simple card with buttons
+await thread.post(
+  <Card title="Order #1234">
+    <CardText>Your order has been received!</CardText>
+    <Section>
+      <CardText style="bold">Total: $50.00</CardText>
+    </Section>
+    <Actions>
+      <Button id="approve" style="primary">Approve</Button>
+      <Button id="reject" style="danger">Reject</Button>
+    </Actions>
+  </Card>
+);
+
+// Card with fields (key-value pairs)
+await thread.post(
+  <Card title="User Profile">
+    <Fields>
+      <Field label="Name" value="John Doe" />
+      <Field label="Role" value="Developer" />
+      <Field label="Team" value="Platform" />
+    </Fields>
+    <Divider />
+    <Actions>
+      <Button id="edit">Edit Profile</Button>
+    </Actions>
+  </Card>
+);
+
+// Card with image
+await thread.post(
+  <Card title="Product Update">
+    <Image url="https://example.com/product.png" alt="Product screenshot" />
+    <CardText>Check out our new feature!</CardText>
+  </Card>
+);
+```
+
+**Note:** Use `CardText` (not `Text`) when using JSX to avoid conflicts with React's built-in types.
+
+## Action Callbacks
+
+Handle button clicks from cards:
+
+```typescript
+import { Chat, type ActionEvent } from "chat-sdk";
+declare const bot: Chat;
+
+// Handle a specific action
+bot.onAction("approve", async (event: ActionEvent) => {
+  await event.thread.post(`Order approved by ${event.user.fullName}!`);
+});
+
+// Handle multiple actions
+bot.onAction(["approve", "reject"], async (event: ActionEvent) => {
+  const action = event.actionId === "approve" ? "approved" : "rejected";
+  await event.thread.post(`Order ${action}!`);
+});
+
+// Catch-all action handler
+bot.onAction(async (event: ActionEvent) => {
+  console.log(`Action: ${event.actionId}, Value: ${event.value}`);
+});
+```
+
+The `ActionEvent` includes `actionId`, `value`, `user`, `thread`, `messageId`, `threadId`, `adapter`, and `raw` properties.
+
+## File Uploads
+
+Send files along with messages:
+
+```typescript
+import type { Thread } from "chat-sdk";
+declare const thread: Thread;
+
+// Send a file with a message
+const reportBuffer = Buffer.from("PDF content");
+await thread.post({
+  markdown: "Here's the report you requested:",
+  files: [
+    {
+      data: reportBuffer,
+      filename: "report.pdf",
+      mimeType: "application/pdf",
+    },
+  ],
+});
+
+// Send multiple files
+const image1 = Buffer.from("image1");
+const image2 = Buffer.from("image2");
+await thread.post({
+  markdown: "Attached are the images:",
+  files: [
+    { data: image1, filename: "screenshot1.png" },
+    { data: image2, filename: "screenshot2.png" },
+  ],
+});
+
+// Files only (with minimal text)
+const buffer = Buffer.from("document content");
+await thread.post({
+  markdown: "",
+  files: [{ data: buffer, filename: "document.xlsx" }],
+});
+```
+
+### Reading Attachments
+
+Access attachments from incoming messages:
+
+```typescript
+import { Chat } from "chat-sdk";
+declare const bot: Chat;
+
+bot.onSubscribedMessage(async (thread, message) => {
+  for (const attachment of message.attachments ?? []) {
+    console.log(`File: ${attachment.name}, Type: ${attachment.mimeType}`);
+
+    // Download the file data
+    if (attachment.fetchData) {
+      const data = await attachment.fetchData();
+      // Process the file...
+      console.log(`Downloaded ${data.length} bytes`);
+    }
+  }
+});
+```
+
+The `Attachment` interface includes `type`, `url`, `name`, `mimeType`, `size`, `width`, `height`, and `fetchData` properties.
+
+## Direct Messages
+
+Initiate DM conversations programmatically:
+
+```typescript
+import { Chat } from "chat-sdk";
+declare const bot: Chat;
+
+// Open a DM via a specific adapter
+const userId = "U1234567890";
+const dmThread = await bot.openDM("slack", userId);
+await dmThread.post("Hello! This is a direct message.");
+
+// Check if a thread is a DM
+bot.onSubscribedMessage(async (thread, message) => {
+  if (thread.isDM) {
+    await thread.post("This is a private conversation.");
+  }
+});
 ```
 
 ## Development

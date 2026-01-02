@@ -626,4 +626,54 @@ describe("Teams Integration", () => {
       ]);
     });
   });
+
+  describe("file uploads", () => {
+    it("should include files as inline data URI attachments", async () => {
+      chat.onNewMention(async (thread) => {
+        await thread.post({
+          markdown: "Here's your file:",
+          files: [
+            {
+              data: Buffer.from("test content"),
+              filename: "test.txt",
+              mimeType: "text/plain",
+            },
+          ],
+        });
+      });
+
+      const activity = createTeamsActivity({
+        text: `<at>${TEAMS_BOT_NAME}</at> send file`,
+        messageId: "msg-file",
+        conversationId: TEST_CONVERSATION_ID,
+        fromId: "user-123",
+        fromName: "John Doe",
+        mentions: [
+          {
+            id: TEAMS_BOT_ID,
+            name: TEAMS_BOT_NAME,
+            text: `<at>${TEAMS_BOT_NAME}</at>`,
+          },
+        ],
+      });
+
+      await chat.webhooks.teams(createTeamsWebhookRequest(activity), {
+        waitUntil: tracker.waitUntil,
+      });
+      await tracker.waitForAll();
+
+      // Verify sentActivities contains the message with attachments
+      const sentWithAttachments = mockBotAdapter.sentActivities.find(
+        (act: unknown) =>
+          typeof act === "object" &&
+          act !== null &&
+          "attachments" in act &&
+          Array.isArray((act as { attachments: unknown[] }).attachments),
+      );
+
+      expect(sentWithAttachments).toBeDefined();
+      const attachments = (sentWithAttachments as { attachments: Array<{ name?: string; contentType?: string }> }).attachments;
+      expect(attachments.some((a) => a.name === "test.txt" && a.contentType === "text/plain")).toBe(true);
+    });
+  });
 });

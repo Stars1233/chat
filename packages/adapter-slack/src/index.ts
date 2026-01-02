@@ -1,10 +1,13 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { WebClient } from "@slack/web-api";
 import type {
+  ActionEvent,
   Adapter,
+  Attachment,
   ChatInstance,
   EmojiValue,
   FetchOptions,
+  FileUpload,
   FormattedContent,
   Logger,
   Message,
@@ -17,8 +20,10 @@ import type {
 import {
   convertEmojiPlaceholders,
   defaultEmojiResolver,
+  isCardElement,
   RateLimitError,
 } from "chat-sdk";
+import { cardToBlockKit, cardToFallbackText } from "./cards";
 import { SlackFormatConverter } from "./markdown";
 
 export interface SlackAdapterConfig {
@@ -51,9 +56,13 @@ export interface SlackEvent {
   username?: string;
   edited?: { ts: string };
   files?: Array<{
+    id?: string;
     mimetype?: string;
     url_private?: string;
     name?: string;
+    size?: number;
+    original_w?: number;
+    original_h?: number;
   }>;
 }
 
@@ -80,6 +89,38 @@ interface SlackWebhookPayload {
   event_time?: number;
 }
 
+/** Slack interactive payload (block_actions) for button clicks */
+interface SlackBlockActionsPayload {
+  type: "block_actions";
+  user: {
+    id: string;
+    username: string;
+    name?: string;
+  };
+  container: {
+    type: string;
+    message_ts: string;
+    channel_id: string;
+    is_ephemeral?: boolean;
+  };
+  channel: {
+    id: string;
+    name: string;
+  };
+  message: {
+    ts: string;
+    thread_ts?: string;
+  };
+  actions: Array<{
+    type: string;
+    action_id: string;
+    block_id?: string;
+    value?: string;
+    action_ts?: string;
+  }>;
+  response_url?: string;
+}
+
 /** Cached user info */
 interface CachedUser {
   displayName: string;
@@ -92,6 +133,7 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
 
   private client: WebClient;
   private signingSecret: string;
+  private botToken: string;
   private chat: ChatInstance | null = null;
   private logger: Logger | null = null;
   private _botUserId: string | null = null;
@@ -107,6 +149,7 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
   constructor(config: SlackAdapterConfig) {
     this.client = new WebClient(config.botToken);
     this.signingSecret = config.signingSecret;
+    this.botToken = config.botToken;
     this.userName = config.userName || "bot";
     this._botUserId = config.botUserId || null;
   }
@@ -208,7 +251,13 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
       return new Response("Invalid signature", { status: 401 });
     }
 
-    // Parse the payload
+    // Check if this is a form-urlencoded interactive payload
+    const contentType = request.headers.get("content-type") || "";
+    if (contentType.includes("application/x-www-form-urlencoded")) {
+      return this.handleInteractivePayload(body, options);
+    }
+
+    // Parse the JSON payload
     let payload: SlackWebhookPayload;
     try {
       payload = JSON.parse(body);
@@ -240,6 +289,96 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
     }
 
     return new Response("ok", { status: 200 });
+  }
+
+  /**
+   * Handle Slack interactive payloads (button clicks, etc.).
+   * These are sent as form-urlencoded with a `payload` JSON field.
+   */
+  private handleInteractivePayload(
+    body: string,
+    options?: WebhookOptions,
+  ): Response {
+    // Parse form-urlencoded body
+    const params = new URLSearchParams(body);
+    const payloadStr = params.get("payload");
+
+    if (!payloadStr) {
+      return new Response("Missing payload", { status: 400 });
+    }
+
+    let payload: SlackBlockActionsPayload;
+    try {
+      payload = JSON.parse(payloadStr);
+    } catch {
+      return new Response("Invalid payload JSON", { status: 400 });
+    }
+
+    // Handle block_actions (button clicks)
+    if (payload.type === "block_actions") {
+      this.handleBlockActions(payload, options);
+    }
+
+    // Respond immediately - Slack requires fast responses for interactions
+    return new Response("", { status: 200 });
+  }
+
+  /**
+   * Handle block_actions payload (button clicks in Block Kit).
+   */
+  private handleBlockActions(
+    payload: SlackBlockActionsPayload,
+    options?: WebhookOptions,
+  ): void {
+    if (!this.chat) {
+      this.logger?.warn("Chat instance not initialized, ignoring action");
+      return;
+    }
+
+    const channel = payload.channel?.id || payload.container?.channel_id;
+    const messageTs = payload.message?.ts || payload.container?.message_ts;
+    const threadTs = payload.message?.thread_ts || messageTs;
+
+    if (!channel || !messageTs) {
+      this.logger?.warn("Missing channel or message_ts in block_actions", {
+        channel,
+        messageTs,
+      });
+      return;
+    }
+
+    const threadId = this.encodeThreadId({
+      channel,
+      threadTs: threadTs || messageTs,
+    });
+
+    // Process each action (usually just one, but can be multiple)
+    for (const action of payload.actions) {
+      const actionEvent: Omit<ActionEvent, "thread"> & { adapter: SlackAdapter } = {
+        actionId: action.action_id,
+        value: action.value,
+        user: {
+          userId: payload.user.id,
+          userName: payload.user.username || payload.user.name || "unknown",
+          fullName: payload.user.name || payload.user.username || "unknown",
+          isBot: false,
+          isMe: false,
+        },
+        messageId: messageTs,
+        threadId,
+        adapter: this,
+        raw: payload,
+      };
+
+      this.logger?.debug("Processing Slack block action", {
+        actionId: action.action_id,
+        value: action.value,
+        messageId: messageTs,
+        threadId,
+      });
+
+      this.chat.processAction(actionEvent, options);
+    }
   }
 
   private verifySignature(
@@ -421,14 +560,62 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
           ? new Date(parseFloat(event.edited.ts) * 1000)
           : undefined,
       },
-      attachments: (event.files || []).map((file) => ({
-        type: file.mimetype?.startsWith("image/")
-          ? ("image" as const)
-          : ("file" as const),
-        url: file.url_private,
-        name: file.name,
-        mimeType: file.mimetype,
-      })),
+      attachments: (event.files || []).map((file) =>
+        this.createAttachment(file),
+      ),
+    };
+  }
+
+  /**
+   * Create an Attachment object from a Slack file.
+   * Includes a fetchData method that uses the bot token for auth.
+   */
+  private createAttachment(file: {
+    id?: string;
+    mimetype?: string;
+    url_private?: string;
+    name?: string;
+    size?: number;
+    original_w?: number;
+    original_h?: number;
+  }): Attachment {
+    const url = file.url_private;
+    const botToken = this.botToken;
+
+    // Determine type based on mimetype
+    let type: Attachment["type"] = "file";
+    if (file.mimetype?.startsWith("image/")) {
+      type = "image";
+    } else if (file.mimetype?.startsWith("video/")) {
+      type = "video";
+    } else if (file.mimetype?.startsWith("audio/")) {
+      type = "audio";
+    }
+
+    return {
+      type,
+      url,
+      name: file.name,
+      mimeType: file.mimetype,
+      size: file.size,
+      width: file.original_w,
+      height: file.original_h,
+      fetchData: url
+        ? async () => {
+            const response = await fetch(url, {
+              headers: {
+                Authorization: `Bearer ${botToken}`,
+              },
+            });
+            if (!response.ok) {
+              throw new Error(
+                `Failed to fetch file: ${response.status} ${response.statusText}`,
+              );
+            }
+            const arrayBuffer = await response.arrayBuffer();
+            return Buffer.from(arrayBuffer);
+          }
+        : undefined,
     };
   }
 
@@ -439,7 +626,66 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
     const { channel, threadTs } = this.decodeThreadId(threadId);
 
     try {
-      // Convert emoji placeholders to Slack format
+      // Check for files to upload
+      const files = this.extractFiles(message);
+      if (files.length > 0) {
+        // Upload files first (they're shared to the channel automatically)
+        await this.uploadFiles(files, channel, threadTs || undefined);
+
+        // If message only has files (no text/card), return early
+        const hasText =
+          typeof message === "string" ||
+          (typeof message === "object" &&
+            message !== null &&
+            ("raw" in message || "markdown" in message || "ast" in message));
+        const card = this.extractCard(message);
+
+        if (!hasText && !card) {
+          // Return a synthetic message ID since files.uploadV2 handles sharing
+          return {
+            id: `file-${Date.now()}`,
+            threadId,
+            raw: { files },
+          };
+        }
+      }
+
+      // Check if message contains a card
+      const card = this.extractCard(message);
+
+      if (card) {
+        // Render card as Block Kit
+        const blocks = cardToBlockKit(card);
+        const fallbackText = cardToFallbackText(card);
+
+        this.logger?.debug("Slack API: chat.postMessage (blocks)", {
+          channel,
+          threadTs,
+          blockCount: blocks.length,
+        });
+
+        const result = await this.client.chat.postMessage({
+          channel,
+          thread_ts: threadTs,
+          text: fallbackText, // Fallback for notifications
+          blocks,
+          unfurl_links: false,
+          unfurl_media: false,
+        });
+
+        this.logger?.debug("Slack API: chat.postMessage response", {
+          messageId: result.ts,
+          ok: result.ok,
+        });
+
+        return {
+          id: result.ts as string,
+          threadId,
+          raw: result,
+        };
+      }
+
+      // Regular text message
       const text = convertEmojiPlaceholders(
         this.formatConverter.renderPostable(message),
         "slack",
@@ -474,6 +720,101 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
     }
   }
 
+  /**
+   * Extract card element from a PostableMessage if present.
+   */
+  private extractCard(message: PostableMessage): import("chat-sdk").CardElement | null {
+    if (isCardElement(message)) {
+      return message;
+    }
+    if (typeof message === "object" && message !== null && "card" in message) {
+      return message.card;
+    }
+    return null;
+  }
+
+  /**
+   * Extract files from a PostableMessage if present.
+   */
+  private extractFiles(message: PostableMessage): FileUpload[] {
+    if (typeof message === "object" && message !== null && "files" in message) {
+      return (message as { files?: FileUpload[] }).files ?? [];
+    }
+    return [];
+  }
+
+  /**
+   * Upload files to Slack and share them to a channel.
+   * Returns the file IDs of uploaded files.
+   */
+  private async uploadFiles(
+    files: FileUpload[],
+    channel: string,
+    threadTs?: string,
+  ): Promise<string[]> {
+    const fileIds: string[] = [];
+
+    for (const file of files) {
+      try {
+        // Convert data to Buffer if needed
+        let fileBuffer: Buffer;
+        if (Buffer.isBuffer(file.data)) {
+          fileBuffer = file.data;
+        } else if (file.data instanceof ArrayBuffer) {
+          fileBuffer = Buffer.from(file.data);
+        } else if (file.data instanceof Blob) {
+          // Convert Blob to Buffer
+          const arrayBuffer = await file.data.arrayBuffer();
+          fileBuffer = Buffer.from(arrayBuffer);
+        } else {
+          throw new Error("Unsupported file data type");
+        }
+
+        this.logger?.debug("Slack API: files.uploadV2", {
+          filename: file.filename,
+          size: fileBuffer.length,
+          mimeType: file.mimeType,
+        });
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const uploadArgs: any = {
+          channel_id: channel,
+          filename: file.filename,
+          file: fileBuffer,
+        };
+        if (threadTs) {
+          uploadArgs.thread_ts = threadTs;
+        }
+
+        const result = (await this.client.files.uploadV2(uploadArgs)) as {
+          ok: boolean;
+          files?: Array<{ id?: string }>;
+        };
+
+        this.logger?.debug("Slack API: files.uploadV2 response", {
+          ok: result.ok,
+        });
+
+        // Extract file IDs from the response
+        if (result.files && Array.isArray(result.files)) {
+          for (const uploadedFile of result.files) {
+            if (uploadedFile.id) {
+              fileIds.push(uploadedFile.id);
+            }
+          }
+        }
+      } catch (error) {
+        this.logger?.error("Failed to upload file", {
+          filename: file.filename,
+          error,
+        });
+        throw error;
+      }
+    }
+
+    return fileIds;
+  }
+
   async editMessage(
     threadId: string,
     messageId: string,
@@ -482,7 +823,40 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
     const { channel } = this.decodeThreadId(threadId);
 
     try {
-      // Convert emoji placeholders to Slack format
+      // Check if message contains a card
+      const card = this.extractCard(message);
+
+      if (card) {
+        // Render card as Block Kit
+        const blocks = cardToBlockKit(card);
+        const fallbackText = cardToFallbackText(card);
+
+        this.logger?.debug("Slack API: chat.update (blocks)", {
+          channel,
+          messageId,
+          blockCount: blocks.length,
+        });
+
+        const result = await this.client.chat.update({
+          channel,
+          ts: messageId,
+          text: fallbackText,
+          blocks,
+        });
+
+        this.logger?.debug("Slack API: chat.update response", {
+          messageId: result.ts,
+          ok: result.ok,
+        });
+
+        return {
+          id: result.ts as string,
+          threadId,
+          raw: result,
+        };
+      }
+
+      // Regular text message
       const text = convertEmojiPlaceholders(
         this.formatConverter.renderPostable(message),
         "slack",
@@ -594,6 +968,37 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
     // Slack doesn't have a direct typing indicator API for bots
   }
 
+  /**
+   * Open a direct message conversation with a user.
+   * Returns a thread ID that can be used to post messages.
+   */
+  async openDM(userId: string): Promise<string> {
+    try {
+      this.logger?.debug("Slack API: conversations.open", { userId });
+
+      const result = await this.client.conversations.open({ users: userId });
+
+      if (!result.channel?.id) {
+        throw new Error("Failed to open DM - no channel returned");
+      }
+
+      const channelId = result.channel.id;
+
+      this.logger?.debug("Slack API: conversations.open response", {
+        channelId,
+        ok: result.ok,
+      });
+
+      // Encode as thread ID (no threadTs for new DM - messages will start new threads)
+      return this.encodeThreadId({
+        channel: channelId,
+        threadTs: "", // Empty threadTs indicates top-level channel messages
+      });
+    } catch (error) {
+      this.handleSlackError(error);
+    }
+  }
+
   async fetchMessages(
     threadId: string,
     options: FetchOptions = {},
@@ -660,6 +1065,15 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
     return `slack:${platformData.channel}:${platformData.threadTs}`;
   }
 
+  /**
+   * Check if a thread is a direct message conversation.
+   * Slack DM channel IDs start with 'D'.
+   */
+  isDM(threadId: string): boolean {
+    const { channel } = this.decodeThreadId(threadId);
+    return channel.startsWith("D");
+  }
+
   decodeThreadId(threadId: string): SlackThreadId {
     const parts = threadId.split(":");
     if (parts.length !== 3 || parts[0] !== "slack") {
@@ -717,14 +1131,9 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
           ? new Date(parseFloat(event.edited.ts) * 1000)
           : undefined,
       },
-      attachments: (event.files || []).map((file) => ({
-        type: file.mimetype?.startsWith("image/")
-          ? ("image" as const)
-          : ("file" as const),
-        url: file.url_private,
-        name: file.name,
-        mimeType: file.mimetype,
-      })),
+      attachments: (event.files || []).map((file) =>
+        this.createAttachment(file),
+      ),
     };
   }
 
@@ -779,3 +1188,6 @@ export {
   SlackFormatConverter,
   SlackFormatConverter as SlackMarkdownConverter,
 } from "./markdown";
+
+// Re-export card converter for advanced use
+export { cardToBlockKit, cardToFallbackText } from "./cards";

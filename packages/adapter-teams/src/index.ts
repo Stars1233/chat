@@ -18,10 +18,13 @@ class ServerlessCloudAdapter extends CloudAdapter {
 }
 
 import type {
+  ActionEvent,
   Adapter,
+  Attachment,
   ChatInstance,
   EmojiValue,
   FetchOptions,
+  FileUpload,
   FormattedContent,
   Logger,
   Message,
@@ -34,8 +37,10 @@ import type {
 import {
   convertEmojiPlaceholders,
   defaultEmojiResolver,
+  isCardElement,
   NotImplementedError,
 } from "chat-sdk";
+import { cardToAdaptiveCard, cardToFallbackText } from "./cards";
 import { TeamsFormatConverter } from "./markdown";
 
 export interface TeamsAdapterConfig {
@@ -153,6 +158,12 @@ export class TeamsAdapter implements Adapter<TeamsThreadId, unknown> {
       return;
     }
 
+    // Handle adaptive card actions (button clicks)
+    if (activity.type === ActivityTypes.Invoke) {
+      await this.handleInvokeActivity(context, options);
+      return;
+    }
+
     // Only handle message activities
     if (activity.type !== ActivityTypes.Message) {
       this.logger?.debug("Ignoring non-message activity", {
@@ -174,6 +185,91 @@ export class TeamsAdapter implements Adapter<TeamsThreadId, unknown> {
       this.parseTeamsMessage(activity, threadId),
       options,
     );
+  }
+
+  /**
+   * Handle invoke activities (adaptive card actions, etc.).
+   */
+  private async handleInvokeActivity(
+    context: TurnContext,
+    options?: WebhookOptions,
+  ): Promise<void> {
+    const activity = context.activity;
+
+    // Handle adaptive card action invokes
+    if (activity.name === "adaptiveCard/action") {
+      await this.handleAdaptiveCardAction(context, activity, options);
+      return;
+    }
+
+    this.logger?.debug("Ignoring unsupported invoke", {
+      name: activity.name,
+    });
+  }
+
+  /**
+   * Handle adaptive card button clicks.
+   * The action data is in activity.value with our { actionId, value } structure.
+   */
+  private async handleAdaptiveCardAction(
+    context: TurnContext,
+    activity: Activity,
+    options?: WebhookOptions,
+  ): Promise<void> {
+    if (!this.chat) return;
+
+    // Activity.value contains our action data
+    const actionData = activity.value?.action?.data as
+      | { actionId?: string; value?: string }
+      | undefined;
+
+    if (!actionData?.actionId) {
+      this.logger?.debug("Adaptive card action missing actionId", {
+        value: activity.value,
+      });
+      // Send acknowledgment response
+      await context.sendActivity({
+        type: ActivityTypes.InvokeResponse,
+        value: { status: 200 },
+      });
+      return;
+    }
+
+    const threadId = this.encodeThreadId({
+      conversationId: activity.conversation?.id || "",
+      serviceUrl: activity.serviceUrl || "",
+    });
+
+    const actionEvent: Omit<ActionEvent, "thread"> & { adapter: TeamsAdapter } = {
+      actionId: actionData.actionId,
+      value: actionData.value,
+      user: {
+        userId: activity.from?.id || "unknown",
+        userName: activity.from?.name || "unknown",
+        fullName: activity.from?.name || "unknown",
+        isBot: false,
+        isMe: false,
+      },
+      messageId: activity.replyToId || activity.id || "",
+      threadId,
+      adapter: this,
+      raw: activity,
+    };
+
+    this.logger?.debug("Processing Teams adaptive card action", {
+      actionId: actionData.actionId,
+      value: actionData.value,
+      messageId: actionEvent.messageId,
+      threadId,
+    });
+
+    this.chat.processAction(actionEvent, options);
+
+    // Send acknowledgment response to prevent timeout
+    await context.sendActivity({
+      type: ActivityTypes.InvokeResponse,
+      value: { status: 200 },
+    });
   }
 
   /**
@@ -286,14 +382,49 @@ export class TeamsAdapter implements Adapter<TeamsThreadId, unknown> {
           : new Date(),
         edited: false,
       },
-      attachments: (activity.attachments || []).map((att) => ({
-        type: att.contentType?.startsWith("image/")
-          ? ("image" as const)
-          : ("file" as const),
-        url: att.contentUrl,
-        name: att.name,
-        mimeType: att.contentType,
-      })),
+      attachments: (activity.attachments || [])
+        .filter((att) => att.contentType !== "application/vnd.microsoft.card.adaptive")
+        .map((att) => this.createAttachment(att)),
+    };
+  }
+
+  /**
+   * Create an Attachment object from a Teams attachment.
+   */
+  private createAttachment(att: {
+    contentType?: string;
+    contentUrl?: string;
+    name?: string;
+  }): Attachment {
+    const url = att.contentUrl;
+
+    // Determine type based on contentType
+    let type: Attachment["type"] = "file";
+    if (att.contentType?.startsWith("image/")) {
+      type = "image";
+    } else if (att.contentType?.startsWith("video/")) {
+      type = "video";
+    } else if (att.contentType?.startsWith("audio/")) {
+      type = "audio";
+    }
+
+    return {
+      type,
+      url,
+      name: att.name,
+      mimeType: att.contentType,
+      fetchData: url
+        ? async () => {
+            const response = await fetch(url);
+            if (!response.ok) {
+              throw new Error(
+                `Failed to fetch file: ${response.status} ${response.statusText}`,
+              );
+            }
+            const arrayBuffer = await response.arrayBuffer();
+            return Buffer.from(arrayBuffer);
+          }
+        : undefined,
     };
   }
 
@@ -309,17 +440,59 @@ export class TeamsAdapter implements Adapter<TeamsThreadId, unknown> {
   ): Promise<RawMessage<unknown>> {
     const { conversationId, serviceUrl } = this.decodeThreadId(threadId);
 
-    // Convert emoji placeholders to Teams format (unicode)
-    const text = convertEmojiPlaceholders(
-      this.formatConverter.renderPostable(message),
-      "teams",
-    );
+    // Check for files to upload
+    const files = this.extractFiles(message);
+    const fileAttachments = files.length > 0
+      ? await this.filesToAttachments(files)
+      : [];
 
-    const activity: Partial<Activity> = {
-      type: ActivityTypes.Message,
-      text,
-      textFormat: "markdown",
-    };
+    // Check if message contains a card
+    const card = this.extractCard(message);
+    let activity: Partial<Activity>;
+
+    if (card) {
+      // Render card as Adaptive Card
+      const adaptiveCard = cardToAdaptiveCard(card);
+      const fallbackText = cardToFallbackText(card);
+
+      activity = {
+        type: ActivityTypes.Message,
+        text: fallbackText,
+        attachments: [
+          {
+            contentType: "application/vnd.microsoft.card.adaptive",
+            content: adaptiveCard,
+          },
+          ...fileAttachments,
+        ],
+      };
+
+      this.logger?.debug("Teams API: sendActivity (adaptive card)", {
+        conversationId,
+        serviceUrl,
+        fileCount: fileAttachments.length,
+      });
+    } else {
+      // Regular text message
+      const text = convertEmojiPlaceholders(
+        this.formatConverter.renderPostable(message),
+        "teams",
+      );
+
+      activity = {
+        type: ActivityTypes.Message,
+        text,
+        textFormat: "markdown",
+        attachments: fileAttachments.length > 0 ? fileAttachments : undefined,
+      };
+
+      this.logger?.debug("Teams API: sendActivity (message)", {
+        conversationId,
+        serviceUrl,
+        textLength: text.length,
+        fileCount: fileAttachments.length,
+      });
+    }
 
     // Use the adapter to send the message
     const conversationReference = {
@@ -327,12 +500,6 @@ export class TeamsAdapter implements Adapter<TeamsThreadId, unknown> {
       serviceUrl,
       conversation: { id: conversationId },
     };
-
-    this.logger?.debug("Teams API: sendActivity (message)", {
-      conversationId,
-      serviceUrl,
-      textLength: text.length,
-    });
 
     let messageId = "";
 
@@ -354,6 +521,71 @@ export class TeamsAdapter implements Adapter<TeamsThreadId, unknown> {
     };
   }
 
+  /**
+   * Extract card element from a PostableMessage if present.
+   */
+  private extractCard(message: PostableMessage): import("chat-sdk").CardElement | null {
+    if (isCardElement(message)) {
+      return message;
+    }
+    if (typeof message === "object" && message !== null && "card" in message) {
+      return message.card;
+    }
+    return null;
+  }
+
+  /**
+   * Extract files from a PostableMessage if present.
+   */
+  private extractFiles(message: PostableMessage): FileUpload[] {
+    if (typeof message === "object" && message !== null && "files" in message) {
+      return (message as { files?: FileUpload[] }).files ?? [];
+    }
+    return [];
+  }
+
+  /**
+   * Convert files to Teams attachments.
+   * Uses inline data URIs for small files.
+   */
+  private async filesToAttachments(
+    files: FileUpload[],
+  ): Promise<Array<{ contentType: string; contentUrl: string; name: string }>> {
+    const attachments: Array<{
+      contentType: string;
+      contentUrl: string;
+      name: string;
+    }> = [];
+
+    for (const file of files) {
+      // Convert data to Buffer
+      let buffer: Buffer;
+      if (Buffer.isBuffer(file.data)) {
+        buffer = file.data;
+      } else if (file.data instanceof ArrayBuffer) {
+        buffer = Buffer.from(file.data);
+      } else if (file.data instanceof Blob) {
+        const arrayBuffer = await file.data.arrayBuffer();
+        buffer = Buffer.from(arrayBuffer);
+      } else {
+        continue;
+      }
+
+      // Create data URI
+      const mimeType = file.mimeType || "application/octet-stream";
+      const base64 = buffer.toString("base64");
+      const dataUri = `data:${mimeType};base64,${base64}`;
+
+      attachments.push({
+        contentType: mimeType,
+        contentUrl: dataUri,
+        name: file.filename,
+      });
+    }
+
+    return attachments;
+  }
+
   async editMessage(
     threadId: string,
     messageId: string,
@@ -361,30 +593,57 @@ export class TeamsAdapter implements Adapter<TeamsThreadId, unknown> {
   ): Promise<RawMessage<unknown>> {
     const { conversationId, serviceUrl } = this.decodeThreadId(threadId);
 
-    // Convert emoji placeholders to Teams format (unicode)
-    const text = convertEmojiPlaceholders(
-      this.formatConverter.renderPostable(message),
-      "teams",
-    );
+    // Check if message contains a card
+    const card = this.extractCard(message);
+    let activity: Partial<Activity>;
 
-    const activity: Partial<Activity> = {
-      id: messageId,
-      type: ActivityTypes.Message,
-      text,
-      textFormat: "markdown",
-    };
+    if (card) {
+      // Render card as Adaptive Card
+      const adaptiveCard = cardToAdaptiveCard(card);
+      const fallbackText = cardToFallbackText(card);
+
+      activity = {
+        id: messageId,
+        type: ActivityTypes.Message,
+        text: fallbackText,
+        attachments: [
+          {
+            contentType: "application/vnd.microsoft.card.adaptive",
+            content: adaptiveCard,
+          },
+        ],
+      };
+
+      this.logger?.debug("Teams API: updateActivity (adaptive card)", {
+        conversationId,
+        messageId,
+      });
+    } else {
+      // Regular text message
+      const text = convertEmojiPlaceholders(
+        this.formatConverter.renderPostable(message),
+        "teams",
+      );
+
+      activity = {
+        id: messageId,
+        type: ActivityTypes.Message,
+        text,
+        textFormat: "markdown",
+      };
+
+      this.logger?.debug("Teams API: updateActivity", {
+        conversationId,
+        messageId,
+        textLength: text.length,
+      });
+    }
 
     const conversationReference = {
       channelId: "msteams",
       serviceUrl,
       conversation: { id: conversationId },
     };
-
-    this.logger?.debug("Teams API: updateActivity", {
-      conversationId,
-      messageId,
-      textLength: text.length,
-    });
 
     await this.botAdapter.continueConversationAsync(
       this.config.appId,
@@ -474,6 +733,78 @@ export class TeamsAdapter implements Adapter<TeamsThreadId, unknown> {
     });
   }
 
+  /**
+   * Open a direct message conversation with a user.
+   * Returns a thread ID that can be used to post messages.
+   *
+   * Note: This requires a serviceUrl to be known. In Teams, you typically
+   * get the serviceUrl from an incoming activity. If you need to proactively
+   * message a user, you may need to store the serviceUrl from previous interactions.
+   */
+  async openDM(
+    userId: string,
+    serviceUrl = "https://smba.trafficmanager.net/teams/",
+  ): Promise<string> {
+    this.logger?.debug("Teams: creating 1:1 conversation", { userId });
+
+    // Create a conversation reference for the 1:1 chat
+    const conversationReference: Partial<ConversationReference> = {
+      channelId: "msteams",
+      serviceUrl,
+      bot: {
+        id: this.config.appId,
+        name: this.userName,
+      },
+    };
+
+    let conversationId = "";
+
+    // Create the 1:1 conversation
+    await this.botAdapter.continueConversationAsync(
+      this.config.appId,
+      conversationReference,
+      async (context) => {
+        // Create conversation parameters
+        const members = [{ id: userId }];
+
+        // biome-ignore lint/suspicious/noExplicitAny: BotBuilder types are incomplete
+        const result = await (context.adapter as any).createConversationAsync(
+          this.config.appId,
+          "msteams",
+          serviceUrl,
+          "", // empty audience
+          {
+            isGroup: false,
+            bot: { id: this.config.appId, name: this.userName },
+            members,
+            tenantId: this.config.appTenantId,
+          },
+          // The callback is optional in the newer SDK but types require it
+          async () => {},
+        );
+
+        // Get conversation ID from the result
+        conversationId = result?.activityId || result?.id || "";
+
+        // If we got a context reference back, extract the conversation ID
+        if (result?.conversation?.id) {
+          conversationId = result.conversation.id;
+        }
+      },
+    );
+
+    if (!conversationId) {
+      throw new Error("Failed to create 1:1 conversation - no ID returned");
+    }
+
+    this.logger?.debug("Teams: 1:1 conversation created", { conversationId });
+
+    return this.encodeThreadId({
+      conversationId,
+      serviceUrl,
+    });
+  }
+
   async fetchMessages(
     _threadId: string,
     _options: FetchOptions = {},
@@ -503,6 +834,16 @@ export class TeamsAdapter implements Adapter<TeamsThreadId, unknown> {
       "base64url",
     );
     return `teams:${encodedConversationId}:${encodedServiceUrl}`;
+  }
+
+  /**
+   * Check if a thread is a direct message conversation.
+   * Teams DMs have conversation IDs that don't start with "19:" (which is for groups/channels).
+   */
+  isDM(threadId: string): boolean {
+    const { conversationId } = this.decodeThreadId(threadId);
+    // Group chats and channels start with "19:", DMs don't
+    return !conversationId.startsWith("19:");
   }
 
   decodeThreadId(threadId: string): TeamsThreadId {
@@ -569,3 +910,6 @@ export function createTeamsAdapter(config: TeamsAdapterConfig): TeamsAdapter {
 }
 
 export { TeamsFormatConverter } from "./markdown";
+
+// Re-export card converter for advanced use
+export { cardToAdaptiveCard, cardToFallbackText } from "./cards";

@@ -1,5 +1,7 @@
 import { ThreadImpl } from "./thread";
 import type {
+  ActionEvent,
+  ActionHandler,
   Adapter,
   ChatConfig,
   ChatInstance,
@@ -34,6 +36,12 @@ interface ReactionPattern {
   /** If specified, only these emoji trigger the handler. Empty means all emoji. */
   emoji: EmojiFilter[];
   handler: ReactionHandler;
+}
+
+interface ActionPattern {
+  /** If specified, only these action IDs trigger the handler. Empty means all actions. */
+  actionIds: string[];
+  handler: ActionHandler;
 }
 
 /**
@@ -80,6 +88,7 @@ export class Chat<
   private messagePatterns: MessagePattern[] = [];
   private subscribedMessageHandlers: SubscribedMessageHandler[] = [];
   private reactionHandlers: ReactionPattern[] = [];
+  private actionHandlers: ActionPattern[] = [];
 
   /** Initialization state */
   private initPromise: Promise<void> | null = null;
@@ -311,6 +320,55 @@ export class Chat<
   }
 
   /**
+   * Register a handler for action events (button clicks in cards).
+   *
+   * @example
+   * ```typescript
+   * // Handle specific action
+   * chat.onAction("approve", async (event) => {
+   *   await event.thread.post("Approved!");
+   * });
+   *
+   * // Handle multiple actions
+   * chat.onAction(["approve", "reject"], async (event) => {
+   *   if (event.actionId === "approve") {
+   *     await event.thread.post("Approved!");
+   *   } else {
+   *     await event.thread.post("Rejected!");
+   *   }
+   * });
+   *
+   * // Handle all actions (catch-all)
+   * chat.onAction(async (event) => {
+   *   console.log(`Action: ${event.actionId}`);
+   * });
+   * ```
+   *
+   * @param actionIdOrHandler - Either an action ID, array of action IDs, or the handler
+   * @param handler - The handler (if action ID filter is provided)
+   */
+  onAction(handler: ActionHandler): void;
+  onAction(actionId: string, handler: ActionHandler): void;
+  onAction(actionIds: string[], handler: ActionHandler): void;
+  onAction(
+    actionIdOrHandler: string | string[] | ActionHandler,
+    handler?: ActionHandler,
+  ): void {
+    if (typeof actionIdOrHandler === "function") {
+      // No action filter - handle all actions
+      this.actionHandlers.push({ actionIds: [], handler: actionIdOrHandler });
+      this.logger.debug("Registered action handler for all actions");
+    } else if (handler) {
+      // Specific action ID(s) filter
+      const actionIds = Array.isArray(actionIdOrHandler)
+        ? actionIdOrHandler
+        : [actionIdOrHandler];
+      this.actionHandlers.push({ actionIds, handler });
+      this.logger.debug("Registered action handler", { actionIds });
+    }
+  }
+
+  /**
    * Get an adapter by name with type safety.
    */
   getAdapter<K extends keyof TAdapters>(name: K): TAdapters[K] {
@@ -353,18 +411,99 @@ export class Chat<
     event: Omit<ReactionEvent, "adapter" | "thread"> & { adapter?: Adapter },
     options?: WebhookOptions,
   ): void {
-    const task = this.handleReactionEvent(event).catch(
-      (err) => {
-        this.logger.error("Reaction processing error", {
-          error: err,
-          emoji: event.emoji,
-          messageId: event.messageId,
-        });
-      },
-    );
+    const task = this.handleReactionEvent(event).catch((err) => {
+      this.logger.error("Reaction processing error", {
+        error: err,
+        emoji: event.emoji,
+        messageId: event.messageId,
+      });
+    });
 
     if (options?.waitUntil) {
       options.waitUntil(task);
+    }
+  }
+
+  /**
+   * Process an incoming action event (button click) from an adapter.
+   * Handles waitUntil registration and error catching internally.
+   */
+  processAction(
+    event: Omit<ActionEvent, "thread"> & { adapter: Adapter },
+    options?: WebhookOptions,
+  ): void {
+    const task = this.handleActionEvent(event).catch((err) => {
+      this.logger.error("Action processing error", {
+        error: err,
+        actionId: event.actionId,
+        messageId: event.messageId,
+      });
+    });
+
+    if (options?.waitUntil) {
+      options.waitUntil(task);
+    }
+  }
+
+  /**
+   * Handle an action event internally.
+   */
+  private async handleActionEvent(
+    event: Omit<ActionEvent, "thread"> & { adapter: Adapter },
+  ): Promise<void> {
+    this.logger.debug("Incoming action", {
+      adapter: event.adapter.name,
+      actionId: event.actionId,
+      value: event.value,
+      user: event.user.userName,
+      messageId: event.messageId,
+      threadId: event.threadId,
+    });
+
+    // Skip actions from self (shouldn't happen, but be safe)
+    if (event.user.isMe) {
+      this.logger.debug("Skipping action from self", {
+        actionId: event.actionId,
+      });
+      return;
+    }
+
+    // Create thread for the action event
+    const isSubscribed = await this.state.isSubscribed(event.threadId);
+    const thread = await this.createThread(
+      event.adapter,
+      event.threadId,
+      {} as Message,
+      isSubscribed,
+    );
+
+    // Build full event with thread
+    const fullEvent: ActionEvent = {
+      ...event,
+      thread,
+    };
+
+    // Run matching handlers
+    this.logger.debug("Checking action handlers", {
+      handlerCount: this.actionHandlers.length,
+      actionId: event.actionId,
+    });
+
+    for (const { actionIds, handler } of this.actionHandlers) {
+      // If no action ID filter, run handler for all actions
+      if (actionIds.length === 0) {
+        this.logger.debug("Running catch-all action handler");
+        await handler(fullEvent);
+        continue;
+      }
+
+      // Check if the action matches any of the specified action IDs
+      if (actionIds.includes(event.actionId)) {
+        this.logger.debug("Running matched action handler", {
+          actionId: event.actionId,
+        });
+        await handler(fullEvent);
+      }
     }
   }
 
@@ -470,6 +609,32 @@ export class Chat<
       return this.logger.child(prefix);
     }
     return this.logger;
+  }
+
+  /**
+   * Open a direct message conversation with a user via a specific adapter.
+   *
+   * @param adapterName - Name of the adapter to use (e.g., "slack", "teams", "gchat")
+   * @param userId - Platform-specific user ID
+   * @returns A Thread that can be used to post messages
+   *
+   * @example
+   * ```ts
+   * const dmThread = await bot.openDM("slack", "U123456");
+   * await dmThread.post("Hello via DM!");
+   * ```
+   */
+  async openDM(adapterName: keyof TAdapters, userId: string): Promise<Thread> {
+    const adapter = this.adapters.get(adapterName as string);
+    if (!adapter) {
+      throw new Error(`Adapter "${String(adapterName)}" not found`);
+    }
+    if (!adapter.openDM) {
+      throw new Error(`Adapter "${String(adapterName)}" does not support openDM`);
+    }
+
+    const threadId = await adapter.openDM(userId);
+    return this.createThread(adapter, threadId, {} as Message, false);
   }
 
   /**
@@ -618,6 +783,9 @@ export class Chat<
     const parts = threadId.split(":");
     const channelId = parts[1] || "";
 
+    // Check if this is a DM
+    const isDM = adapter.isDM?.(threadId) ?? false;
+
     return new ThreadImpl({
       id: threadId,
       adapter,
@@ -625,6 +793,7 @@ export class Chat<
       state: this.state,
       initialMessage,
       isSubscribedContext,
+      isDM,
     });
   }
 

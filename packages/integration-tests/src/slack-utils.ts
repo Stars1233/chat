@@ -139,11 +139,21 @@ export function createMockSlackClient() {
         ok: true,
         messages: [],
       }),
+      open: vi.fn().mockResolvedValue({
+        ok: true,
+        channel: { id: "D123456" },
+      }),
     },
     users: {
       info: vi.fn().mockResolvedValue({
         ok: true,
         user: { id: "U123", name: "testuser", real_name: "Test User" },
+      }),
+    },
+    files: {
+      uploadV2: vi.fn().mockResolvedValue({
+        ok: true,
+        files: [{ id: "F123456" }],
       }),
     },
   };
@@ -167,4 +177,91 @@ export function injectMockSlackClient(
  */
 export function getSlackThreadId(channel: string, threadTs: string): string {
   return `slack:${channel}:${threadTs}`;
+}
+
+/**
+ * Options for creating a Slack block_actions event
+ */
+export interface SlackBlockActionsOptions {
+  actionId: string;
+  actionValue?: string;
+  userId: string;
+  userName?: string;
+  messageTs: string;
+  threadTs?: string;
+  channel: string;
+  triggerId?: string;
+}
+
+/**
+ * Create a Slack block_actions payload (form-urlencoded)
+ */
+export function createSlackBlockActionsPayload(
+  options: SlackBlockActionsOptions,
+) {
+  const {
+    actionId,
+    actionValue,
+    userId,
+    userName = "testuser",
+    messageTs,
+    threadTs,
+    channel,
+    triggerId = "trigger123",
+  } = options;
+
+  const payload = {
+    type: "block_actions",
+    user: {
+      id: userId,
+      username: userName,
+      name: userName,
+      team_id: "T123456",
+    },
+    api_app_id: "A123456",
+    team: { id: "T123456", domain: "test" },
+    channel: { id: channel, name: "general" },
+    message: {
+      ts: messageTs,
+      thread_ts: threadTs || messageTs,
+    },
+    trigger_id: triggerId,
+    actions: [
+      {
+        action_id: actionId,
+        block_id: "block1",
+        type: "button",
+        value: actionValue,
+        action_ts: String(Date.now() / 1000),
+      },
+    ],
+  };
+
+  return payload;
+}
+
+/**
+ * Create a Slack block_actions webhook request (form-urlencoded)
+ */
+export function createSlackBlockActionsRequest(
+  options: SlackBlockActionsOptions,
+  signingSecret = SLACK_SIGNING_SECRET,
+): Request {
+  const payload = createSlackBlockActionsPayload(options);
+  const body = `payload=${encodeURIComponent(JSON.stringify(payload))}`;
+  const timestamp = Math.floor(Date.now() / 1000).toString();
+  const sigBasestring = `v0:${timestamp}:${body}`;
+  const signature =
+    "v0=" +
+    createHmac("sha256", signingSecret).update(sigBasestring).digest("hex");
+
+  return new Request("https://example.com/webhook/slack", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+      "x-slack-request-timestamp": timestamp,
+      "x-slack-signature": signature,
+    },
+    body,
+  });
 }

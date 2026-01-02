@@ -1,8 +1,11 @@
 import type {
+  ActionEvent,
   Adapter,
+  Attachment,
   ChatInstance,
   EmojiValue,
   FetchOptions,
+  FileUpload,
   FormattedContent,
   Logger,
   Message,
@@ -16,8 +19,10 @@ import type {
 import {
   convertEmojiPlaceholders,
   defaultEmojiResolver,
+  isCardElement,
   RateLimitError,
 } from "chat-sdk";
+import { cardToFallbackText, cardToGoogleCard } from "./cards";
 import { type chat_v1, google } from "googleapis";
 import { GoogleChatFormatConverter } from "./markdown";
 import {
@@ -169,6 +174,10 @@ export interface GoogleChatEvent {
     userLocale?: string;
     hostApp?: string;
     platform?: string;
+    /** The function name invoked (for card clicks) */
+    invokedFunction?: string;
+    /** Parameters passed to the function */
+    parameters?: Record<string, string>;
   };
   chat?: {
     user?: GoogleChatUser;
@@ -184,6 +193,12 @@ export interface GoogleChatEvent {
     /** Present when the bot is removed from a space */
     removedFromSpacePayload?: {
       space: GoogleChatSpace;
+    };
+    /** Present when a card button is clicked */
+    buttonClickedPayload?: {
+      space: GoogleChatSpace;
+      message: GoogleChatMessage;
+      user: GoogleChatUser;
     };
   };
 }
@@ -210,6 +225,8 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
   private useADC = false;
   /** Custom auth client (e.g., Vercel OIDC) */
   private customAuth?: Parameters<typeof google.chat>[0]["auth"];
+  /** Auth client for making authenticated requests */
+  private authClient!: Parameters<typeof google.chat>[0]["auth"];
   /** User email to impersonate for Workspace Events API (domain-wide delegation) */
   private impersonateUser?: string;
   /** In-progress subscription creations to prevent duplicate requests */
@@ -257,6 +274,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
       );
     }
 
+    this.authClient = auth;
     this.chatApi = google.chat({ version: "v1", auth });
   }
 
@@ -538,6 +556,13 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
       });
     }
 
+    // Handle card button clicks
+    const buttonClickedPayload = event.chat?.buttonClickedPayload;
+    const invokedFunction = event.commonEventObject?.invokedFunction;
+    if (buttonClickedPayload || invokedFunction) {
+      this.handleCardClick(event, options);
+    }
+
     // Check for message payload in the Add-ons format
     const messagePayload = event.chat?.messagePayload;
     if (messagePayload) {
@@ -547,7 +572,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
         text: messagePayload.message.text?.slice(0, 50),
       });
       this.handleMessageEvent(event, options);
-    } else if (!addedPayload && !removedPayload) {
+    } else if (!addedPayload && !removedPayload && !buttonClickedPayload && !invokedFunction) {
       this.logger?.debug("Non-message event received", {
         hasChat: !!event.chat,
         hasCommonEventObject: !!event.commonEventObject,
@@ -794,14 +819,9 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
         dateSent: new Date(message.createTime),
         edited: false,
       },
-      attachments: (message.attachment || []).map((att) => ({
-        type: att.contentType?.startsWith("image/")
-          ? ("image" as const)
-          : ("file" as const),
-        url: att.downloadUri,
-        name: att.contentName,
-        mimeType: att.contentType,
-      })),
+      attachments: (message.attachment || []).map((att) =>
+        this.createAttachment(att),
+      ),
     };
 
     this.logger?.debug("Pub/Sub parsed message", {
@@ -827,6 +847,74 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
     if (options?.waitUntil) {
       options.waitUntil(subscribeTask);
     }
+  }
+
+  /**
+   * Handle card button clicks.
+   * Google Chat sends action data via commonEventObject.invokedFunction and parameters.
+   */
+  private handleCardClick(
+    event: GoogleChatEvent,
+    options?: WebhookOptions,
+  ): void {
+    if (!this.chat) {
+      this.logger?.warn("Chat instance not initialized, ignoring card click");
+      return;
+    }
+
+    const buttonPayload = event.chat?.buttonClickedPayload;
+    const commonEvent = event.commonEventObject;
+
+    // Get action ID from invokedFunction (this is the button's id)
+    const actionId = commonEvent?.invokedFunction;
+    if (!actionId) {
+      this.logger?.debug("Card click missing invokedFunction");
+      return;
+    }
+
+    // Get value from parameters
+    const value = commonEvent?.parameters?.["value"];
+
+    // Get space and message info from buttonClickedPayload
+    const space = buttonPayload?.space;
+    const message = buttonPayload?.message;
+    const user = buttonPayload?.user || event.chat?.user;
+
+    if (!space) {
+      this.logger?.warn("Card click missing space info");
+      return;
+    }
+
+    const threadName = message?.thread?.name || message?.name;
+    const threadId = this.encodeThreadId({
+      spaceName: space.name,
+      threadName,
+    });
+
+    const actionEvent: Omit<ActionEvent, "thread"> & { adapter: GoogleChatAdapter } = {
+      actionId,
+      value,
+      user: {
+        userId: user?.name || "unknown",
+        userName: user?.displayName || "unknown",
+        fullName: user?.displayName || "unknown",
+        isBot: user?.type === "BOT",
+        isMe: false,
+      },
+      messageId: message?.name || "",
+      threadId,
+      adapter: this,
+      raw: event,
+    };
+
+    this.logger?.debug("Processing GChat card click", {
+      actionId,
+      value,
+      messageId: actionEvent.messageId,
+      threadId,
+    });
+
+    this.chat.processAction(actionEvent, options);
   }
 
   /**
@@ -896,14 +984,9 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
         dateSent: new Date(message.createTime),
         edited: false,
       },
-      attachments: (message.attachment || []).map((att) => ({
-        type: att.contentType?.startsWith("image/")
-          ? ("image" as const)
-          : ("file" as const),
-        url: att.downloadUri,
-        name: att.contentName,
-        mimeType: att.contentType,
-      })),
+      attachments: (message.attachment || []).map((att) =>
+        this.createAttachment(att),
+      ),
     };
   }
 
@@ -914,7 +997,53 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
     const { spaceName, threadName } = this.decodeThreadId(threadId);
 
     try {
-      // Convert emoji placeholders to GChat format
+      // Check for files - currently not implemented for GChat
+      const files = this.extractFiles(message);
+      if (files.length > 0) {
+        this.logger?.warn(
+          "File uploads are not yet supported for Google Chat. Files will be ignored.",
+          { fileCount: files.length },
+        );
+        // TODO: Implement using Google Chat media.upload API
+      }
+
+      // Check if message contains a card
+      const card = this.extractCard(message);
+
+      if (card) {
+        // Render card as Google Chat Card
+        const googleCard = cardToGoogleCard(card);
+        const fallbackText = cardToFallbackText(card);
+
+        this.logger?.debug("GChat API: spaces.messages.create (card)", {
+          spaceName,
+          threadName,
+        });
+
+        const response = await this.chatApi.spaces.messages.create({
+          parent: spaceName,
+          messageReplyOption: threadName
+            ? "REPLY_MESSAGE_FALLBACK_TO_NEW_THREAD"
+            : undefined,
+          requestBody: {
+            text: fallbackText,
+            cardsV2: [googleCard],
+            thread: threadName ? { name: threadName } : undefined,
+          },
+        });
+
+        this.logger?.debug("GChat API: spaces.messages.create response", {
+          messageName: response.data.name,
+        });
+
+        return {
+          id: response.data.name || "",
+          threadId,
+          raw: response.data,
+        };
+      }
+
+      // Regular text message
       const text = convertEmojiPlaceholders(
         this.formatConverter.renderPostable(message),
         "gchat",
@@ -952,13 +1081,127 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
     }
   }
 
+  /**
+   * Extract card element from a PostableMessage if present.
+   */
+  private extractCard(message: PostableMessage): import("chat-sdk").CardElement | null {
+    if (isCardElement(message)) {
+      return message;
+    }
+    if (typeof message === "object" && message !== null && "card" in message) {
+      return message.card;
+    }
+    return null;
+  }
+
+  /**
+   * Extract files from a PostableMessage if present.
+   */
+  private extractFiles(message: PostableMessage): FileUpload[] {
+    if (typeof message === "object" && message !== null && "files" in message) {
+      return (message as { files?: FileUpload[] }).files ?? [];
+    }
+    return [];
+  }
+
+  /**
+   * Create an Attachment object from a Google Chat attachment.
+   */
+  private createAttachment(att: {
+    contentType?: string | null;
+    downloadUri?: string | null;
+    contentName?: string | null;
+    thumbnailUri?: string | null;
+  }): Attachment {
+    const url = att.downloadUri || undefined;
+    const authClient = this.authClient;
+
+    // Determine type based on contentType
+    let type: Attachment["type"] = "file";
+    if (att.contentType?.startsWith("image/")) {
+      type = "image";
+    } else if (att.contentType?.startsWith("video/")) {
+      type = "video";
+    } else if (att.contentType?.startsWith("audio/")) {
+      type = "audio";
+    }
+
+    // Capture auth client for use in fetchData closure
+    const auth = authClient;
+
+    return {
+      type,
+      url,
+      name: att.contentName || undefined,
+      mimeType: att.contentType || undefined,
+      fetchData: url
+        ? async () => {
+            // Get access token for authenticated download
+            if (typeof auth === "string" || !auth) {
+              throw new Error("Cannot fetch file: no auth client configured");
+            }
+            const tokenResult = await auth.getAccessToken();
+            const token =
+              typeof tokenResult === "string" ? tokenResult : tokenResult?.token;
+            if (!token) {
+              throw new Error("Failed to get access token");
+            }
+            const response = await fetch(url, {
+              headers: {
+                Authorization: `Bearer ${token}`,
+              },
+            });
+            if (!response.ok) {
+              throw new Error(
+                `Failed to fetch file: ${response.status} ${response.statusText}`,
+              );
+            }
+            const arrayBuffer = await response.arrayBuffer();
+            return Buffer.from(arrayBuffer);
+          }
+        : undefined,
+    };
+  }
+
   async editMessage(
     threadId: string,
     messageId: string,
     message: PostableMessage,
   ): Promise<RawMessage<unknown>> {
     try {
-      // Convert emoji placeholders to GChat format
+      // Check if message contains a card
+      const card = this.extractCard(message);
+
+      if (card) {
+        // Render card as Google Chat Card
+        const googleCard = cardToGoogleCard(card);
+        const fallbackText = cardToFallbackText(card);
+
+        this.logger?.debug("GChat API: spaces.messages.update (card)", {
+          messageId,
+        });
+
+        const response = await this.chatApi.spaces.messages.update({
+          name: messageId,
+          updateMask: "text,cardsV2",
+          requestBody: {
+            text: fallbackText,
+            cardsV2: [googleCard],
+          },
+        });
+
+        this.logger?.debug("GChat API: spaces.messages.update response", {
+          messageName: response.data.name,
+        });
+
+        return {
+          id: response.data.name || "",
+          threadId,
+          raw: response.data,
+        };
+      }
+
+      // Regular text message
       const text = convertEmojiPlaceholders(
         this.formatConverter.renderPostable(message),
         "gchat",
@@ -1097,6 +1340,48 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
     // Google Chat doesn't have a typing indicator API for bots
   }
 
+  /**
+   * Open a direct message conversation with a user.
+   * Returns a thread ID that can be used to post messages.
+   *
+   * @param userId - The user's resource name (e.g., "users/123456")
+   */
+  async openDM(userId: string): Promise<string> {
+    try {
+      this.logger?.debug("GChat API: spaces.setup (DM)", { userId });
+
+      // Create a DM space with the user
+      const response = await this.chatApi.spaces.setup({
+        requestBody: {
+          space: {
+            spaceType: "DIRECT_MESSAGE",
+            singleUserBotDm: true,
+          },
+          memberships: [
+            {
+              member: {
+                name: userId,
+                type: "HUMAN",
+              },
+            },
+          ],
+        },
+      });
+
+      const spaceName = response.data.name;
+
+      if (!spaceName) {
+        throw new Error("Failed to create DM - no space name returned");
+      }
+
+      this.logger?.debug("GChat API: spaces.setup response", { spaceName });
+
+      return this.encodeThreadId({ spaceName });
+    } catch (error) {
+      this.handleGoogleChatError(error);
+    }
+  }
+
   async fetchMessages(
     threadId: string,
     options: FetchOptions = {},
@@ -1182,6 +1467,17 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
       ? `:${Buffer.from(platformData.threadName).toString("base64url")}`
       : "";
     return `gchat:${platformData.spaceName}${threadPart}`;
+  }
+
+  /**
+   * Check if a thread is a direct message conversation.
+   * GChat DM space names typically contain "dm-" in the space name.
+   * This is a heuristic - for accurate detection, use fetchThread() to get space type.
+   */
+  isDM(threadId: string): boolean {
+    const { spaceName } = this.decodeThreadId(threadId);
+    // DM space names typically contain "dm-" or follow the pattern "spaces/dm-..."
+    return spaceName.includes("dm-") || spaceName.includes("/dm");
   }
 
   decodeThreadId(threadId: string): GoogleChatThreadId {
@@ -1333,6 +1629,9 @@ export function createGoogleChatAdapter(
 }
 
 export { GoogleChatFormatConverter } from "./markdown";
+
+// Re-export card converter for advanced use
+export { cardToFallbackText, cardToGoogleCard } from "./cards";
 
 export {
   type CreateSpaceSubscriptionOptions,
