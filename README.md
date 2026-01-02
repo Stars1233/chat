@@ -15,18 +15,6 @@ A unified SDK for building chat bots across Slack, Microsoft Teams, and Google C
 - Message deduplication for platform quirks
 - Serverless-ready with pluggable state backends
 
-## Packages
-
-| Package | Description |
-|---------|-------------|
-| `chat` | Core SDK with thread management and handlers |
-| `@chat-adapter/slack` | Slack adapter |
-| `@chat-adapter/teams` | Microsoft Teams adapter |
-| `@chat-adapter/gchat` | Google Chat adapter with Workspace Events |
-| `@chat-adapter/state-memory` | In-memory state (development) |
-| `@chat-adapter/state-redis` | Redis state using `redis` package (production) |
-| `@chat-adapter/state-ioredis` | Redis state using `ioredis` package (production) |
-
 ## Quick Start
 
 ### 1. Create your bot (`lib/bot.ts`)
@@ -85,7 +73,7 @@ type Platform = keyof typeof bot.webhooks;
 
 export async function POST(
   request: Request,
-  { params }: { params: Promise<{ platform: string }> },
+  { params }: { params: Promise<{ platform: string }> }
 ) {
   const { platform } = await params;
 
@@ -101,6 +89,7 @@ export async function POST(
 ```
 
 This creates endpoints for each platform:
+
 - `POST /api/webhooks/slack`
 - `POST /api/webhooks/teams`
 - `POST /api/webhooks/gchat`
@@ -128,17 +117,17 @@ await thread.post(`${emoji.thumbs_up} Great job!`);
 
 **Available emoji:**
 
-| Name | Emoji | Name | Emoji |
-|------|-------|------|-------|
-| `emoji.thumbs_up` | 👍 | `emoji.thumbs_down` | 👎 |
-| `emoji.heart` | ❤️ | `emoji.smile` | 😊 |
-| `emoji.laugh` | 😂 | `emoji.thinking` | 🤔 |
-| `emoji.eyes` | 👀 | `emoji.fire` | 🔥 |
-| `emoji.check` | ✅ | `emoji.x` | ❌ |
-| `emoji.question` | ❓ | `emoji.party` | 🎉 |
-| `emoji.rocket` | 🚀 | `emoji.star` | ⭐ |
-| `emoji.wave` | 👋 | `emoji.clap` | 👏 |
-| `emoji["100"]` | 💯 | `emoji.warning` | ⚠️ |
+| Name              | Emoji | Name                | Emoji |
+| ----------------- | ----- | ------------------- | ----- |
+| `emoji.thumbs_up` | 👍    | `emoji.thumbs_down` | 👎    |
+| `emoji.heart`     | ❤️    | `emoji.smile`       | 😊    |
+| `emoji.laugh`     | 😂    | `emoji.thinking`    | 🤔    |
+| `emoji.eyes`      | 👀    | `emoji.fire`        | 🔥    |
+| `emoji.check`     | ✅    | `emoji.x`           | ❌    |
+| `emoji.question`  | ❓    | `emoji.party`       | 🎉    |
+| `emoji.rocket`    | 🚀    | `emoji.star`        | ⭐    |
+| `emoji.wave`      | 👋    | `emoji.clap`        | 👏    |
+| `emoji["100"]`    | 💯    | `emoji.warning`     | ⚠️    |
 
 For one-off custom emoji, use `emoji.custom("name")`.
 
@@ -179,7 +168,17 @@ Configure your `tsconfig.json` to use the chat JSX runtime:
 Then use JSX syntax:
 
 ```tsx
-import { Card, CardText, Button, Actions, Section, Fields, Field, Divider, Image } from "chat";
+import {
+  Card,
+  CardText,
+  Button,
+  Actions,
+  Section,
+  Fields,
+  Field,
+  Divider,
+  Image,
+} from "chat";
 
 // Simple card with buttons
 await thread.post(
@@ -189,8 +188,12 @@ await thread.post(
       <CardText style="bold">Total: $50.00</CardText>
     </Section>
     <Actions>
-      <Button id="approve" style="primary">Approve</Button>
-      <Button id="reject" style="danger">Reject</Button>
+      <Button id="approve" style="primary">
+        Approve
+      </Button>
+      <Button id="reject" style="danger">
+        Reject
+      </Button>
     </Actions>
   </Card>
 );

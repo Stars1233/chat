@@ -1107,7 +1107,9 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
 
       if (card) {
         // Render card as Google Chat Card
-        const googleCard = cardToGoogleCard(card);
+        // cardId is required for interactive cards (button clicks)
+        const cardId = `card-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+        const googleCard = cardToGoogleCard(card, cardId);
 
         this.logger?.debug("GChat API: spaces.messages.create (card)", {
           spaceName,
@@ -1273,10 +1275,13 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
 
       if (card) {
         // Render card as Google Chat Card
-        const googleCard = cardToGoogleCard(card);
+        // cardId is required for interactive cards (button clicks)
+        const cardId = `card-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+        const googleCard = cardToGoogleCard(card, cardId);
 
         this.logger?.debug("GChat API: spaces.messages.update (card)", {
           messageId,
+          cardId,
         });
 
         const response = await this.chatApi.spaces.messages.update({
