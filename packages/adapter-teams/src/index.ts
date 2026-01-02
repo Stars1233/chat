@@ -74,6 +74,7 @@ export class TeamsAdapter implements Adapter<TeamsThreadId, unknown> {
   private formatConverter = new TeamsFormatConverter();
   private config: TeamsAdapterConfig;
 
+
   constructor(config: TeamsAdapterConfig) {
     this.config = config;
     this.userName = config.userName || "bot";
@@ -151,6 +152,13 @@ export class TeamsAdapter implements Adapter<TeamsThreadId, unknown> {
     }
 
     const activity = context.activity;
+
+    // Cache serviceUrl for the user - needed for opening DMs later
+    if (activity.from?.id && activity.serviceUrl) {
+      const cacheKey = `teams:serviceUrl:${activity.from.id}`;
+      // Store for 30 days (serviceUrls are stable per tenant)
+      this.chat.getState().set(cacheKey, activity.serviceUrl, 30 * 24 * 60 * 60 * 1000);
+    }
 
     // Handle message reactions
     if (activity.type === ActivityTypes.MessageReaction) {
@@ -793,15 +801,22 @@ export class TeamsAdapter implements Adapter<TeamsThreadId, unknown> {
    * Open a direct message conversation with a user.
    * Returns a thread ID that can be used to post messages.
    *
-   * Note: This requires a serviceUrl to be known. In Teams, you typically
-   * get the serviceUrl from an incoming activity. If you need to proactively
-   * message a user, you may need to store the serviceUrl from previous interactions.
+   * The serviceUrl is automatically resolved from cached user interactions.
+   * If no cached serviceUrl is found, a default is used (which may not work
+   * for all tenants).
    */
-  async openDM(
-    userId: string,
-    serviceUrl = "https://smba.trafficmanager.net/teams/",
-  ): Promise<string> {
-    this.logger?.debug("Teams: creating 1:1 conversation", { userId });
+  async openDM(userId: string): Promise<string> {
+    // Look up cached serviceUrl for this user from state
+    const cacheKey = `teams:serviceUrl:${userId}`;
+    const cachedServiceUrl = await this.chat?.getState().get<string>(cacheKey);
+    const serviceUrl =
+      cachedServiceUrl || "https://smba.trafficmanager.net/teams/";
+
+    this.logger?.debug("Teams: creating 1:1 conversation", {
+      userId,
+      serviceUrl,
+      cached: !!cachedServiceUrl,
+    });
 
     // Create a conversation reference for the 1:1 chat
     const conversationReference: Partial<ConversationReference> = {
