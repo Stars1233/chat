@@ -368,7 +368,7 @@ type ExtendedEmojiHelper = BaseEmojiHelper & {
  * @example
  * ```typescript
  * // First, extend the CustomEmojiMap type (usually in a .d.ts file)
- * declare module "chat-sdk" {
+ * declare module "chat" {
  *   interface CustomEmojiMap {
  *     unicorn: EmojiFormats;
  *     company_logo: EmojiFormats;
@@ -538,7 +538,7 @@ export function createEmoji<
  *
  * @example
  * ```typescript
- * import { emoji } from "chat-sdk";
+ * import { emoji } from "chat";
  *
  * await thread.post(`Great job! ${emoji.thumbs_up} ${emoji.fire}`);
  * // Slack: "Great job! :+1: :fire:"
@@ -549,7 +549,7 @@ export function createEmoji<
  * @example
  * ```typescript
  * // types.d.ts
- * declare module "chat-sdk" {
+ * declare module "chat" {
  *   interface CustomEmojiMap {
  *     unicorn: EmojiFormats;
  *   }

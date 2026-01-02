@@ -25,7 +25,7 @@ import {
   type Root,
   type Strong,
   type Text,
-} from "chat-sdk";
+} from "chat";
 
 export class TeamsFormatConverter extends BaseFormatConverter {
   /**

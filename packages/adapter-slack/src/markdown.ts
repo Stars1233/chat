@@ -24,7 +24,7 @@ import {
   type Root,
   type Strong,
   type Text,
-} from "chat-sdk";
+} from "chat";
 
 export class SlackFormatConverter extends BaseFormatConverter {
   /**

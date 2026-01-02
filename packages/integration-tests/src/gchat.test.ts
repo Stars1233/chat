@@ -1,9 +1,9 @@
 import {
   createGoogleChatAdapter,
   type GoogleChatAdapter,
-} from "@chat-sdk/gchat";
-import { createMemoryState } from "@chat-sdk/state-memory";
-import { Chat } from "chat-sdk";
+} from "@chat-adapter/gchat";
+import { createMemoryState } from "@chat-adapter/state-memory";
+import { Chat } from "chat";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createGoogleChatEvent,

@@ -31,17 +31,17 @@ pnpm validate
 pnpm dev
 
 # Build a specific package
-pnpm --filter chat-sdk build
-pnpm --filter @chat-sdk/slack build
-pnpm --filter @chat-sdk/gchat build
-pnpm --filter @chat-sdk/teams build
+pnpm --filter chat build
+pnpm --filter @chat-adapter/slack build
+pnpm --filter @chat-adapter/gchat build
+pnpm --filter @chat-adapter/teams build
 
 # Run tests for a specific package
-pnpm --filter chat-sdk test
-pnpm --filter @chat-sdk/integration-tests test
+pnpm --filter chat test
+pnpm --filter @chat-adapter/integration-tests test
 
 # Run a single test file
-pnpm --filter @chat-sdk/integration-tests test src/slack.test.ts
+pnpm --filter @chat-adapter/integration-tests test src/slack.test.ts
 ```
 
 ## Code Style
@@ -55,7 +55,7 @@ This is a **pnpm monorepo** using **Turborepo** for build orchestration. All pac
 
 ### Package Structure
 
-- **`packages/chat-sdk`** - Core SDK with `Chat` class, types, and markdown utilities (mdast-based)
+- **`packages/chat-sdk`** - Core SDK (`chat` package) with `Chat` class, types, and markdown utilities (mdast-based)
 - **`packages/adapter-slack`** - Slack adapter using `@slack/web-api`
 - **`packages/adapter-gchat`** - Google Chat adapter using `googleapis`
 - **`packages/adapter-teams`** - Microsoft Teams adapter using `botbuilder`
@@ -66,7 +66,7 @@ This is a **pnpm monorepo** using **Turborepo** for build orchestration. All pac
 
 ### Core Concepts
 
-1. **Chat** (`packages/chat-sdk/src/chat.ts`) - Main entry point that coordinates adapters and handlers
+1. **Chat** (`packages/chat-sdk/src/chat.ts` in `chat` package) - Main entry point that coordinates adapters and handlers
 2. **Adapter** - Platform-specific implementations (Slack, Teams, Google Chat). Each adapter:
    - Handles webhook verification and parsing
    - Converts platform-specific message formats to/from normalized format

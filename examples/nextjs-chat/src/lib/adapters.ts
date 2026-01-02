@@ -1,9 +1,9 @@
 import {
   createGoogleChatAdapter,
   type GoogleChatAdapter,
-} from "@chat-sdk/gchat";
-import { createSlackAdapter, type SlackAdapter } from "@chat-sdk/slack";
-import { createTeamsAdapter, type TeamsAdapter } from "@chat-sdk/teams";
+} from "@chat-adapter/gchat";
+import { createSlackAdapter, type SlackAdapter } from "@chat-adapter/slack";
+import { createTeamsAdapter, type TeamsAdapter } from "@chat-adapter/teams";
 import { withRecording } from "./recorder";
 
 export type Adapters = {
@@ -84,7 +84,7 @@ export function buildAdapters(): Adapters {
       );
     } catch {
       console.warn(
-        "[chat-sdk] Invalid GOOGLE_CHAT_CREDENTIALS JSON, skipping gchat adapter",
+        "[chat] Invalid GOOGLE_CHAT_CREDENTIALS JSON, skipping gchat adapter",
       );
     }
   }

@@ -1,4 +1,4 @@
-import type { Lock, StateAdapter } from "chat-sdk";
+import type { Lock, StateAdapter } from "chat";
 import Redis from "ioredis";
 
 export interface IoRedisStateAdapterOptions {

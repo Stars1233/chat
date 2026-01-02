@@ -1,7 +1,7 @@
 import { createHmac } from "node:crypto";
-import { createSlackAdapter, type SlackAdapter } from "@chat-sdk/slack";
-import { createMemoryState } from "@chat-sdk/state-memory";
-import { Chat } from "chat-sdk";
+import { createSlackAdapter, type SlackAdapter } from "@chat-adapter/slack";
+import { createMemoryState } from "@chat-adapter/state-memory";
+import { Chat } from "chat";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createMockSlackClient,

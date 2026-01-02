@@ -16,7 +16,7 @@ import {
   type ImageElement,
   type SectionElement,
   type TextElement,
-} from "chat-sdk";
+} from "chat";
 
 /**
  * Convert emoji placeholders in text to Teams format.

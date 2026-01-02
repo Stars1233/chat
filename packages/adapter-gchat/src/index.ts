@@ -15,13 +15,13 @@ import type {
   StateAdapter,
   ThreadInfo,
   WebhookOptions,
-} from "chat-sdk";
+} from "chat";
 import {
   convertEmojiPlaceholders,
   defaultEmojiResolver,
   isCardElement,
   RateLimitError,
-} from "chat-sdk";
+} from "chat";
 import { type chat_v1, google } from "googleapis";
 import { cardToGoogleCard } from "./cards";
 import { GoogleChatFormatConverter } from "./markdown";
@@ -1181,7 +1181,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
    */
   private extractCard(
     message: PostableMessage,
-  ): import("chat-sdk").CardElement | null {
+  ): import("chat").CardElement | null {
     if (isCardElement(message)) {
       return message;
     }

@@ -124,7 +124,7 @@ The SDK normalizes these to `EmojiValue` objects with a common `name` property:
 You can extend the emoji system with custom emoji using `createEmoji()`:
 
 ```typescript
-import { createEmoji, emoji } from "chat-sdk";
+import { createEmoji, emoji } from "chat";
 
 // Create custom emoji with cross-platform mappings
 const myEmoji = createEmoji({
@@ -142,7 +142,7 @@ chat.onReaction([emoji.thumbs_up, myEmoji.unicorn], async (event) => {
 For TypeScript module augmentation to extend the global emoji helper:
 
 ```typescript
-declare module "chat-sdk" {
+declare module "chat" {
   interface CustomEmojiMap {
     unicorn: true;
     custom_team_emoji: true;

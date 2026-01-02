@@ -39,12 +39,12 @@ This isn't the final API, just me thinking of what would be nice.
 ```typescript
 [lib/bot.ts]
 
-import {Chat} from "chat-sdk"; // Hypothetical name for the library we are building
-import {Bold} from "chat-sdk/tsx";
-import {SlackAdapter} from "chat-sdk/adapters/slack";
-import {TeamsAdapter} from "chat-sdk/adapters/team";
-import {GoogleChatAdapter} from "chat-sdk/adapters/gchat";
-import {createRedisState} from "chat-sdk/state/redis";
+import {Chat} from "chat";
+import {Bold} from "chat/jsx-runtime";
+import {SlackAdapter} from "@chat-adapter/slack";
+import {TeamsAdapter} from "@chat-adapter/teams";
+import {GoogleChatAdapter} from "@chat-adapter/gchat";
+import {createRedisState} from "@chat-adapter/state-redis";
 
 export const bot = new Chat({
   userName: "mybot" // @mybot in Slack, Teams, etc.

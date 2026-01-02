@@ -3,7 +3,7 @@
  */
 
 import { createHmac } from "node:crypto";
-import type { SlackAdapter } from "@chat-sdk/slack";
+import type { SlackAdapter } from "@chat-adapter/slack";
 import { vi } from "vitest";
 
 export const SLACK_SIGNING_SECRET = "test-signing-secret";

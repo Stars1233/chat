@@ -1,7 +1,7 @@
 {
-  "name": "@chat-sdk/state-memory",
-  "version": "0.1.0",
-  "description": "In-memory state adapter for chat-sdk (development/testing)",
+  "name": "@chat-adapter/state-memory",
+  "version": "4.0.0",
+  "description": "In-memory state adapter for chat (development/testing)",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -25,7 +25,10 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "chat-sdk": "workspace:*"
+    "chat": "workspace:*"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
@@ -34,7 +37,7 @@
     "vitest": "^2.1.8"
   },
   "keywords": [
-    "chat-sdk",
+    "chat",
     "state",
     "memory",
     "testing"

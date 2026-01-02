@@ -1,4 +1,4 @@
-import type { ChatInstance, Lock, StateAdapter } from "chat-sdk";
+import type { ChatInstance, Lock, StateAdapter } from "chat";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createGoogleChatAdapter,

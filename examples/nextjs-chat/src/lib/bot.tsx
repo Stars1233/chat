@@ -1,6 +1,6 @@
-/** @jsxImportSource chat-sdk */
+/** @jsxImportSource chat */
 // @ts-nocheck - TypeScript doesn't understand custom JSX runtimes with per-file pragmas
-import { createRedisState } from "@chat-sdk/state-redis";
+import { createRedisState } from "@chat-adapter/state-redis";
 import {
   Actions,
   Button,
@@ -12,7 +12,7 @@ import {
   Fields,
   Section,
   CardText as Text,
-} from "chat-sdk";
+} from "chat";
 import { buildAdapters } from "./adapters";
 
 const state = createRedisState({ url: process.env.REDIS_URL || "" });

@@ -1,5 +1,5 @@
 /**
- * Custom JSX runtime for chat-sdk cards.
+ * Custom JSX runtime for chat cards.
  *
  * This allows using JSX syntax without React. Configure your bundler:
  *
@@ -7,16 +7,16 @@
  * {
  *   "compilerOptions": {
  *     "jsx": "react-jsx",
- *     "jsxImportSource": "chat-sdk"
+ *     "jsxImportSource": "chat"
  *   }
  * }
  *
  * Or per-file:
- * /** @jsxImportSource chat-sdk *\/
+ * /** @jsxImportSource chat *\/
  *
  * Usage:
  * ```tsx
- * import { Card, Text, Button, Actions } from "chat-sdk";
+ * import { Card, Text, Button, Actions } from "chat";
  *
  * const card = (
  *   <Card title="Order #1234">
@@ -46,11 +46,11 @@ import {
 } from "./cards";
 
 // Symbol to identify our JSX elements before they're processed
-const JSX_ELEMENT = Symbol.for("chat-sdk.jsx.element");
+const JSX_ELEMENT = Symbol.for("chat.jsx.element");
 
 /**
- * Represents a JSX element from the chat-sdk JSX runtime.
- * This is the type returned when using JSX syntax with chat-sdk components.
+ * Represents a JSX element from the chat JSX runtime.
+ * This is the type returned when using JSX syntax with chat components.
  */
 export interface CardJSXElement {
   $$typeof: typeof JSX_ELEMENT;

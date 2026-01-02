@@ -1,7 +1,7 @@
 {
-  "name": "@chat-sdk/state-redis",
-  "version": "0.1.0",
-  "description": "Redis state adapter for chat-sdk (production)",
+  "name": "@chat-adapter/state-redis",
+  "version": "4.0.0",
+  "description": "Redis state adapter for chat (production)",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -25,8 +25,11 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "chat-sdk": "workspace:*",
+    "chat": "workspace:*",
     "redis": "^4.7.0"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
@@ -35,7 +38,7 @@
     "vitest": "^2.1.8"
   },
   "keywords": [
-    "chat-sdk",
+    "chat",
     "state",
     "redis",
     "production"

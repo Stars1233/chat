@@ -1,4 +1,4 @@
-import type { Lock, StateAdapter } from "chat-sdk";
+import type { Lock, StateAdapter } from "chat";
 
 interface MemoryLock extends Lock {
   threadId: string;
@@ -34,8 +34,8 @@ export class MemoryStateAdapter implements StateAdapter {
       this.connectPromise = Promise.resolve().then(() => {
         if (process.env.NODE_ENV === "production") {
           console.warn(
-            "[chat-sdk] MemoryStateAdapter is not recommended for production. " +
-              "Consider using @chat-sdk/state-redis instead.",
+            "[chat] MemoryStateAdapter is not recommended for production. " +
+              "Consider using @chat-adapter/state-redis instead.",
           );
         }
         this.connected = true;

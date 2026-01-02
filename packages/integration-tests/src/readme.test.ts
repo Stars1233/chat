@@ -49,20 +49,20 @@ function createTempProject(codeBlocks: string[]): string {
       // Use typeRoots to find @types/node from the repo
       typeRoots: [join(REPO_ROOT, "node_modules/@types")],
       paths: {
-        "chat-sdk": [join(__dirname, "../../chat-sdk/src/index.ts")],
-        "@chat-sdk/slack": [
+        chat: [join(__dirname, "../../chat-sdk/src/index.ts")],
+        "@chat-adapter/slack": [
           join(__dirname, "../../adapter-slack/src/index.ts"),
         ],
-        "@chat-sdk/teams": [
+        "@chat-adapter/teams": [
           join(__dirname, "../../adapter-teams/src/index.ts"),
         ],
-        "@chat-sdk/gchat": [
+        "@chat-adapter/gchat": [
           join(__dirname, "../../adapter-gchat/src/index.ts"),
         ],
-        "@chat-sdk/state-redis": [
+        "@chat-adapter/state-redis": [
           join(__dirname, "../../state-redis/src/index.ts"),
         ],
-        "@chat-sdk/state-memory": [
+        "@chat-adapter/state-memory": [
           join(__dirname, "../../state-memory/src/index.ts"),
         ],
         "@/lib/bot": [join(tempDir, "bot.ts")],

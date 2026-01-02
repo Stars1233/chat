@@ -2,10 +2,10 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   transpilePackages: [
-    "chat-sdk",
-    "@chat-sdk/slack",
-    "@chat-sdk/state-memory",
-    "@chat-sdk/state-redis",
+    "chat",
+    "@chat-adapter/slack",
+    "@chat-adapter/state-memory",
+    "@chat-adapter/state-redis",
   ],
   typescript: {
     ignoreBuildErrors: true,

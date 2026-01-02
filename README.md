@@ -19,24 +19,24 @@ A unified SDK for building chat bots across Slack, Microsoft Teams, and Google C
 
 | Package | Description |
 |---------|-------------|
-| `chat-sdk` | Core SDK with thread management and handlers |
-| `@chat-sdk/slack` | Slack adapter |
-| `@chat-sdk/teams` | Microsoft Teams adapter |
-| `@chat-sdk/gchat` | Google Chat adapter with Workspace Events |
-| `@chat-sdk/state-memory` | In-memory state (development) |
-| `@chat-sdk/state-redis` | Redis state using `redis` package (production) |
-| `@chat-sdk/state-ioredis` | Redis state using `ioredis` package (production) |
+| `chat` | Core SDK with thread management and handlers |
+| `@chat-adapter/slack` | Slack adapter |
+| `@chat-adapter/teams` | Microsoft Teams adapter |
+| `@chat-adapter/gchat` | Google Chat adapter with Workspace Events |
+| `@chat-adapter/state-memory` | In-memory state (development) |
+| `@chat-adapter/state-redis` | Redis state using `redis` package (production) |
+| `@chat-adapter/state-ioredis` | Redis state using `ioredis` package (production) |
 
 ## Quick Start
 
 ### 1. Create your bot (`lib/bot.ts`)
 
 ```typescript
-import { Chat, emoji } from "chat-sdk";
-import { createSlackAdapter } from "@chat-sdk/slack";
-import { createTeamsAdapter } from "@chat-sdk/teams";
-import { createGoogleChatAdapter } from "@chat-sdk/gchat";
-import { createRedisState } from "@chat-sdk/state-redis";
+import { Chat, emoji } from "chat";
+import { createSlackAdapter } from "@chat-adapter/slack";
+import { createTeamsAdapter } from "@chat-adapter/teams";
+import { createGoogleChatAdapter } from "@chat-adapter/gchat";
+import { createRedisState } from "@chat-adapter/state-redis";
 
 export const bot = new Chat({
   userName: "mybot",
@@ -147,7 +147,7 @@ For one-off custom emoji, use `emoji.custom("name")`.
 For workspace-specific emoji with full type safety, use `createEmoji()`:
 
 ```typescript
-import { createEmoji } from "chat-sdk";
+import { createEmoji } from "chat";
 
 // Create emoji helper with custom emoji
 const myEmoji = createEmoji({
@@ -165,13 +165,13 @@ const message = `${myEmoji.unicorn} Magic! ${myEmoji.company_logo}`;
 
 Send interactive cards with buttons that work across all platforms. Cards automatically convert to Block Kit (Slack), Adaptive Cards (Teams), and Google Chat Cards.
 
-Configure your `tsconfig.json` to use the chat-sdk JSX runtime:
+Configure your `tsconfig.json` to use the chat JSX runtime:
 
 ```json
 {
   "compilerOptions": {
     "jsx": "react-jsx",
-    "jsxImportSource": "chat-sdk"
+    "jsxImportSource": "chat"
   }
 }
 ```
@@ -179,7 +179,7 @@ Configure your `tsconfig.json` to use the chat-sdk JSX runtime:
 Then use JSX syntax:
 
 ```tsx
-import { Card, CardText, Button, Actions, Section, Fields, Field, Divider, Image } from "chat-sdk";
+import { Card, CardText, Button, Actions, Section, Fields, Field, Divider, Image } from "chat";
 
 // Simple card with buttons
 await thread.post(
@@ -226,7 +226,7 @@ await thread.post(
 Handle button clicks from cards:
 
 ```typescript
-import { Chat, type ActionEvent } from "chat-sdk";
+import { Chat, type ActionEvent } from "chat";
 declare const bot: Chat;
 
 // Handle a specific action
@@ -253,7 +253,7 @@ The `ActionEvent` includes `actionId`, `value`, `user`, `thread`, `messageId`, `
 Send files along with messages:
 
 ```typescript
-import type { Thread } from "chat-sdk";
+import type { Thread } from "chat";
 declare const thread: Thread;
 
 // Send a file with a message
@@ -293,7 +293,7 @@ await thread.post({
 Access attachments from incoming messages:
 
 ```typescript
-import { Chat } from "chat-sdk";
+import { Chat } from "chat";
 declare const bot: Chat;
 
 bot.onSubscribedMessage(async (thread, message) => {
@@ -317,7 +317,7 @@ The `Attachment` interface includes `type`, `url`, `name`, `mimeType`, `size`, `
 Initiate DM conversations programmatically. The adapter is automatically inferred from the userId format:
 
 ```typescript
-import { Chat } from "chat-sdk";
+import { Chat } from "chat";
 declare const bot: Chat;
 
 // Open a DM using Author object (convenient in handlers)

@@ -1,6 +1,6 @@
-import { createMemoryState } from "@chat-sdk/state-memory";
-import { createTeamsAdapter, type TeamsAdapter } from "@chat-sdk/teams";
-import { Chat } from "chat-sdk";
+import { createMemoryState } from "@chat-adapter/state-memory";
+import { createTeamsAdapter, type TeamsAdapter } from "@chat-adapter/teams";
+import { Chat } from "chat";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createMockBotAdapter,

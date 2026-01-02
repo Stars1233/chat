@@ -2,7 +2,7 @@
  * Google Chat test utilities for creating mock APIs, events, and webhook requests.
  */
 
-import type { GoogleChatAdapter } from "@chat-sdk/gchat";
+import type { GoogleChatAdapter } from "@chat-adapter/gchat";
 import { vi } from "vitest";
 
 export const GCHAT_TEST_CREDENTIALS = {

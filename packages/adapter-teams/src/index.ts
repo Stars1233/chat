@@ -33,13 +33,13 @@ import type {
   ReactionEvent,
   ThreadInfo,
   WebhookOptions,
-} from "chat-sdk";
+} from "chat";
 import {
   convertEmojiPlaceholders,
   defaultEmojiResolver,
   isCardElement,
   NotImplementedError,
-} from "chat-sdk";
+} from "chat";
 import { cardToAdaptiveCard } from "./cards";
 import { TeamsFormatConverter } from "./markdown";
 
@@ -597,7 +597,7 @@ export class TeamsAdapter implements Adapter<TeamsThreadId, unknown> {
    */
   private extractCard(
     message: PostableMessage,
-  ): import("chat-sdk").CardElement | null {
+  ): import("chat").CardElement | null {
     if (isCardElement(message)) {
       return message;
     }

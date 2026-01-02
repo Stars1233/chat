@@ -853,7 +853,7 @@ export interface EmojiFormats {
  * @example
  * ```typescript
  * // Extend with custom emoji
- * declare module "chat-sdk" {
+ * declare module "chat" {
  *   interface CustomEmojiMap {
  *     "custom_emoji": EmojiFormats;
  *   }

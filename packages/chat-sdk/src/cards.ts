@@ -11,7 +11,7 @@
  *
  * @example Function API
  * ```ts
- * import { Card, Text, Actions, Button } from "chat-sdk";
+ * import { Card, Text, Actions, Button } from "chat";
  *
  * await thread.post(
  *   Card({
@@ -27,10 +27,10 @@
  * );
  * ```
  *
- * @example JSX API (requires jsxImportSource: "chat-sdk" in tsconfig)
+ * @example JSX API (requires jsxImportSource: "chat" in tsconfig)
  * ```tsx
- * /** @jsxImportSource chat-sdk *\/
- * import { Card, Text, Actions, Button } from "chat-sdk";
+ * /** @jsxImportSource chat *\/
+ * import { Card, Text, Actions, Button } from "chat";
  *
  * await thread.post(
  *   <Card title="Order #1234">
@@ -214,7 +214,7 @@ export function Text(
  *
  * @example
  * ```ts
- * import { CardText } from "chat-sdk";
+ * import { CardText } from "chat";
  * CardText("Hello, world!")
  * ```
  */
@@ -400,7 +400,7 @@ const componentMap = new Map<unknown, string>([
  * @example
  * ```tsx
  * import React from "react";
- * import { Card, Text, fromReactElement } from "chat-sdk";
+ * import { Card, Text, fromReactElement } from "chat";
  *
  * const element = (
  *   <Card title="Hello">

@@ -12,11 +12,11 @@
     "recording:export": "tsx src/lib/recorder.ts"
   },
   "dependencies": {
-    "@chat-sdk/gchat": "workspace:*",
-    "@chat-sdk/slack": "workspace:*",
-    "@chat-sdk/state-redis": "workspace:*",
-    "@chat-sdk/teams": "workspace:*",
-    "chat-sdk": "workspace:*",
+    "@chat-adapter/gchat": "workspace:*",
+    "@chat-adapter/slack": "workspace:*",
+    "@chat-adapter/state-redis": "workspace:*",
+    "@chat-adapter/teams": "workspace:*",
+    "chat": "workspace:*",
     "next": "^16.1.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",

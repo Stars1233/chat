@@ -8,7 +8,7 @@ import {
   Fields,
   Image,
   Section,
-} from "chat-sdk";
+} from "chat";
 import { describe, expect, it } from "vitest";
 import { cardToBlockKit, cardToFallbackText } from "./cards";
 

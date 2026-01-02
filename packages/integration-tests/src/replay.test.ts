@@ -12,11 +12,11 @@ import { createHmac } from "node:crypto";
 import {
   createGoogleChatAdapter,
   type GoogleChatAdapter,
-} from "@chat-sdk/gchat";
-import { createSlackAdapter, type SlackAdapter } from "@chat-sdk/slack";
-import { createMemoryState } from "@chat-sdk/state-memory";
-import { createTeamsAdapter, type TeamsAdapter } from "@chat-sdk/teams";
-import { Chat, type Message, type Thread } from "chat-sdk";
+} from "@chat-adapter/gchat";
+import { createSlackAdapter, type SlackAdapter } from "@chat-adapter/slack";
+import { createMemoryState } from "@chat-adapter/state-memory";
+import { createTeamsAdapter, type TeamsAdapter } from "@chat-adapter/teams";
+import { Chat, type Message, type Thread } from "chat";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import gchatFixtures from "../fixtures/replay/gchat.json";
 import slackFixtures from "../fixtures/replay/slack.json";

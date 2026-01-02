@@ -1,4 +1,4 @@
-import type { Lock, StateAdapter } from "chat-sdk";
+import type { Lock, StateAdapter } from "chat";
 import { createClient, type RedisClientType } from "redis";
 
 export interface RedisStateAdapterOptions {

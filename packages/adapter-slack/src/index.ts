@@ -16,13 +16,13 @@ import type {
   ReactionEvent,
   ThreadInfo,
   WebhookOptions,
-} from "chat-sdk";
+} from "chat";
 import {
   convertEmojiPlaceholders,
   defaultEmojiResolver,
   isCardElement,
   RateLimitError,
-} from "chat-sdk";
+} from "chat";
 import { cardToBlockKit, cardToFallbackText } from "./cards";
 import { SlackFormatConverter } from "./markdown";
 
@@ -733,7 +733,7 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
    */
   private extractCard(
     message: PostableMessage,
-  ): import("chat-sdk").CardElement | null {
+  ): import("chat").CardElement | null {
     if (isCardElement(message)) {
       return message;
     }

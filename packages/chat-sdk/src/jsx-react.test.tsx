@@ -3,7 +3,7 @@
  *
  * This mode allows using React's JSX syntax with card components:
  * ```tsx
- * import { Card, Text, fromReactElement } from "chat-sdk";
+ * import { Card, Text, fromReactElement } from "chat";
  *
  * const element = <Card title="Hello"><Text>World</Text></Card>;
  * const card = fromReactElement(element);

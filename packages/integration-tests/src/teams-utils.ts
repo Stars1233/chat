@@ -2,7 +2,7 @@
  * Teams test utilities for creating mock adapters, activities, and webhook requests.
  */
 
-import type { TeamsAdapter } from "@chat-sdk/teams";
+import type { TeamsAdapter } from "@chat-adapter/teams";
 import { vi } from "vitest";
 
 export const TEAMS_APP_ID = "test-app-id";
