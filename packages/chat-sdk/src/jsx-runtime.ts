@@ -29,7 +29,21 @@
  * ```
  */
 
-import type { CardChild, CardElement } from "./cards";
+import {
+  Actions,
+  Button,
+  type ButtonElement,
+  type CardChild,
+  type CardElement,
+  Divider,
+  Field,
+  type FieldElement,
+  Fields,
+  Image,
+  Section,
+  Text,
+  type TextStyle,
+} from "./cards";
 
 // Symbol to identify our JSX elements before they're processed
 const JSX_ELEMENT = Symbol.for("chat-sdk.jsx.element");
@@ -62,10 +76,13 @@ function isJSXElement(value: unknown): value is JSXElement {
   );
 }
 
+/** Non-null card element for children arrays */
+type CardChildOrNested = CardChild | ButtonElement | FieldElement;
+
 /**
  * Process children, converting JSX elements to card elements.
  */
-function processChildren(children: unknown): CardChild[] {
+function processChildren(children: unknown): CardChildOrNested[] {
   if (children == null) {
     return [];
   }
@@ -78,95 +95,112 @@ function processChildren(children: unknown): CardChild[] {
   if (isJSXElement(children)) {
     const resolved = resolveJSXElement(children);
     if (resolved) {
-      return [resolved as CardChild];
+      return [resolved as CardChildOrNested];
     }
     return [];
   }
 
   // If it's already a card element, return it
   if (typeof children === "object" && "type" in children) {
-    return [children as CardChild];
+    return [children as CardChildOrNested];
   }
 
   // If it's a string, it might be text content for a Button
   if (typeof children === "string") {
     // Return as-is, the component will handle it
-    return [children as unknown as CardChild];
+    return [children as unknown as CardChildOrNested];
   }
 
   return [];
 }
 
+/** Any card element type that can be created */
+type AnyCardElement =
+  | CardElement
+  | CardChild
+  | ButtonElement
+  | FieldElement
+  | null;
+
 /**
  * Resolve a JSX element by calling its component function.
  * Transforms JSX props into the format each builder function expects.
  */
-function resolveJSXElement(
-  element: JSXElement,
-): CardElement | CardChild | null {
+function resolveJSXElement(element: JSXElement): AnyCardElement {
   const { type, props, children } = element;
 
   // Process children first
   const processedChildren = processChildren(children);
 
-  // Get the function name to determine how to call it
-  const fnName = type.name;
+  // Use identity comparison to determine which builder function this is
+  // This is necessary because function names get minified in production builds
+  // Cast to unknown first to allow comparison between different function types
+  const fn = type as unknown;
 
-  // Transform props based on builder function signature
-  switch (fnName) {
-    case "Text": {
-      // Text(content: string, options?: { style })
-      // JSX children become the content string
-      const content =
-        processedChildren.length > 0
-          ? String(processedChildren[0])
-          : ((props.children as string) ?? "");
-      return type(content, { style: props.style });
-    }
-
-    case "Section":
-    case "Actions":
-    case "Fields": {
-      // These take array as first argument: Section(children), Actions(children), Fields(children)
-      return type(processedChildren);
-    }
-
-    case "Button": {
-      // Button({ id, label, style, value })
-      // JSX children become the label
-      const label =
-        processedChildren.length > 0
-          ? String(processedChildren[0])
-          : ((props.label as string) ?? "");
-      return type({
-        id: props.id as string,
-        label,
-        style: props.style,
-        value: props.value,
-      });
-    }
-
-    case "Image":
-    case "Field": {
-      // Image({ url, alt }), Field({ label, value })
-      // No children, just props
-      return type(props);
-    }
-
-    case "Divider": {
-      // Divider() - no args
-      return type();
-    }
-
-    default: {
-      // Card({ title, subtitle, imageUrl, children })
-      // Pass props with processed children
-      return type({
-        ...props,
-        children: processedChildren,
-      });
-    }
+  if (fn === Text) {
+    // Text(content: string, options?: { style })
+    // JSX children become the content string
+    const content =
+      processedChildren.length > 0
+        ? String(processedChildren[0])
+        : ((props.children as string) ?? "");
+    return Text(content, { style: props.style as TextStyle | undefined });
   }
+
+  if (fn === Section) {
+    // Section takes array as first argument
+    return Section(processedChildren as CardChild[]);
+  }
+
+  if (fn === Actions) {
+    // Actions takes array of ButtonElements
+    return Actions(processedChildren as unknown as ButtonElement[]);
+  }
+
+  if (fn === Fields) {
+    // Fields takes array of FieldElements
+    return Fields(processedChildren as unknown as FieldElement[]);
+  }
+
+  if (fn === Button) {
+    // Button({ id, label, style, value })
+    // JSX children become the label
+    const label =
+      processedChildren.length > 0
+        ? String(processedChildren[0])
+        : ((props.label as string) ?? "");
+    return Button({
+      id: props.id as string,
+      label,
+      style: props.style as ButtonElement["style"],
+      value: props.value as string | undefined,
+    });
+  }
+
+  if (fn === Image) {
+    // Image({ url, alt })
+    return Image({ url: props.url as string, alt: props.alt as string });
+  }
+
+  if (fn === Field) {
+    // Field({ label, value })
+    return Field({
+      label: props.label as string,
+      value: props.value as string,
+    });
+  }
+
+  if (fn === Divider) {
+    // Divider() - no args
+    return Divider();
+  }
+
+  // Default: Card({ title, subtitle, imageUrl, children })
+  // Pass props with processed children
+  return type({
+    ...props,
+    children: processedChildren,
+  });
 }
 
 /**
@@ -217,7 +251,7 @@ export const jsxDEV = jsx;
  * Fragment support (flattens children).
  */
 export function Fragment(props: { children?: unknown }): CardChild[] {
-  return processChildren(props.children);
+  return processChildren(props.children) as CardChild[];
 }
 
 /**
