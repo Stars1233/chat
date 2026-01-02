@@ -74,6 +74,12 @@ export interface GoogleChatAdapterBaseConfig {
    * This user must have access to the Chat spaces you want to subscribe to.
    */
   impersonateUser?: string;
+  /**
+   * HTTP endpoint URL for button click actions.
+   * Required for HTTP endpoint apps - button clicks will be routed to this URL.
+   * Should be the full URL of your webhook endpoint (e.g., "https://your-app.vercel.app/api/webhooks/gchat")
+   */
+  endpointUrl?: string;
 }
 
 /** Config using service account credentials (JSON key file) */
@@ -249,11 +255,14 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
   private pendingSubscriptions = new Map<string, Promise<void>>();
   /** Chat API client with impersonation for user-context operations (DMs, etc.) */
   private impersonatedChatApi?: chat_v1.Chat;
+  /** HTTP endpoint URL for button click actions */
+  private endpointUrl?: string;
 
   constructor(config: GoogleChatAdapterConfig) {
     this.userName = config.userName || "bot";
     this.pubsubTopic = config.pubsubTopic;
     this.impersonateUser = config.impersonateUser;
+    this.endpointUrl = config.endpointUrl;
 
     let auth: Parameters<typeof google.chat>[0]["auth"];
 
@@ -574,6 +583,21 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
     request: Request,
     options?: WebhookOptions,
   ): Promise<Response> {
+    // Auto-detect endpoint URL from incoming request for button click routing
+    // This allows HTTP endpoint apps to work without manual endpointUrl configuration
+    if (!this.endpointUrl) {
+      try {
+        const url = new URL(request.url);
+        // Preserve the full URL including query strings
+        this.endpointUrl = url.toString();
+        this.logger?.debug("Auto-detected endpoint URL", {
+          endpointUrl: this.endpointUrl,
+        });
+      } catch {
+        // URL parsing failed, endpointUrl will remain undefined
+      }
+    }
+
     const body = await request.text();
     this.logger?.debug("GChat webhook raw body", { body });
 
@@ -928,7 +952,8 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
 
   /**
    * Handle card button clicks.
-   * Google Chat sends action data via commonEventObject.invokedFunction and parameters.
+   * For HTTP endpoint apps, the actionId is passed via parameters (since function is the URL).
+   * For other deployments, actionId may be in invokedFunction.
    */
   private handleCardClick(
     event: GoogleChatEvent,
@@ -942,10 +967,15 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
     const buttonPayload = event.chat?.buttonClickedPayload;
     const commonEvent = event.commonEventObject;
 
-    // Get action ID from invokedFunction (this is the button's id)
-    const actionId = commonEvent?.invokedFunction;
+    // Get action ID - for HTTP endpoints it's in parameters.actionId,
+    // for other deployments it may be in invokedFunction
+    const actionId =
+      commonEvent?.parameters?.actionId || commonEvent?.invokedFunction;
     if (!actionId) {
-      this.logger?.debug("Card click missing invokedFunction");
+      this.logger?.debug("Card click missing actionId", {
+        parameters: commonEvent?.parameters,
+        invokedFunction: commonEvent?.invokedFunction,
+      });
       return;
     }
 
@@ -1108,8 +1138,12 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
       if (card) {
         // Render card as Google Chat Card
         // cardId is required for interactive cards (button clicks)
+        // endpointUrl is required for HTTP endpoint apps to route button clicks
         const cardId = `card-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-        const googleCard = cardToGoogleCard(card, cardId);
+        const googleCard = cardToGoogleCard(card, {
+          cardId,
+          endpointUrl: this.endpointUrl,
+        });
 
         this.logger?.debug("GChat API: spaces.messages.create (card)", {
           spaceName,
@@ -1276,8 +1310,12 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
       if (card) {
         // Render card as Google Chat Card
         // cardId is required for interactive cards (button clicks)
+        // endpointUrl is required for HTTP endpoint apps to route button clicks
         const cardId = `card-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-        const googleCard = cardToGoogleCard(card, cardId);
+        const googleCard = cardToGoogleCard(card, {
+          cardId,
+          endpointUrl: this.endpointUrl,
+        });
 
         this.logger?.debug("GChat API: spaces.messages.update (card)", {
           messageId,

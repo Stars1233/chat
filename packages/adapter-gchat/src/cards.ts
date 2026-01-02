@@ -72,12 +72,29 @@ export interface GoogleChatButton {
 }
 
 /**
+ * Options for card conversion.
+ */
+export interface CardConversionOptions {
+  /** Unique card ID for interactive cards */
+  cardId?: string;
+  /**
+   * HTTP endpoint URL for button actions.
+   * Required for HTTP endpoint apps - button clicks will be routed to this URL.
+   */
+  endpointUrl?: string;
+}
+
+/**
  * Convert a CardElement to Google Chat Card v2 format.
  */
 export function cardToGoogleCard(
   card: CardElement,
-  cardId?: string,
+  options?: CardConversionOptions | string,
 ): GoogleChatCard {
+  // Support legacy signature where second arg is cardId string
+  const opts: CardConversionOptions =
+    typeof options === "string" ? { cardId: options } : options || {};
+
   const sections: GoogleChatCardSection[] = [];
 
   // Build header
@@ -107,11 +124,11 @@ export function cardToGoogleCard(
         currentWidgets = [];
       }
       // Convert section as its own section
-      const sectionWidgets = convertSectionToWidgets(child);
+      const sectionWidgets = convertSectionToWidgets(child, opts.endpointUrl);
       sections.push({ widgets: sectionWidgets });
     } else {
       // Add to current widgets
-      const widgets = convertChildToWidgets(child);
+      const widgets = convertChildToWidgets(child, opts.endpointUrl);
       currentWidgets.push(...widgets);
     }
   }
@@ -138,8 +155,8 @@ export function cardToGoogleCard(
     googleCard.card.header = header;
   }
 
-  if (cardId) {
-    googleCard.cardId = cardId;
+  if (opts.cardId) {
+    googleCard.cardId = opts.cardId;
   }
 
   return googleCard;
@@ -148,7 +165,10 @@ export function cardToGoogleCard(
 /**
  * Convert a card child element to Google Chat widgets.
  */
-function convertChildToWidgets(child: CardChild): GoogleChatWidget[] {
+function convertChildToWidgets(
+  child: CardChild,
+  endpointUrl?: string,
+): GoogleChatWidget[] {
   switch (child.type) {
     case "text":
       return [convertTextToWidget(child)];
@@ -157,9 +177,9 @@ function convertChildToWidgets(child: CardChild): GoogleChatWidget[] {
     case "divider":
       return [convertDividerToWidget(child)];
     case "actions":
-      return [convertActionsToWidget(child)];
+      return [convertActionsToWidget(child, endpointUrl)];
     case "section":
-      return convertSectionToWidgets(child);
+      return convertSectionToWidgets(child, endpointUrl);
     case "fields":
       return convertFieldsToWidgets(child);
     default:
@@ -196,9 +216,12 @@ function convertDividerToWidget(_element: DividerElement): GoogleChatWidget {
   return { divider: {} };
 }
 
-function convertActionsToWidget(element: ActionsElement): GoogleChatWidget {
+function convertActionsToWidget(
+  element: ActionsElement,
+  endpointUrl?: string,
+): GoogleChatWidget {
   const buttons: GoogleChatButton[] = element.children.map((button) =>
-    convertButtonToGoogleButton(button),
+    convertButtonToGoogleButton(button, endpointUrl),
   );
 
   return {
@@ -206,13 +229,28 @@ function convertActionsToWidget(element: ActionsElement): GoogleChatWidget {
   };
 }
 
-function convertButtonToGoogleButton(button: ButtonElement): GoogleChatButton {
+function convertButtonToGoogleButton(
+  button: ButtonElement,
+  endpointUrl?: string,
+): GoogleChatButton {
+  // For HTTP endpoint apps, the function field must be the endpoint URL,
+  // and the action ID is passed via parameters.
+  // See: https://developers.google.com/workspace/add-ons/chat/dialogs
+  const parameters: Array<{ key: string; value: string }> = [
+    { key: "actionId", value: button.id },
+  ];
+  if (button.value) {
+    parameters.push({ key: "value", value: button.value });
+  }
+
   const googleButton: GoogleChatButton = {
     text: convertEmoji(button.label),
     onClick: {
       action: {
-        function: button.id,
-        parameters: button.value ? [{ key: "value", value: button.value }] : [],
+        // For HTTP endpoints, function must be the full URL
+        // For other deployments (Apps Script, etc.), use just the action ID
+        function: endpointUrl || button.id,
+        parameters,
       },
     },
   };
@@ -229,10 +267,13 @@ function convertButtonToGoogleButton(button: ButtonElement): GoogleChatButton {
   return googleButton;
 }
 
-function convertSectionToWidgets(element: SectionElement): GoogleChatWidget[] {
+function convertSectionToWidgets(
+  element: SectionElement,
+  endpointUrl?: string,
+): GoogleChatWidget[] {
   const widgets: GoogleChatWidget[] = [];
   for (const child of element.children) {
-    widgets.push(...convertChildToWidgets(child));
+    widgets.push(...convertChildToWidgets(child, endpointUrl));
   }
   return widgets;
 }
