@@ -1394,20 +1394,44 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
    * Open a direct message conversation with a user.
    * Returns a thread ID that can be used to post messages.
    *
-   * NOTE: This method requires domain-wide delegation with the `chat.spaces` and
-   * `chat.spaces.create` scopes. The `impersonateUser` config must be set to a
-   * user email that has access to create DM spaces with the target user.
+   * For Google Chat, this first tries to find an existing DM space with the user.
+   * If no DM exists, it creates one using spaces.setup.
    *
    * @param userId - The user's resource name (e.g., "users/123456")
    */
   async openDM(userId: string): Promise<string> {
-    // Use impersonated API if available (required for DMs with domain-wide delegation)
+    try {
+      // First, try to find an existing DM space with this user
+      // This works with the bot's own credentials (no impersonation needed)
+      this.logger?.debug("GChat API: spaces.findDirectMessage", { userId });
+
+      const findResponse = await this.chatApi.spaces.findDirectMessage({
+        name: userId,
+      });
+
+      if (findResponse.data.name) {
+        this.logger?.debug("GChat API: Found existing DM space", {
+          spaceName: findResponse.data.name,
+        });
+        return this.encodeThreadId({ spaceName: findResponse.data.name });
+      }
+    } catch (error) {
+      // 404 means no DM exists yet - we'll try to create one
+      const gError = error as { code?: number };
+      if (gError.code !== 404) {
+        this.logger?.debug("GChat API: findDirectMessage failed", { error });
+      }
+    }
+
+    // No existing DM found - try to create one
+    // Use impersonated API if available (required for creating new DMs)
     const chatApi = this.impersonatedChatApi || this.chatApi;
 
     if (!this.impersonatedChatApi) {
       this.logger?.warn(
-        "openDM called without impersonation - this may fail. " +
-          "Set 'impersonateUser' in adapter config for domain-wide delegation."
+        "openDM: No existing DM found and no impersonation configured. " +
+          "Creating new DMs requires domain-wide delegation. " +
+          "Set 'impersonateUser' in adapter config."
       );
     }
 
@@ -1418,12 +1442,12 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
         impersonateUser: this.impersonateUser,
       });
 
-      // Create a DM space with the user
+      // Create a DM space between the impersonated user and the target user
+      // Don't use singleUserBotDm - that's for DMs with the bot itself
       const response = await chatApi.spaces.setup({
         requestBody: {
           space: {
             spaceType: "DIRECT_MESSAGE",
-            singleUserBotDm: true,
           },
           memberships: [
             {
