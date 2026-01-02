@@ -1,0 +1,62 @@
+{
+  "botName": "Chat SDK Demo",
+  "botUserId": "users/113977916201552346146",
+  "mention": {
+    "commonEventObject": {
+      "userLocale": "en",
+      "hostApp": "CHAT",
+      "platform": "WEB"
+    },
+    "chat": {
+      "user": {
+        "name": "users/117994873354375860089",
+        "displayName": "Malte Ubl",
+        "type": "HUMAN"
+      },
+      "eventTime": "2026-01-02T03:55:00.000000Z",
+      "messagePayload": {
+        "space": { "name": "spaces/AAQADmenPpY", "type": "ROOM" },
+        "message": {
+          "name": "spaces/AAQADmenPpY/messages/hCCyDOha7-o.hCCyDOha7-o",
+          "sender": {
+            "name": "users/117994873354375860089",
+            "displayName": "Malte Ubl",
+            "type": "HUMAN"
+          },
+          "text": "@Chat SDK Demo Test",
+          "annotations": [
+            {
+              "type": "USER_MENTION",
+              "startIndex": 0,
+              "length": 14,
+              "userMention": {
+                "user": {
+                  "name": "users/113977916201552346146",
+                  "type": "BOT"
+                },
+                "type": "MENTION"
+              }
+            }
+          ],
+          "thread": { "name": "spaces/AAQADmenPpY/threads/hCCyDOha7-o" },
+          "space": { "name": "spaces/AAQADmenPpY" }
+        }
+      }
+    }
+  },
+  "reaction": {
+    "message": {
+      "attributes": {
+        "ce-datacontenttype": "application/json",
+        "ce-id": "spaces/AAQADmenPpY/spaceEvents/MTc2NzMyNjEwMzIzODkyNF81OF9jcmVhdGVk",
+        "ce-source": "//workspaceevents.googleapis.com/subscriptions/chat-spaces-czpBQVFBRG1lblBwWToxMTc5OTQ4NzMzNTQzNzU4NjAwODk6MTEzOTc3OTE2MjAxNTUyMzQ2MTQ2",
+        "ce-specversion": "1.0",
+        "ce-subject": "//chat.googleapis.com/spaces/AAQADmenPpY",
+        "ce-time": "2026-01-02T03:55:03.238924Z",
+        "ce-type": "google.workspace.chat.reaction.v1.created"
+      },
+      "data": "eyJyZWFjdGlvbiI6eyJuYW1lIjoic3BhY2VzL0FBUUFEbWVuUHBZL21lc3NhZ2VzL2hDQ3lET2hhNy1vLjRsUXZNdUVHTTBnL3JlYWN0aW9ucy8xMTc5OTQ4NzMzNTQzNzU4NjAwODkuVlU1SlEwOUVSUzd3bjVHTiIsInVzZXIiOnsibmFtZSI6InVzZXJzLzExNzk5NDg3MzM1NDM3NTg2MDA4OSIsInR5cGUiOiJIVU1BTiJ9LCJlbW9qaSI6eyJ1bmljb2RlIjoi8J+RjSJ9fX0="
+    },
+    "subscription": "projects/chat-sdk-demo-482018/subscriptions/chat-messages-push"
+  }
+}

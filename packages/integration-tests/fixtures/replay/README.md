@@ -1,51 +1,87 @@
 # Replay Test Fixtures
 
-These fixtures contain recorded production webhook payloads used by `replay.test.ts`.
+Replay tests verify the Chat SDK handles real webhook payloads correctly by recording production interactions and replaying them in tests.
 
-## Updating Fixtures
+## Quick Start: SHA-Based Recording Workflow
 
-### 1. Record a session in production
+The recommended workflow ties recordings to git commits, making it easy to capture and convert production interactions into tests.
 
-Set environment variables in your deployed app:
+### 1. Deploy with recording enabled
+
 ```bash
+# Set in Vercel environment variables (or .env.local for local dev)
 RECORDING_ENABLED=true
-RECORDING_SESSION_ID=my-session  # optional, auto-generated if omitted
+REDIS_URL=redis://...
 ```
 
-### 2. Interact with the bot
+When deployed, recordings are automatically tagged with `VERCEL_GIT_COMMIT_SHA`:
+```
+session-{SHA}-{timestamp}-{random}
+```
 
-Perform the interaction you want to test:
-1. @mention the bot in a channel/space
-2. Send follow-up messages in the thread
+### 2. Interact with your bot
 
-### 3. Export the recording
+Perform the interactions you want to test:
+- @mention the bot in Slack, Teams, or Google Chat
+- Click buttons in cards (actions)
+- Add emoji reactions
+- Send follow-up messages
+
+### 3. Find recordings for your SHA
 
 ```bash
 cd examples/nextjs-chat
 
-# List available sessions
+# List all recording sessions
 pnpm recording:list
 
-# Export a session to JSON
-pnpm recording:export my-session > /path/to/output.json
+# Output shows sessions grouped by SHA:
+#   session-abc123-2024-01-15T10:30:00.000Z-x7k2m (5 entries)
+#   session-abc123-2024-01-15T10:32:15.000Z-p9n3q (3 entries)
+#   session-def456-2024-01-14T09:00:00.000Z-m2k8j (8 entries)
 ```
 
-### 4. Extract webhook payloads
+### 4. Export and inspect recordings
 
-From the exported JSON, find entries with `"type": "webhook"` and copy the `body` field (parsed as JSON) to the appropriate fixture file.
+```bash
+# Export a specific session
+pnpm recording:export session-abc123-2024-01-15T10:30:00.000Z-x7k2m > recording.json
 
-**For @mention:** Find the first webhook from a human user
-**For follow-up:** Find subsequent webhooks in the same thread
+# Or pipe through jq to filter webhooks only
+pnpm recording:export <session-id> | jq '[.[] | select(.type == "webhook")]'
+```
 
-### 5. Update fixture metadata
+### 5. Extract webhook payloads into fixtures
 
-Each fixture file has metadata at the top:
-- `botName` - Display name of your bot
-- `botUserId` - Platform-specific bot user ID
-- `appId` (Teams only) - Microsoft App ID
+From the exported JSON, extract the `body` field from webhook entries:
+
+```bash
+# Extract all webhook bodies as parsed JSON
+cat recording.json | jq '[.[] | select(.type == "webhook") | {platform, body: (.body | fromjson)}]'
+```
+
+Then copy the relevant payloads into fixture files.
+
+### 6. Create fixture file
+
+```json
+{
+  "botName": "My Bot",
+  "botUserId": "U123...",
+  "mention": { /* first webhook - the @mention */ },
+  "action": { /* button click webhook (if testing actions) */ },
+  "reaction": { /* emoji reaction webhook (if testing reactions) */ },
+  "followUp": { /* follow-up message webhook (if testing conversations) */ }
+}
+```
+
+### 7. Write the replay test
+
+See `replay.test.ts` and `replay-actions-reactions.test.ts` for examples.
 
 ## Fixture Structure
 
+### Basic messaging (`slack.json`, `gchat.json`, `teams.json`)
 ```json
 {
   "botName": "My Bot",
@@ -55,18 +91,60 @@ Each fixture file has metadata at the top:
 }
 ```
 
-## Platform-Specific Notes
+### Actions & reactions (`actions-reactions/*.json`)
+```json
+{
+  "botName": "My Bot",
+  "botUserId": "U123...",
+  "mention": { /* webhook to subscribe the thread */ },
+  "action": { /* button click webhook */ },
+  "reaction": { /* emoji reaction webhook */ }
+}
+```
+
+## Platform-Specific Webhook Formats
 
 ### Google Chat
-- `mention`: Direct webhook in Add-ons format (has `chat.messagePayload`)
-- `followUp`: Pub/Sub webhook (has `message.data` as base64)
+
+| Event | Format |
+|-------|--------|
+| Mention | Direct webhook with `chat.messagePayload` |
+| Follow-up | Pub/Sub with `message.data` (base64) |
+| Reaction | Pub/Sub with `ce-type: "google.workspace.chat.reaction.v1.created"` |
+| Action | `type: "CARD_CLICKED"` event |
 
 ### Slack
-- Both webhooks are `event_callback` type
-- `mention`: Message with bot user mention in text (`<@UBOTID>`)
-- `followUp`: Message with `thread_ts` matching the mention's `ts`
+
+| Event | Format |
+|-------|--------|
+| Mention | `event_callback` with `event.type: "app_mention"` |
+| Follow-up | `event_callback` with `event.type: "message"` and `thread_ts` |
+| Reaction | `event_callback` with `event.type: "reaction_added"` |
+| Action | `block_actions` (URL-encoded form: `payload=...`) |
+
+Raw emoji format: Slack shortcode without colons (e.g., `+1`, `heart`)
 
 ### Teams
-- Both are Bot Framework Activity payloads
-- `mention`: Has `entities` array with bot mention
-- `followUp`: Same `conversation.id` as mention, no bot in entities
+
+| Event | Format |
+|-------|--------|
+| Mention | `type: "message"` with bot in `entities` array |
+| Follow-up | `type: "message"` with same `conversation.id` |
+| Reaction | `type: "messageReaction"` with `reactionsAdded` array |
+| Action | `type: "message"` with `value.actionId` |
+
+Raw emoji format: Teams reaction type (e.g., `like`, `heart`)
+
+## Recording Implementation Details
+
+The recorder (`examples/nextjs-chat/src/lib/recorder.ts`) stores entries in Redis:
+- Key: `recording:{sessionId}`
+- TTL: 24 hours
+- Entry types: `webhook` (incoming) and `api-call` (outgoing)
+
+Session ID format when `VERCEL_GIT_COMMIT_SHA` is set:
+```
+session-{SHA}-{ISO timestamp}-{random 6 chars}
+```
+
+This makes it easy to find all recordings from a specific deployment.

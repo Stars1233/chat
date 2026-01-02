@@ -314,16 +314,25 @@ The `Attachment` interface includes `type`, `url`, `name`, `mimeType`, `size`, `
 
 ## Direct Messages
 
-Initiate DM conversations programmatically:
+Initiate DM conversations programmatically. The adapter is automatically inferred from the userId format:
 
 ```typescript
 import { Chat } from "chat-sdk";
 declare const bot: Chat;
 
-// Open a DM via a specific adapter
-const userId = "U1234567890";
-const dmThread = await bot.openDM("slack", userId);
-await dmThread.post("Hello! This is a direct message.");
+// Open a DM using Author object (convenient in handlers)
+bot.onSubscribedMessage(async (thread, message) => {
+  if (message.text === "DM me") {
+    const dmThread = await bot.openDM(message.author);
+    await dmThread.post("Hello! This is a direct message.");
+  }
+});
+
+// Or use userId string directly - adapter inferred from format:
+// - Slack: U... (e.g., "U1234567890")
+// - Teams: 29:... (e.g., "29:abc123...")
+// - Google Chat: users/... (e.g., "users/123456789")
+const dmThread = await bot.openDM("U1234567890");
 
 // Check if a thread is a DM
 bot.onSubscribedMessage(async (thread, message) => {

@@ -869,22 +869,37 @@ describe("Chat", () => {
   });
 
   describe("openDM", () => {
-    it("should open a DM via the adapter", async () => {
-      const thread = await chat.openDM("slack", "U123456");
+    it("should infer Slack adapter from U... userId", async () => {
+      const thread = await chat.openDM("U123456");
 
       expect(mockAdapter.openDM).toHaveBeenCalledWith("U123456");
       expect(thread).toBeDefined();
       expect(thread.id).toBe("slack:DU123456:");
     });
 
-    it("should throw error for unknown adapter", async () => {
-      await expect(
-        (chat as Chat<Record<string, Adapter>>).openDM("unknown", "U123456"),
-      ).rejects.toThrow('Adapter "unknown" not found');
+    it("should accept Author object and extract userId", async () => {
+      const author = {
+        userId: "U789ABC",
+        userName: "testuser",
+        fullName: "Test User",
+        isBot: false,
+        isMe: false,
+      };
+      const thread = await chat.openDM(author);
+
+      expect(mockAdapter.openDM).toHaveBeenCalledWith("U789ABC");
+      expect(thread).toBeDefined();
+      expect(thread.id).toBe("slack:DU789ABC:");
+    });
+
+    it("should throw error for unknown userId format", async () => {
+      await expect(chat.openDM("invalid-user-id")).rejects.toThrow(
+        'Cannot infer adapter from userId "invalid-user-id"',
+      );
     });
 
     it("should allow posting to DM thread", async () => {
-      const thread = await chat.openDM("slack", "U123456");
+      const thread = await chat.openDM("U123456");
       await thread.post("Hello via DM!");
 
       expect(mockAdapter.postMessage).toHaveBeenCalledWith(
@@ -896,7 +911,7 @@ describe("Chat", () => {
 
   describe("isDM", () => {
     it("should return true for DM threads", async () => {
-      const thread = await chat.openDM("slack", "U123456");
+      const thread = await chat.openDM("U123456");
 
       expect(thread.isDM).toBe(true);
     });

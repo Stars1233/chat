@@ -3,6 +3,7 @@ import type {
   ActionEvent,
   ActionHandler,
   Adapter,
+  Author,
   ChatConfig,
   ChatInstance,
   EmojiValue,
@@ -18,7 +19,7 @@ import type {
   Thread,
   WebhookOptions,
 } from "./types";
-import { ConsoleLogger, LockError } from "./types";
+import { ChatError, ConsoleLogger, LockError } from "./types";
 
 const DEFAULT_LOCK_TTL_MS = 30_000; // 30 seconds
 /** TTL for message deduplication entries */
@@ -612,31 +613,71 @@ export class Chat<
   }
 
   /**
-   * Open a direct message conversation with a user via a specific adapter.
+   * Open a direct message conversation with a user.
    *
-   * @param adapterName - Name of the adapter to use (e.g., "slack", "teams", "gchat")
-   * @param userId - Platform-specific user ID
+   * Accepts either a user ID string or an Author object (from message.author or event.user).
+   *
+   * The adapter is automatically inferred from the userId format:
+   * - Slack: `U...` (e.g., "U03STHCA1JM")
+   * - Teams: `29:...` (e.g., "29:198PbJuw...")
+   * - Google Chat: `users/...` (e.g., "users/117994873354375860089")
+   *
+   * @param user - Platform-specific user ID string, or an Author object
    * @returns A Thread that can be used to post messages
    *
    * @example
    * ```ts
-   * const dmThread = await bot.openDM("slack", "U123456");
+   * // Using user ID directly
+   * const dmThread = await chat.openDM("U123456");
    * await dmThread.post("Hello via DM!");
+   *
+   * // Using Author object from a message
+   * chat.onSubscribedMessage(async (thread, message) => {
+   *   const dmThread = await chat.openDM(message.author);
+   *   await dmThread.post("Hello via DM!");
+   * });
    * ```
    */
-  async openDM(adapterName: keyof TAdapters, userId: string): Promise<Thread> {
-    const adapter = this.adapters.get(adapterName as string);
-    if (!adapter) {
-      throw new Error(`Adapter "${String(adapterName)}" not found`);
-    }
+  async openDM(user: string | Author): Promise<Thread> {
+    const userId = typeof user === "string" ? user : user.userId;
+    const adapter = this.inferAdapterFromUserId(userId);
     if (!adapter.openDM) {
-      throw new Error(
-        `Adapter "${String(adapterName)}" does not support openDM`,
+      throw new ChatError(
+        `Adapter "${adapter.name}" does not support openDM`,
+        "NOT_SUPPORTED",
       );
     }
 
     const threadId = await adapter.openDM(userId);
     return this.createThread(adapter, threadId, {} as Message, false);
+  }
+
+  /**
+   * Infer which adapter to use based on the userId format.
+   */
+  private inferAdapterFromUserId(userId: string): Adapter {
+    // Google Chat: users/123456789
+    if (userId.startsWith("users/")) {
+      const adapter = this.adapters.get("gchat");
+      if (adapter) return adapter;
+    }
+
+    // Teams: 29:base64string...
+    if (userId.startsWith("29:")) {
+      const adapter = this.adapters.get("teams");
+      if (adapter) return adapter;
+    }
+
+    // Slack: U followed by alphanumeric (e.g., U03STHCA1JM)
+    if (/^U[A-Z0-9]+$/i.test(userId)) {
+      const adapter = this.adapters.get("slack");
+      if (adapter) return adapter;
+    }
+
+    throw new ChatError(
+      `Cannot infer adapter from userId "${userId}". Expected format: Slack (U...), Teams (29:...), or Google Chat (users/...).`,
+      "UNKNOWN_USER_ID_FORMAT",
+    );
   }
 
   /**

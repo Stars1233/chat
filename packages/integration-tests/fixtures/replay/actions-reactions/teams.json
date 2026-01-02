@@ -1,0 +1,106 @@
+{
+  "botName": "Chat SDK Demo",
+  "appId": "57627569-c120-42a1-9e6f-7cb4b96cc8ef",
+  "botId": "28:57627569-c120-42a1-9e6f-7cb4b96cc8ef",
+  "serviceUrl": "https://smba.trafficmanager.net/amer/ed6e6740-934d-4088-a05e-caa14d8d89ee/",
+  "mention": {
+    "text": "<at>Chat SDK Demo</at> Test",
+    "type": "message",
+    "id": "1767326091220",
+    "channelId": "msteams",
+    "serviceUrl": "https://smba.trafficmanager.net/amer/ed6e6740-934d-4088-a05e-caa14d8d89ee/",
+    "from": {
+      "id": "29:198PbJuwlbYy4Gp7p3PZrunMBts-QmZieTANExeuaryFy4cfQknJFVwlT8esy8B9zQNy3qcVqoBZKj2oYDP6HHQ",
+      "name": "Malte Ubl",
+      "aadObjectId": "7a9b12a6-4f02-43f1-b6f9-fd10e047f903"
+    },
+    "conversation": {
+      "isGroup": true,
+      "conversationType": "channel",
+      "tenantId": "ed6e6740-934d-4088-a05e-caa14d8d89ee",
+      "id": "19:d441d38c655c47a085215b2726e76927@thread.tacv2;messageid=1767326091220"
+    },
+    "recipient": {
+      "id": "28:57627569-c120-42a1-9e6f-7cb4b96cc8ef",
+      "name": "Chat SDK Demo"
+    },
+    "entities": [
+      {
+        "mentioned": {
+          "id": "28:57627569-c120-42a1-9e6f-7cb4b96cc8ef",
+          "name": "Chat SDK Demo"
+        },
+        "text": "<at>Chat SDK Demo</at>",
+        "type": "mention"
+      }
+    ],
+    "channelData": {
+      "teamsChannelId": "19:d441d38c655c47a085215b2726e76927@thread.tacv2",
+      "teamsTeamId": "19:8j-Mnacwmq2QFDbzykeQH5v55m6cN1X3QJ5viHvGIIQ1@thread.tacv2",
+      "channel": { "id": "19:d441d38c655c47a085215b2726e76927@thread.tacv2" },
+      "team": { "id": "19:8j-Mnacwmq2QFDbzykeQH5v55m6cN1X3QJ5viHvGIIQ1@thread.tacv2" },
+      "tenant": { "id": "ed6e6740-934d-4088-a05e-caa14d8d89ee" }
+    }
+  },
+  "action": {
+    "type": "message",
+    "id": "f:975cac46-e795-f39b-0c0d-491c14495a9b",
+    "channelId": "msteams",
+    "serviceUrl": "https://smba.trafficmanager.net/amer/ed6e6740-934d-4088-a05e-caa14d8d89ee/",
+    "from": {
+      "id": "29:198PbJuwlbYy4Gp7p3PZrunMBts-QmZieTANExeuaryFy4cfQknJFVwlT8esy8B9zQNy3qcVqoBZKj2oYDP6HHQ",
+      "name": "Malte Ubl",
+      "aadObjectId": "7a9b12a6-4f02-43f1-b6f9-fd10e047f903"
+    },
+    "conversation": {
+      "isGroup": true,
+      "conversationType": "channel",
+      "tenantId": "ed6e6740-934d-4088-a05e-caa14d8d89ee",
+      "id": "19:d441d38c655c47a085215b2726e76927@thread.tacv2;messageid=1767326091220",
+      "name": "Chat SDK"
+    },
+    "recipient": {
+      "id": "28:57627569-c120-42a1-9e6f-7cb4b96cc8ef",
+      "name": "Chat SDK Demo"
+    },
+    "value": {
+      "actionId": "info"
+    },
+    "channelData": {
+      "channel": { "id": "19:d441d38c655c47a085215b2726e76927@thread.tacv2" },
+      "team": { "id": "19:8j-Mnacwmq2QFDbzykeQH5v55m6cN1X3QJ5viHvGIIQ1@thread.tacv2" },
+      "tenant": { "id": "ed6e6740-934d-4088-a05e-caa14d8d89ee" },
+      "source": { "name": "message" },
+      "legacy": { "replyToId": "1:1aEb_t8xYcdQWHv96vLan89Vq2bzTp3wih6Cu23Gxk_I" }
+    }
+  },
+  "reaction": {
+    "type": "messageReaction",
+    "timestamp": "2026-01-02T03:55:18.9534472Z",
+    "id": "1767326111492",
+    "channelId": "msteams",
+    "serviceUrl": "https://smba.trafficmanager.net/amer/ed6e6740-934d-4088-a05e-caa14d8d89ee/",
+    "from": {
+      "id": "29:198PbJuwlbYy4Gp7p3PZrunMBts-QmZieTANExeuaryFy4cfQknJFVwlT8esy8B9zQNy3qcVqoBZKj2oYDP6HHQ",
+      "aadObjectId": "7a9b12a6-4f02-43f1-b6f9-fd10e047f903"
+    },
+    "conversation": {
+      "isGroup": true,
+      "conversationType": "channel",
+      "tenantId": "ed6e6740-934d-4088-a05e-caa14d8d89ee",
+      "id": "19:d441d38c655c47a085215b2726e76927@thread.tacv2;messageid=1767326091220"
+    },
+    "recipient": {
+      "id": "28:57627569-c120-42a1-9e6f-7cb4b96cc8ef",
+      "name": "Chat SDK Demo"
+    },
+    "reactionsAdded": [{ "type": "like" }],
+    "channelData": {
+      "channel": { "id": "19:d441d38c655c47a085215b2726e76927@thread.tacv2" },
+      "team": { "id": "19:8j-Mnacwmq2QFDbzykeQH5v55m6cN1X3QJ5viHvGIIQ1@thread.tacv2" },
+      "tenant": { "id": "ed6e6740-934d-4088-a05e-caa14d8d89ee" },
+      "legacy": { "replyToId": "1:1fLA_RNPuIsZAvfb52Da3sgax9CKJ4lKCcz6sqX0k7FQ" }
+    },
+    "replyToId": "1767326111492"
+  }
+}

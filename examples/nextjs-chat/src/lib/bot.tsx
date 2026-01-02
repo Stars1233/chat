@@ -103,6 +103,26 @@ bot.onNewMessage(/help/i, async (thread, message) => {
 
 // Handle messages in subscribed threads
 bot.onSubscribedMessage(async (thread, message) => {
+  // Check if user wants a DM
+  if (/^dm\s*me$/i.test(message.text.trim())) {
+    try {
+      const dmThread = await bot.openDM(message.author);
+      await dmThread.post(
+        <Card title={`${emoji.speech_bubble} Private Message`}>
+          <Text>{`Hi ${message.author.fullName}! You requested a DM from the thread.`}</Text>
+          <Divider />
+          <Text>This is a private conversation between us.</Text>
+        </Card>,
+      );
+      await thread.post(`${emoji.check} I've sent you a DM!`);
+    } catch (err) {
+      await thread.post(
+        `${emoji.warning} Sorry, I couldn't send you a DM. Error: ${err instanceof Error ? err.message : "Unknown error"}`,
+      );
+    }
+    return;
+  }
+
   // Check if message has attachments
   if (message.attachments && message.attachments.length > 0) {
     const attachmentInfo = message.attachments
