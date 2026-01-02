@@ -1031,7 +1031,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
         this.logger?.debug("GChat API: spaces.messages.create (card)", {
           spaceName,
           threadName,
-          googleCard,
+          googleCard: JSON.stringify(googleCard),
         });
 
         const response = await this.chatApi.spaces.messages.create({
