@@ -19,18 +19,26 @@ const SLACK_METHODS = [
   "deleteMessage",
   "addReaction",
   "removeReaction",
+  "startTyping",
+  "stream",
+  "openDM",
 ];
 const TEAMS_METHODS = [
   "postMessage",
   "editMessage",
   "deleteMessage",
+  "addReaction",
+  "removeReaction",
   "startTyping",
+  "openDM",
 ];
 const GCHAT_METHODS = [
   "postMessage",
   "editMessage",
   "deleteMessage",
   "addReaction",
+  "removeReaction",
+  "openDM",
 ];
 
 /**
