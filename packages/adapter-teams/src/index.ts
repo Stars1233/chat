@@ -965,45 +965,68 @@ export class TeamsAdapter implements Adapter<TeamsThreadId, unknown> {
       // For Graph API, we use /chats/{chat-id}/messages for all chat types
 
       // Note: Teams Graph API only supports orderby("createdDateTime desc")
-      // Ascending order is not supported, so we work around this limitation
-      let request = this.graphClient
-        .api(`/chats/${encodeURIComponent(conversationId)}/messages`)
-        .top(direction === "forward" ? 1000 : limit) // Fetch more for forward to find oldest
-        .orderby("createdDateTime desc"); // Only desc is supported
+      // Ascending order is not supported, so we work around this limitation.
+      // Also, max page size is 50 messages per request.
 
-      if (direction === "backward" && cursor) {
-        // Backward with cursor: get messages older than cursor
-        request = request.filter(`createdDateTime lt ${cursor}`);
-      }
-      // For forward direction, we fetch all and slice (no filter supported for gt with desc order)
-
-      const response = await request.get();
-
-      let graphMessages = (response.value || []) as GraphChatMessage[];
-
-      // API returns newest first, always reverse to get chronological order
-      graphMessages = graphMessages.reverse();
-
-      // Track whether there are more messages for cursor calculation
+      let graphMessages: GraphChatMessage[];
       let hasMoreMessages = false;
 
       if (direction === "forward") {
-        // Forward: we want oldest messages first
+        // Forward direction: need to fetch ALL messages to find the oldest ones
+        // since API only supports descending order. Paginate with max 50 per request.
+        const allMessages: GraphChatMessage[] = [];
+        let nextLink: string | undefined;
+        const apiUrl = `/chats/${encodeURIComponent(conversationId)}/messages`;
+
+        do {
+          const request = nextLink
+            ? this.graphClient.api(nextLink)
+            : this.graphClient
+                .api(apiUrl)
+                .top(50) // Max allowed by Teams API
+                .orderby("createdDateTime desc");
+
+          const response = await request.get();
+          const pageMessages = (response.value || []) as GraphChatMessage[];
+          allMessages.push(...pageMessages);
+          nextLink = response["@odata.nextLink"];
+        } while (nextLink);
+
+        // Reverse to get chronological order (oldest first)
+        allMessages.reverse();
+
         // Find starting position based on cursor (cursor is a timestamp)
         let startIndex = 0;
         if (cursor) {
-          // Find first message after the cursor timestamp
-          startIndex = graphMessages.findIndex(
+          startIndex = allMessages.findIndex(
             (msg) => msg.createdDateTime && msg.createdDateTime > cursor,
           );
-          if (startIndex === -1) startIndex = graphMessages.length;
+          if (startIndex === -1) startIndex = allMessages.length;
         }
+
         // Check if there are more messages beyond our slice
-        hasMoreMessages = startIndex + limit < graphMessages.length;
+        hasMoreMessages = startIndex + limit < allMessages.length;
         // Take only the requested limit
-        graphMessages = graphMessages.slice(startIndex, startIndex + limit);
+        graphMessages = allMessages.slice(startIndex, startIndex + limit);
       } else {
-        // Backward: we got a full page if we got the requested limit
+        // Backward direction: simple single-page fetch
+        let request = this.graphClient
+          .api(`/chats/${encodeURIComponent(conversationId)}/messages`)
+          .top(limit)
+          .orderby("createdDateTime desc");
+
+        if (cursor) {
+          // Get messages older than cursor
+          request = request.filter(`createdDateTime lt ${cursor}`);
+        }
+
+        const response = await request.get();
+        graphMessages = (response.value || []) as GraphChatMessage[];
+
+        // API returns newest first, reverse to get chronological order
+        graphMessages = graphMessages.reverse();
+
+        // We got a full page if we got the requested limit
         hasMoreMessages = graphMessages.length >= limit;
       }
 

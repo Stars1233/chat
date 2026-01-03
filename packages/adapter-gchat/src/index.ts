@@ -1614,7 +1614,8 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
 
   /**
    * Fetch messages in backward direction (most recent first).
-   * GChat API natively returns newest first, so this is efficient.
+   * GChat API defaults to createTime ASC (oldest first), so we request DESC
+   * to get the most recent messages, then reverse for chronological order within page.
    */
   private async fetchMessagesBackward(
     api: chat_v1.Chat,
@@ -1636,9 +1637,10 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
       pageSize: limit,
       pageToken: cursor,
       filter,
+      orderBy: "createTime desc", // Get newest messages first
     });
 
-    // GChat API returns newest first, reverse to get chronological order within page
+    // API returns newest first (DESC), reverse to get chronological order within page
     const rawMessages = (response.data.messages || []).reverse();
 
     this.logger?.debug("GChat API: spaces.messages.list response (backward)", {
@@ -1662,13 +1664,13 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
   /**
    * Fetch messages in forward direction (oldest first).
    *
-   * GChat API always returns newest first with no option to reverse.
+   * GChat API defaults to createTime ASC (oldest first), which is what we want.
    * For forward pagination, we:
-   * 1. If no cursor: Fetch ALL messages, return the first `limit` from oldest
+   * 1. If no cursor: Fetch ALL messages (already in chronological order)
    * 2. If cursor: Cursor is a message name, skip to after that message
    *
    * Note: This is less efficient than backward for large message histories,
-   * as it requires fetching all messages to find the oldest ones.
+   * as it requires fetching all messages to find the cursor position.
    */
   private async fetchMessagesForward(
     api: chat_v1.Chat,
@@ -1685,7 +1687,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
       cursor,
     });
 
-    // Fetch all messages (GChat returns newest first)
+    // Fetch all messages (GChat defaults to createTime ASC = oldest first)
     const allRawMessages: chat_v1.Schema$Message[] = [];
     let pageToken: string | undefined;
 
@@ -1695,6 +1697,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
         pageSize: 1000, // Max page size for efficiency
         pageToken,
         filter,
+        // Default orderBy is createTime ASC (oldest first) - what we want
       });
 
       const pageMessages = response.data.messages || [];
@@ -1702,8 +1705,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
       pageToken = response.data.nextPageToken ?? undefined;
     } while (pageToken);
 
-    // Reverse to get chronological order (oldest first)
-    allRawMessages.reverse();
+    // Messages are already in chronological order (oldest first) from API
 
     this.logger?.debug(
       "GChat API: fetched all messages for forward pagination",
