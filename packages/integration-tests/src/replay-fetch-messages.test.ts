@@ -503,8 +503,8 @@ describe("fetchMessages Replay Tests", () => {
         direction: "backward",
       });
 
-      // Should have all 19 messages from the fixture
-      expect(result.messages).toHaveLength(19);
+      // Should have all 20 messages from the fixture
+      expect(result.messages).toHaveLength(20);
 
       // Extract just the numbered messages (filter out bot card messages)
       // Note: Recording has numbers 1-13 (no "Hey" or "14" as those are parent/missing)
@@ -541,7 +541,7 @@ describe("fetchMessages Replay Tests", () => {
         direction: "forward",
       });
 
-      expect(result.messages).toHaveLength(19);
+      expect(result.messages).toHaveLength(20);
 
       // Extract numbered messages and verify order
       const expectedNumbers = [
@@ -574,10 +574,10 @@ describe("fetchMessages Replay Tests", () => {
       const botMessages = result.messages.filter((m) => m.author.isBot);
       const humanMessages = result.messages.filter((m) => !m.author.isBot);
 
-      // 6 bot messages (2 welcome/fetch cards, 3 "Thanks", 1 additional card)
+      // 6 bot messages (2 welcome/fetch cards, 4 "Thanks")
       expect(botMessages).toHaveLength(6);
-      // 13 human messages (numbered 1-13)
-      expect(humanMessages).toHaveLength(13);
+      // 14 human messages (numbered 1-13 + "Proper text")
+      expect(humanMessages).toHaveLength(14);
 
       // All bot messages should have isMe: true
       for (const msg of botMessages) {
@@ -645,8 +645,8 @@ describe("fetchMessages Replay Tests", () => {
         );
       });
 
-      // Should have 3 card messages in this recording
-      expect(cardMessages).toHaveLength(3);
+      // Should have 2 card messages in this recording (Welcome and Message Fetch Results)
+      expect(cardMessages).toHaveLength(2);
 
       // All should be from the bot
       for (const msg of cardMessages) {
@@ -987,8 +987,8 @@ describe("allMessages Replay Tests", () => {
         messages.push(msg);
       }
 
-      // Should have all 19 messages
-      expect(messages).toHaveLength(19);
+      // Should have all 20 messages
+      expect(messages).toHaveLength(20);
 
       // Extract numbered messages and verify chronological order (1-13 in this recording)
       const expectedNumbers = [

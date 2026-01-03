@@ -163,7 +163,7 @@ bot.onAction("messages", async (event) => {
         msg.attachments && msg.attachments.length > 0,
       );
       allMessages.push(
-        `${count + 1}. [${msg.author.userName}]: ${displayText}`,
+        `#${count + 1} ${msg.author.userName}: ${displayText}`,
       );
       count++;
     }
@@ -177,7 +177,7 @@ bot.onAction("messages", async (event) => {
                 m.text,
                 m.attachments && m.attachments.length > 0,
               );
-              return `${i + 1}. [${m.author.userName}]: ${displayText}`;
+              return `#${i + 1} ${m.author.userName}: ${displayText}`;
             })
             .join("\n")
         : "(no messages)";
