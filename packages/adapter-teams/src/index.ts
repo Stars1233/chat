@@ -1215,11 +1215,15 @@ export class TeamsAdapter implements Adapter<TeamsThreadId, unknown> {
       // Forward direction: fetch all replies and paginate in chronological order
       const allMessages: GraphChatMessage[] = [];
       let nextLink: string | undefined;
+      const graphClient = this.graphClient;
+      if (!graphClient) {
+        throw new Error("Graph client not initialized");
+      }
 
       do {
         const request = nextLink
-          ? this.graphClient!.api(nextLink)
-          : this.graphClient!.api(apiUrl).top(50);
+          ? graphClient.api(nextLink)
+          : graphClient.api(apiUrl).top(50);
 
         const response = await request.get();
         const pageMessages = (response.value || []) as GraphChatMessage[];
@@ -1243,11 +1247,15 @@ export class TeamsAdapter implements Adapter<TeamsThreadId, unknown> {
       // We need to get all and then return the most recent
       const allMessages: GraphChatMessage[] = [];
       let nextLink: string | undefined;
+      const graphClient = this.graphClient;
+      if (!graphClient) {
+        throw new Error("Graph client not initialized");
+      }
 
       do {
         const request = nextLink
-          ? this.graphClient!.api(nextLink)
-          : this.graphClient!.api(apiUrl).top(50);
+          ? graphClient.api(nextLink)
+          : graphClient.api(apiUrl).top(50);
 
         const response = await request.get();
         const pageMessages = (response.value || []) as GraphChatMessage[];
@@ -1296,8 +1304,7 @@ export class TeamsAdapter implements Adapter<TeamsThreadId, unknown> {
         ),
         raw: msg,
         author: {
-          userId:
-            msg.from?.user?.id || msg.from?.application?.id || "unknown",
+          userId: msg.from?.user?.id || msg.from?.application?.id || "unknown",
           userName:
             msg.from?.user?.displayName ||
             msg.from?.application?.displayName ||

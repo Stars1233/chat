@@ -139,6 +139,7 @@ export function createSlackTestContext(
   const adapter = createSlackAdapter({
     botToken: SLACK_BOT_TOKEN,
     signingSecret: SLACK_SIGNING_SECRET,
+    botUserId: fixtures.botUserId,
   });
 
   const mockClient = createMockSlackClient();

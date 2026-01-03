@@ -1,5 +1,6 @@
 // Main exports
 export { Chat } from "./chat";
+export { ThreadImpl } from "./thread";
 
 // Card builders - import then re-export to ensure values are properly exported
 import {

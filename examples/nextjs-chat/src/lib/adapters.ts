@@ -57,6 +57,7 @@ export function buildAdapters(): Adapters {
       createSlackAdapter({
         botToken: process.env.SLACK_BOT_TOKEN,
         signingSecret: process.env.SLACK_SIGNING_SECRET,
+        userName: "Chat SDK Bot",
       }),
       "slack",
       SLACK_METHODS,
@@ -85,6 +86,7 @@ export function buildAdapters(): Adapters {
       adapters.gchat = withRecording(
         createGoogleChatAdapter({
           credentials,
+          userName: "Chat SDK Demo",
           // Pub/Sub topic for receiving ALL messages (not just @mentions)
           pubsubTopic: process.env.GOOGLE_CHAT_PUBSUB_TOPIC,
           // User email to impersonate for Workspace Events API (domain-wide delegation)

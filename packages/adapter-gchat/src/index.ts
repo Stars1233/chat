@@ -1763,7 +1763,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
   private async parseGChatListMessage(
     msg: chat_v1.Schema$Message,
     spaceName: string,
-    threadId: string,
+    _threadId: string,
   ): Promise<Message<unknown>> {
     const msgThreadId = this.encodeThreadId({
       spaceName,
