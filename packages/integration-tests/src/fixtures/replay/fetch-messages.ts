@@ -3,6 +3,8 @@
  * These are the raw API responses from actual platform calls.
  */
 
+import teamsGraphMessages from "./teams-graph-messages.json";
+
 // GChat fixture data
 export const GCHAT_THREAD_ID =
   "gchat:spaces/AAQAO1heGsE:c3BhY2VzL0FBUUFPMWhlR3NFL3RocmVhZHMvN2tJaS14N1NEQVk";
@@ -337,3 +339,17 @@ export const EXPECTED_NUMBERED_TEXTS = [
   "13",
   "14",
 ];
+
+// Teams fixture data
+export const TEAMS_TEAM_ID = "0809b319-cd4d-4602-8b99-12a2f25a5b82";
+export const TEAMS_CHANNEL_ID =
+  "19:8d9438b787af4481afd71a4b3d5da629@thread.tacv2";
+export const TEAMS_PARENT_MESSAGE_ID = "1767468438840";
+export const TEAMS_SERVICE_URL =
+  "https://smba.trafficmanager.net/amer/ed6e6740-934d-4088-a05e-caa14d8d89ee/";
+export const TEAMS_BOT_APP_ID = "57627569-c120-42a1-9e6f-7cb4b96cc8ef";
+export const TEAMS_HUMAN_USER_ID = "7a9b12a6-4f02-43f1-b6f9-fd10e047f903";
+
+// Raw Teams messages as returned by the Graph API (/messages/{id}/replies)
+// Sorted oldest to newest (by createdDateTime) - imported from JSON fixture
+export const TEAMS_RAW_MESSAGES = teamsGraphMessages;

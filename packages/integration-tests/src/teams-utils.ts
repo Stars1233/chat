@@ -244,3 +244,77 @@ export function getTeamsThreadId(
  */
 export const DEFAULT_TEAMS_SERVICE_URL =
   "https://smba.trafficmanager.net/teams/";
+
+/**
+ * Create a mock Microsoft Graph client for testing fetchMessages
+ */
+export function createMockGraphClient() {
+  let mockResponses: Array<{ value: unknown[]; "@odata.nextLink"?: string }> =
+    [];
+  let callIndex = 0;
+  let currentTop: number | undefined;
+  const apiCalls: Array<{ url: string; top?: number }> = [];
+
+  const mockRequest = {
+    top: vi.fn((n: number) => {
+      apiCalls[apiCalls.length - 1].top = n;
+      currentTop = n;
+      return mockRequest;
+    }),
+    orderby: vi.fn(() => mockRequest),
+    filter: vi.fn(() => mockRequest),
+    get: vi.fn(async () => {
+      const response = mockResponses[callIndex] || { value: [] };
+      callIndex++;
+      // Respect the top() limit if set
+      if (currentTop && response.value) {
+        return {
+          ...response,
+          value: response.value.slice(0, currentTop),
+        };
+      }
+      return response;
+    }),
+  };
+
+  const mockClient = {
+    api: vi.fn((url: string) => {
+      apiCalls.push({ url });
+      currentTop = undefined; // Reset for each new request chain
+      return mockRequest;
+    }),
+  };
+
+  return {
+    client: mockClient,
+    apiCalls,
+    mockRequest,
+    setResponses: (
+      responses: Array<{ value: unknown[]; "@odata.nextLink"?: string }>,
+    ) => {
+      mockResponses = responses;
+      callIndex = 0;
+    },
+    reset: () => {
+      callIndex = 0;
+      currentTop = undefined;
+      apiCalls.length = 0;
+      mockClient.api.mockClear();
+      mockRequest.get.mockClear();
+      mockRequest.top.mockClear();
+    },
+  };
+}
+
+export type MockGraphClient = ReturnType<typeof createMockGraphClient>;
+
+/**
+ * Inject mock Graph client into Teams adapter
+ */
+export function injectMockGraphClient(
+  adapter: TeamsAdapter,
+  mockClient: MockGraphClient,
+): void {
+  // biome-ignore lint/suspicious/noExplicitAny: accessing private field for testing
+  (adapter as any).graphClient = mockClient.client;
+}

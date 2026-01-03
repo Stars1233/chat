@@ -131,6 +131,16 @@ bot.onAction("goodbye", async (event) => {
 bot.onAction("messages", async (event) => {
   const { thread } = event;
 
+  // Helper to get display text for a message (handles empty text from cards)
+  const getDisplayText = (text: string, hasAttachments?: boolean) => {
+    if (text && text.trim()) {
+      const truncated = text.slice(0, 30);
+      return text.length > 30 ? `${truncated}...` : truncated;
+    }
+    // Empty text - likely a card or attachment-only message
+    return hasAttachments ? "[Attachment]" : "[Card]";
+  };
+
   try {
     // 1. fetchMessages with backward direction (default) - gets most recent messages
     const recentResult = await thread.adapter.fetchMessages(thread.id, {
@@ -148,10 +158,12 @@ bot.onAction("messages", async (event) => {
     const allMessages: string[] = [];
     let count = 0;
     for await (const msg of thread.allMessages) {
+      const displayText = getDisplayText(
+        msg.text,
+        msg.attachments && msg.attachments.length > 0,
+      );
       allMessages.push(
-        `${count + 1}. [${msg.author.userName}]: ${msg.text.slice(0, 30)}${
-          msg.text.length > 30 ? "..." : ""
-        }`,
+        `${count + 1}. [${msg.author.userName}]: ${displayText}`,
       );
       count++;
     }
@@ -160,12 +172,13 @@ bot.onAction("messages", async (event) => {
     const formatMessages = (msgs: typeof recentResult.messages) =>
       msgs.length > 0
         ? msgs
-            .map(
-              (m, i) =>
-                `${i + 1}. [${m.author.userName}]: ${m.text.slice(0, 30)}${
-                  m.text.length > 30 ? "..." : ""
-                }`,
-            )
+            .map((m, i) => {
+              const displayText = getDisplayText(
+                m.text,
+                m.attachments && m.attachments.length > 0,
+              );
+              return `${i + 1}. [${m.author.userName}]: ${displayText}`;
+            })
             .join("\n")
         : "(no messages)";
 

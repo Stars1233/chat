@@ -1,0 +1,786 @@
+[
+  {
+    "id": "1767468442402",
+    "replyToId": "1767468438840",
+    "etag": "1767468442402",
+    "messageType": "message",
+    "createdDateTime": "2026-01-03T19:27:22.402Z",
+    "lastModifiedDateTime": "2026-01-03T19:27:22.402Z",
+    "lastEditedDateTime": null,
+    "deletedDateTime": null,
+    "subject": null,
+    "summary": null,
+    "chatId": null,
+    "importance": "normal",
+    "locale": "en-us",
+    "webUrl": "https://teams.microsoft.com/l/message/19%3A8d9438b787af4481afd71a4b3d5da629%40thread.tacv2/1767468442402?groupId=0809b319-cd4d-4602-8b99-12a2f25a5b82&tenantId=ed6e6740-934d-4088-a05e-caa14d8d89ee&createdTime=1767468442402&parentMessageId=1767468438840",
+    "policyViolation": null,
+    "eventDetail": null,
+    "from": {
+      "device": null,
+      "user": null,
+      "application": {
+        "@odata.type": "#microsoft.graph.teamworkApplicationIdentity",
+        "id": "57627569-c120-42a1-9e6f-7cb4b96cc8ef",
+        "displayName": "Chat SDK Demo",
+        "applicationIdentityType": "bot"
+      }
+    },
+    "body": {
+      "contentType": "html",
+      "content": "<attachment id=\"7ec20338ceda43539ad4759b927e8c4f\"></attachment>"
+    },
+    "channelIdentity": {
+      "teamId": "0809b319-cd4d-4602-8b99-12a2f25a5b82",
+      "channelId": "19:8d9438b787af4481afd71a4b3d5da629@thread.tacv2"
+    },
+    "attachments": [
+      {
+        "id": "7ec20338ceda43539ad4759b927e8c4f",
+        "contentType": "application/vnd.microsoft.card.adaptive",
+        "contentUrl": null,
+        "content": "{\r\n  \"type\": \"AdaptiveCard\",\r\n  \"body\": [\r\n    {\r\n      \"size\": \"large\",\r\n      \"text\": \"👋 Welcome!\",\r\n      \"weight\": \"bolder\",\r\n      \"wrap\": true,\r\n      \"type\": \"TextBlock\"\r\n    },\r\n    {\r\n      \"isSubtle\": true,\r\n      \"text\": \"Connected via teams\",\r\n      \"wrap\": true,\r\n      \"type\": \"TextBlock\"\r\n    },\r\n    {\r\n      \"text\": \"I'm now listening to this thread. Try these actions:\",\r\n      \"wrap\": true,\r\n      \"type\": \"TextBlock\"\r\n    },\r\n    {\r\n      \"text\": \"✨ **Mention me with \\\"AI\\\"** to enable AI assistant mode\",\r\n      \"wrap\": true,\r\n      \"type\": \"TextBlock\"\r\n    },\r\n    {\r\n      \"items\": [],\r\n      \"separator\": true,\r\n      \"type\": \"Container\"\r\n    },\r\n    {\r\n      \"facts\": [\r\n        {\r\n          \"title\": \"DM Support\",\r\n          \"value\": \"No\"\r\n        },\r\n        {\r\n          \"title\": \"Platform\",\r\n          \"value\": \"teams\"\r\n        }\r\n      ],\r\n      \"type\": \"FactSet\"\r\n    },\r\n    {\r\n      \"items\": [],\r\n      \"separator\": true,\r\n      \"type\": \"Container\"\r\n    }\r\n  ],\r\n  \"actions\": [\r\n    {\r\n      \"data\": {\r\n        \"actionId\": \"hello\"\r\n      },\r\n      \"title\": \"Say Hello\",\r\n      \"style\": \"positive\",\r\n      \"type\": \"Action.Submit\"\r\n    },\r\n    {\r\n      \"data\": {\r\n        \"actionId\": \"info\"\r\n      },\r\n      \"title\": \"Show Info\",\r\n      \"type\": \"Action.Submit\"\r\n    },\r\n    {\r\n      \"data\": {\r\n        \"actionId\": \"messages\"\r\n      },\r\n      \"title\": \"Fetch Messages\",\r\n      \"type\": \"Action.Submit\"\r\n    },\r\n    {\r\n      \"data\": {\r\n        \"actionId\": \"goodbye\"\r\n      },\r\n      \"title\": \"Goodbye\",\r\n      \"style\": \"destructive\",\r\n      \"type\": \"Action.Submit\"\r\n    }\r\n  ],\r\n  \"$schema\": \"http://adaptivecards.io/schemas/adaptive-card.json\",\r\n  \"version\": \"1.2\"\r\n}",
+        "name": null,
+        "thumbnailUrl": null,
+        "teamsAppId": null
+      }
+    ],
+    "mentions": [],
+    "reactions": []
+  },
+  {
+    "id": "1767468448941",
+    "replyToId": "1767468438840",
+    "etag": "1767468448941",
+    "messageType": "message",
+    "createdDateTime": "2026-01-03T19:27:28.941Z",
+    "lastModifiedDateTime": "2026-01-03T19:27:28.941Z",
+    "lastEditedDateTime": null,
+    "deletedDateTime": null,
+    "subject": null,
+    "summary": null,
+    "chatId": null,
+    "importance": "normal",
+    "locale": "en-us",
+    "webUrl": "https://teams.microsoft.com/l/message/19%3A8d9438b787af4481afd71a4b3d5da629%40thread.tacv2/1767468448941?groupId=0809b319-cd4d-4602-8b99-12a2f25a5b82&tenantId=ed6e6740-934d-4088-a05e-caa14d8d89ee&createdTime=1767468448941&parentMessageId=1767468438840",
+    "policyViolation": null,
+    "eventDetail": null,
+    "from": {
+      "device": null,
+      "user": null,
+      "application": {
+        "@odata.type": "#microsoft.graph.teamworkApplicationIdentity",
+        "id": "57627569-c120-42a1-9e6f-7cb4b96cc8ef",
+        "displayName": "Chat SDK Demo",
+        "applicationIdentityType": "bot"
+      }
+    },
+    "body": {
+      "contentType": "html",
+      "content": "<attachment id=\"6021d8caed7a457f984f1b89a08d575e\"></attachment>"
+    },
+    "channelIdentity": {
+      "teamId": "0809b319-cd4d-4602-8b99-12a2f25a5b82",
+      "channelId": "19:8d9438b787af4481afd71a4b3d5da629@thread.tacv2"
+    },
+    "attachments": [
+      {
+        "id": "6021d8caed7a457f984f1b89a08d575e",
+        "contentType": "application/vnd.microsoft.card.adaptive",
+        "contentUrl": null,
+        "content": "{\r\n  \"type\": \"AdaptiveCard\",\r\n  \"body\": [\r\n    {\r\n      \"size\": \"large\",\r\n      \"text\": \"📝 Message Fetch Results\",\r\n      \"weight\": \"bolder\",\r\n      \"wrap\": true,\r\n      \"type\": \"TextBlock\"\r\n    },\r\n    {\r\n      \"items\": [\r\n        {\r\n          \"text\": \"**fetchMessages (backward, limit: 5)**\",\r\n          \"wrap\": true,\r\n          \"type\": \"TextBlock\"\r\n        },\r\n        {\r\n          \"text\": \"Gets most recent messages, cursor points to older\",\r\n          \"wrap\": true,\r\n          \"type\": \"TextBlock\"\r\n        },\r\n        {\r\n          \"text\": \"1. [Malte Ubl]: Chat SDK Demo&nbsp;Hey\\n2. [Chat SDK Demo]: \",\r\n          \"wrap\": true,\r\n          \"type\": \"TextBlock\"\r\n        },\r\n        {\r\n          \"text\": \"Next cursor: yes\",\r\n          \"wrap\": true,\r\n          \"type\": \"TextBlock\"\r\n        }\r\n      ],\r\n      \"type\": \"Container\"\r\n    },\r\n    {\r\n      \"items\": [],\r\n      \"separator\": true,\r\n      \"type\": \"Container\"\r\n    },\r\n    {\r\n      \"items\": [\r\n        {\r\n          \"text\": \"**fetchMessages (forward, limit: 5)**\",\r\n          \"wrap\": true,\r\n          \"type\": \"TextBlock\"\r\n        },\r\n        {\r\n          \"text\": \"Gets oldest messages first, cursor points to newer\",\r\n          \"wrap\": true,\r\n          \"type\": \"TextBlock\"\r\n        },\r\n        {\r\n          \"text\": \"(no messages)\",\r\n          \"wrap\": true,\r\n          \"type\": \"TextBlock\"\r\n        },\r\n        {\r\n          \"text\": \"Next cursor: none\",\r\n          \"wrap\": true,\r\n          \"type\": \"TextBlock\"\r\n        }\r\n      ],\r\n      \"type\": \"Container\"\r\n    },\r\n    {\r\n      \"items\": [],\r\n      \"separator\": true,\r\n      \"type\": \"Container\"\r\n    },\r\n    {\r\n      \"items\": [\r\n        {\r\n          \"text\": \"**allMessages iterator**\",\r\n          \"wrap\": true,\r\n          \"type\": \"TextBlock\"\r\n        },\r\n        {\r\n          \"text\": \"Iterates from oldest to newest using forward direction\",\r\n          \"wrap\": true,\r\n          \"type\": \"TextBlock\"\r\n        },\r\n        {\r\n          \"text\": \"1. [Malte Ubl]: Chat SDK Demo&nbsp;Hey\\n2. [Chat SDK Demo]: \",\r\n          \"wrap\": true,\r\n          \"type\": \"TextBlock\"\r\n        }\r\n      ],\r\n      \"type\": \"Container\"\r\n    }\r\n  ],\r\n  \"$schema\": \"http://adaptivecards.io/schemas/adaptive-card.json\",\r\n  \"version\": \"1.2\"\r\n}",
+        "name": null,
+        "thumbnailUrl": null,
+        "teamsAppId": null
+      }
+    ],
+    "mentions": [],
+    "reactions": []
+  },
+  {
+    "id": "1767468456333",
+    "replyToId": "1767468438840",
+    "etag": "1767468456333",
+    "messageType": "message",
+    "createdDateTime": "2026-01-03T19:27:36.333Z",
+    "lastModifiedDateTime": "2026-01-03T19:27:36.333Z",
+    "lastEditedDateTime": null,
+    "deletedDateTime": null,
+    "subject": "",
+    "summary": null,
+    "chatId": null,
+    "importance": "normal",
+    "locale": "en-us",
+    "webUrl": "https://teams.microsoft.com/l/message/19%3A8d9438b787af4481afd71a4b3d5da629%40thread.tacv2/1767468456333?groupId=0809b319-cd4d-4602-8b99-12a2f25a5b82&tenantId=ed6e6740-934d-4088-a05e-caa14d8d89ee&createdTime=1767468456333&parentMessageId=1767468438840",
+    "policyViolation": null,
+    "eventDetail": null,
+    "from": {
+      "application": null,
+      "device": null,
+      "user": {
+        "@odata.type": "#microsoft.graph.teamworkUserIdentity",
+        "id": "7a9b12a6-4f02-43f1-b6f9-fd10e047f903",
+        "displayName": "Malte Ubl",
+        "userIdentityType": "aadUser",
+        "tenantId": "ed6e6740-934d-4088-a05e-caa14d8d89ee"
+      }
+    },
+    "body": {
+      "contentType": "html",
+      "content": "<p>1</p>"
+    },
+    "channelIdentity": {
+      "teamId": "0809b319-cd4d-4602-8b99-12a2f25a5b82",
+      "channelId": "19:8d9438b787af4481afd71a4b3d5da629@thread.tacv2"
+    },
+    "attachments": [],
+    "mentions": [],
+    "reactions": []
+  },
+  {
+    "id": "1767468460511",
+    "replyToId": "1767468438840",
+    "etag": "1767468464736",
+    "messageType": "message",
+    "createdDateTime": "2026-01-03T19:27:40.511Z",
+    "lastModifiedDateTime": "2026-01-03T19:27:44.736Z",
+    "lastEditedDateTime": "2026-01-03T19:27:44.616Z",
+    "deletedDateTime": null,
+    "subject": null,
+    "summary": null,
+    "chatId": null,
+    "importance": "normal",
+    "locale": "en-us",
+    "webUrl": "https://teams.microsoft.com/l/message/19%3A8d9438b787af4481afd71a4b3d5da629%40thread.tacv2/1767468460511?groupId=0809b319-cd4d-4602-8b99-12a2f25a5b82&tenantId=ed6e6740-934d-4088-a05e-caa14d8d89ee&createdTime=1767468460511&parentMessageId=1767468438840",
+    "policyViolation": null,
+    "eventDetail": null,
+    "from": {
+      "device": null,
+      "user": null,
+      "application": {
+        "@odata.type": "#microsoft.graph.teamworkApplicationIdentity",
+        "id": "57627569-c120-42a1-9e6f-7cb4b96cc8ef",
+        "displayName": "Chat SDK Demo",
+        "applicationIdentityType": "bot"
+      }
+    },
+    "body": {
+      "contentType": "html",
+      "content": "<p>✅ Thanks for your message!</p>"
+    },
+    "channelIdentity": {
+      "teamId": "0809b319-cd4d-4602-8b99-12a2f25a5b82",
+      "channelId": "19:8d9438b787af4481afd71a4b3d5da629@thread.tacv2"
+    },
+    "attachments": [],
+    "mentions": [],
+    "reactions": []
+  },
+  {
+    "id": "1767468466140",
+    "replyToId": "1767468438840",
+    "etag": "1767468466140",
+    "messageType": "message",
+    "createdDateTime": "2026-01-03T19:27:46.14Z",
+    "lastModifiedDateTime": "2026-01-03T19:27:46.14Z",
+    "lastEditedDateTime": null,
+    "deletedDateTime": null,
+    "subject": "",
+    "summary": null,
+    "chatId": null,
+    "importance": "normal",
+    "locale": "en-us",
+    "webUrl": "https://teams.microsoft.com/l/message/19%3A8d9438b787af4481afd71a4b3d5da629%40thread.tacv2/1767468466140?groupId=0809b319-cd4d-4602-8b99-12a2f25a5b82&tenantId=ed6e6740-934d-4088-a05e-caa14d8d89ee&createdTime=1767468466140&parentMessageId=1767468438840",
+    "policyViolation": null,
+    "eventDetail": null,
+    "from": {
+      "application": null,
+      "device": null,
+      "user": {
+        "@odata.type": "#microsoft.graph.teamworkUserIdentity",
+        "id": "7a9b12a6-4f02-43f1-b6f9-fd10e047f903",
+        "displayName": "Malte Ubl",
+        "userIdentityType": "aadUser",
+        "tenantId": "ed6e6740-934d-4088-a05e-caa14d8d89ee"
+      }
+    },
+    "body": {
+      "contentType": "html",
+      "content": "<p>2</p>"
+    },
+    "channelIdentity": {
+      "teamId": "0809b319-cd4d-4602-8b99-12a2f25a5b82",
+      "channelId": "19:8d9438b787af4481afd71a4b3d5da629@thread.tacv2"
+    },
+    "attachments": [],
+    "mentions": [],
+    "reactions": []
+  },
+  {
+    "id": "1767468467155",
+    "replyToId": "1767468438840",
+    "etag": "1767468467155",
+    "messageType": "message",
+    "createdDateTime": "2026-01-03T19:27:47.155Z",
+    "lastModifiedDateTime": "2026-01-03T19:27:47.155Z",
+    "lastEditedDateTime": null,
+    "deletedDateTime": null,
+    "subject": "",
+    "summary": null,
+    "chatId": null,
+    "importance": "normal",
+    "locale": "en-us",
+    "webUrl": "https://teams.microsoft.com/l/message/19%3A8d9438b787af4481afd71a4b3d5da629%40thread.tacv2/1767468467155?groupId=0809b319-cd4d-4602-8b99-12a2f25a5b82&tenantId=ed6e6740-934d-4088-a05e-caa14d8d89ee&createdTime=1767468467155&parentMessageId=1767468438840",
+    "policyViolation": null,
+    "eventDetail": null,
+    "from": {
+      "application": null,
+      "device": null,
+      "user": {
+        "@odata.type": "#microsoft.graph.teamworkUserIdentity",
+        "id": "7a9b12a6-4f02-43f1-b6f9-fd10e047f903",
+        "displayName": "Malte Ubl",
+        "userIdentityType": "aadUser",
+        "tenantId": "ed6e6740-934d-4088-a05e-caa14d8d89ee"
+      }
+    },
+    "body": {
+      "contentType": "html",
+      "content": "<p>3</p>"
+    },
+    "channelIdentity": {
+      "teamId": "0809b319-cd4d-4602-8b99-12a2f25a5b82",
+      "channelId": "19:8d9438b787af4481afd71a4b3d5da629@thread.tacv2"
+    },
+    "attachments": [],
+    "mentions": [],
+    "reactions": []
+  },
+  {
+    "id": "1767468467781",
+    "replyToId": "1767468438840",
+    "etag": "1767468467781",
+    "messageType": "message",
+    "createdDateTime": "2026-01-03T19:27:47.781Z",
+    "lastModifiedDateTime": "2026-01-03T19:27:47.781Z",
+    "lastEditedDateTime": null,
+    "deletedDateTime": null,
+    "subject": "",
+    "summary": null,
+    "chatId": null,
+    "importance": "normal",
+    "locale": "en-us",
+    "webUrl": "https://teams.microsoft.com/l/message/19%3A8d9438b787af4481afd71a4b3d5da629%40thread.tacv2/1767468467781?groupId=0809b319-cd4d-4602-8b99-12a2f25a5b82&tenantId=ed6e6740-934d-4088-a05e-caa14d8d89ee&createdTime=1767468467781&parentMessageId=1767468438840",
+    "policyViolation": null,
+    "eventDetail": null,
+    "from": {
+      "application": null,
+      "device": null,
+      "user": {
+        "@odata.type": "#microsoft.graph.teamworkUserIdentity",
+        "id": "7a9b12a6-4f02-43f1-b6f9-fd10e047f903",
+        "displayName": "Malte Ubl",
+        "userIdentityType": "aadUser",
+        "tenantId": "ed6e6740-934d-4088-a05e-caa14d8d89ee"
+      }
+    },
+    "body": {
+      "contentType": "html",
+      "content": "<p>4</p>"
+    },
+    "channelIdentity": {
+      "teamId": "0809b319-cd4d-4602-8b99-12a2f25a5b82",
+      "channelId": "19:8d9438b787af4481afd71a4b3d5da629@thread.tacv2"
+    },
+    "attachments": [],
+    "mentions": [],
+    "reactions": []
+  },
+  {
+    "id": "1767468468089",
+    "replyToId": "1767468438840",
+    "etag": "1767468468089",
+    "messageType": "message",
+    "createdDateTime": "2026-01-03T19:27:48.089Z",
+    "lastModifiedDateTime": "2026-01-03T19:27:48.089Z",
+    "lastEditedDateTime": null,
+    "deletedDateTime": null,
+    "subject": "",
+    "summary": null,
+    "chatId": null,
+    "importance": "normal",
+    "locale": "en-us",
+    "webUrl": "https://teams.microsoft.com/l/message/19%3A8d9438b787af4481afd71a4b3d5da629%40thread.tacv2/1767468468089?groupId=0809b319-cd4d-4602-8b99-12a2f25a5b82&tenantId=ed6e6740-934d-4088-a05e-caa14d8d89ee&createdTime=1767468468089&parentMessageId=1767468438840",
+    "policyViolation": null,
+    "eventDetail": null,
+    "from": {
+      "application": null,
+      "device": null,
+      "user": {
+        "@odata.type": "#microsoft.graph.teamworkUserIdentity",
+        "id": "7a9b12a6-4f02-43f1-b6f9-fd10e047f903",
+        "displayName": "Malte Ubl",
+        "userIdentityType": "aadUser",
+        "tenantId": "ed6e6740-934d-4088-a05e-caa14d8d89ee"
+      }
+    },
+    "body": {
+      "contentType": "html",
+      "content": "<p>5</p>"
+    },
+    "channelIdentity": {
+      "teamId": "0809b319-cd4d-4602-8b99-12a2f25a5b82",
+      "channelId": "19:8d9438b787af4481afd71a4b3d5da629@thread.tacv2"
+    },
+    "attachments": [],
+    "mentions": [],
+    "reactions": []
+  },
+  {
+    "id": "1767468468249",
+    "replyToId": "1767468438840",
+    "etag": "1767468472363",
+    "messageType": "message",
+    "createdDateTime": "2026-01-03T19:27:48.249Z",
+    "lastModifiedDateTime": "2026-01-03T19:27:52.363Z",
+    "lastEditedDateTime": "2026-01-03T19:27:51.955Z",
+    "deletedDateTime": null,
+    "subject": null,
+    "summary": null,
+    "chatId": null,
+    "importance": "normal",
+    "locale": "en-us",
+    "webUrl": "https://teams.microsoft.com/l/message/19%3A8d9438b787af4481afd71a4b3d5da629%40thread.tacv2/1767468468249?groupId=0809b319-cd4d-4602-8b99-12a2f25a5b82&tenantId=ed6e6740-934d-4088-a05e-caa14d8d89ee&createdTime=1767468468249&parentMessageId=1767468438840",
+    "policyViolation": null,
+    "eventDetail": null,
+    "from": {
+      "device": null,
+      "user": null,
+      "application": {
+        "@odata.type": "#microsoft.graph.teamworkApplicationIdentity",
+        "id": "57627569-c120-42a1-9e6f-7cb4b96cc8ef",
+        "displayName": "Chat SDK Demo",
+        "applicationIdentityType": "bot"
+      }
+    },
+    "body": {
+      "contentType": "html",
+      "content": "<p>✅ Thanks for your message!</p>"
+    },
+    "channelIdentity": {
+      "teamId": "0809b319-cd4d-4602-8b99-12a2f25a5b82",
+      "channelId": "19:8d9438b787af4481afd71a4b3d5da629@thread.tacv2"
+    },
+    "attachments": [],
+    "mentions": [],
+    "reactions": []
+  },
+  {
+    "id": "1767468468422",
+    "replyToId": "1767468438840",
+    "etag": "1767468468422",
+    "messageType": "message",
+    "createdDateTime": "2026-01-03T19:27:48.422Z",
+    "lastModifiedDateTime": "2026-01-03T19:27:48.422Z",
+    "lastEditedDateTime": null,
+    "deletedDateTime": null,
+    "subject": "",
+    "summary": null,
+    "chatId": null,
+    "importance": "normal",
+    "locale": "en-us",
+    "webUrl": "https://teams.microsoft.com/l/message/19%3A8d9438b787af4481afd71a4b3d5da629%40thread.tacv2/1767468468422?groupId=0809b319-cd4d-4602-8b99-12a2f25a5b82&tenantId=ed6e6740-934d-4088-a05e-caa14d8d89ee&createdTime=1767468468422&parentMessageId=1767468438840",
+    "policyViolation": null,
+    "eventDetail": null,
+    "from": {
+      "application": null,
+      "device": null,
+      "user": {
+        "@odata.type": "#microsoft.graph.teamworkUserIdentity",
+        "id": "7a9b12a6-4f02-43f1-b6f9-fd10e047f903",
+        "displayName": "Malte Ubl",
+        "userIdentityType": "aadUser",
+        "tenantId": "ed6e6740-934d-4088-a05e-caa14d8d89ee"
+      }
+    },
+    "body": {
+      "contentType": "html",
+      "content": "<p>6</p>"
+    },
+    "channelIdentity": {
+      "teamId": "0809b319-cd4d-4602-8b99-12a2f25a5b82",
+      "channelId": "19:8d9438b787af4481afd71a4b3d5da629@thread.tacv2"
+    },
+    "attachments": [],
+    "mentions": [],
+    "reactions": []
+  },
+  {
+    "id": "1767468468771",
+    "replyToId": "1767468438840",
+    "etag": "1767468468771",
+    "messageType": "message",
+    "createdDateTime": "2026-01-03T19:27:48.771Z",
+    "lastModifiedDateTime": "2026-01-03T19:27:48.771Z",
+    "lastEditedDateTime": null,
+    "deletedDateTime": null,
+    "subject": "",
+    "summary": null,
+    "chatId": null,
+    "importance": "normal",
+    "locale": "en-us",
+    "webUrl": "https://teams.microsoft.com/l/message/19%3A8d9438b787af4481afd71a4b3d5da629%40thread.tacv2/1767468468771?groupId=0809b319-cd4d-4602-8b99-12a2f25a5b82&tenantId=ed6e6740-934d-4088-a05e-caa14d8d89ee&createdTime=1767468468771&parentMessageId=1767468438840",
+    "policyViolation": null,
+    "eventDetail": null,
+    "from": {
+      "application": null,
+      "device": null,
+      "user": {
+        "@odata.type": "#microsoft.graph.teamworkUserIdentity",
+        "id": "7a9b12a6-4f02-43f1-b6f9-fd10e047f903",
+        "displayName": "Malte Ubl",
+        "userIdentityType": "aadUser",
+        "tenantId": "ed6e6740-934d-4088-a05e-caa14d8d89ee"
+      }
+    },
+    "body": {
+      "contentType": "html",
+      "content": "<p>7</p>"
+    },
+    "channelIdentity": {
+      "teamId": "0809b319-cd4d-4602-8b99-12a2f25a5b82",
+      "channelId": "19:8d9438b787af4481afd71a4b3d5da629@thread.tacv2"
+    },
+    "attachments": [],
+    "mentions": [],
+    "reactions": []
+  },
+  {
+    "id": "1767468469434",
+    "replyToId": "1767468438840",
+    "etag": "1767468469434",
+    "messageType": "message",
+    "createdDateTime": "2026-01-03T19:27:49.434Z",
+    "lastModifiedDateTime": "2026-01-03T19:27:49.434Z",
+    "lastEditedDateTime": null,
+    "deletedDateTime": null,
+    "subject": "",
+    "summary": null,
+    "chatId": null,
+    "importance": "normal",
+    "locale": "en-us",
+    "webUrl": "https://teams.microsoft.com/l/message/19%3A8d9438b787af4481afd71a4b3d5da629%40thread.tacv2/1767468469434?groupId=0809b319-cd4d-4602-8b99-12a2f25a5b82&tenantId=ed6e6740-934d-4088-a05e-caa14d8d89ee&createdTime=1767468469434&parentMessageId=1767468438840",
+    "policyViolation": null,
+    "eventDetail": null,
+    "from": {
+      "application": null,
+      "device": null,
+      "user": {
+        "@odata.type": "#microsoft.graph.teamworkUserIdentity",
+        "id": "7a9b12a6-4f02-43f1-b6f9-fd10e047f903",
+        "displayName": "Malte Ubl",
+        "userIdentityType": "aadUser",
+        "tenantId": "ed6e6740-934d-4088-a05e-caa14d8d89ee"
+      }
+    },
+    "body": {
+      "contentType": "html",
+      "content": "<p>8</p>"
+    },
+    "channelIdentity": {
+      "teamId": "0809b319-cd4d-4602-8b99-12a2f25a5b82",
+      "channelId": "19:8d9438b787af4481afd71a4b3d5da629@thread.tacv2"
+    },
+    "attachments": [],
+    "mentions": [],
+    "reactions": []
+  },
+  {
+    "id": "1767468470373",
+    "replyToId": "1767468438840",
+    "etag": "1767468470373",
+    "messageType": "message",
+    "createdDateTime": "2026-01-03T19:27:50.373Z",
+    "lastModifiedDateTime": "2026-01-03T19:27:50.373Z",
+    "lastEditedDateTime": null,
+    "deletedDateTime": null,
+    "subject": "",
+    "summary": null,
+    "chatId": null,
+    "importance": "normal",
+    "locale": "en-us",
+    "webUrl": "https://teams.microsoft.com/l/message/19%3A8d9438b787af4481afd71a4b3d5da629%40thread.tacv2/1767468470373?groupId=0809b319-cd4d-4602-8b99-12a2f25a5b82&tenantId=ed6e6740-934d-4088-a05e-caa14d8d89ee&createdTime=1767468470373&parentMessageId=1767468438840",
+    "policyViolation": null,
+    "eventDetail": null,
+    "from": {
+      "application": null,
+      "device": null,
+      "user": {
+        "@odata.type": "#microsoft.graph.teamworkUserIdentity",
+        "id": "7a9b12a6-4f02-43f1-b6f9-fd10e047f903",
+        "displayName": "Malte Ubl",
+        "userIdentityType": "aadUser",
+        "tenantId": "ed6e6740-934d-4088-a05e-caa14d8d89ee"
+      }
+    },
+    "body": {
+      "contentType": "html",
+      "content": "<p>9</p>"
+    },
+    "channelIdentity": {
+      "teamId": "0809b319-cd4d-4602-8b99-12a2f25a5b82",
+      "channelId": "19:8d9438b787af4481afd71a4b3d5da629@thread.tacv2"
+    },
+    "attachments": [],
+    "mentions": [],
+    "reactions": []
+  },
+  {
+    "id": "1767468475162",
+    "replyToId": "1767468438840",
+    "etag": "1767468475162",
+    "messageType": "message",
+    "createdDateTime": "2026-01-03T19:27:55.162Z",
+    "lastModifiedDateTime": "2026-01-03T19:27:55.162Z",
+    "lastEditedDateTime": null,
+    "deletedDateTime": null,
+    "subject": "",
+    "summary": null,
+    "chatId": null,
+    "importance": "normal",
+    "locale": "en-us",
+    "webUrl": "https://teams.microsoft.com/l/message/19%3A8d9438b787af4481afd71a4b3d5da629%40thread.tacv2/1767468475162?groupId=0809b319-cd4d-4602-8b99-12a2f25a5b82&tenantId=ed6e6740-934d-4088-a05e-caa14d8d89ee&createdTime=1767468475162&parentMessageId=1767468438840",
+    "policyViolation": null,
+    "eventDetail": null,
+    "from": {
+      "application": null,
+      "device": null,
+      "user": {
+        "@odata.type": "#microsoft.graph.teamworkUserIdentity",
+        "id": "7a9b12a6-4f02-43f1-b6f9-fd10e047f903",
+        "displayName": "Malte Ubl",
+        "userIdentityType": "aadUser",
+        "tenantId": "ed6e6740-934d-4088-a05e-caa14d8d89ee"
+      }
+    },
+    "body": {
+      "contentType": "html",
+      "content": "<p>10</p>"
+    },
+    "channelIdentity": {
+      "teamId": "0809b319-cd4d-4602-8b99-12a2f25a5b82",
+      "channelId": "19:8d9438b787af4481afd71a4b3d5da629@thread.tacv2"
+    },
+    "attachments": [],
+    "mentions": [],
+    "reactions": []
+  },
+  {
+    "id": "1767468476187",
+    "replyToId": "1767468438840",
+    "etag": "1767468476187",
+    "messageType": "message",
+    "createdDateTime": "2026-01-03T19:27:56.187Z",
+    "lastModifiedDateTime": "2026-01-03T19:27:56.187Z",
+    "lastEditedDateTime": null,
+    "deletedDateTime": null,
+    "subject": "",
+    "summary": null,
+    "chatId": null,
+    "importance": "normal",
+    "locale": "en-us",
+    "webUrl": "https://teams.microsoft.com/l/message/19%3A8d9438b787af4481afd71a4b3d5da629%40thread.tacv2/1767468476187?groupId=0809b319-cd4d-4602-8b99-12a2f25a5b82&tenantId=ed6e6740-934d-4088-a05e-caa14d8d89ee&createdTime=1767468476187&parentMessageId=1767468438840",
+    "policyViolation": null,
+    "eventDetail": null,
+    "from": {
+      "application": null,
+      "device": null,
+      "user": {
+        "@odata.type": "#microsoft.graph.teamworkUserIdentity",
+        "id": "7a9b12a6-4f02-43f1-b6f9-fd10e047f903",
+        "displayName": "Malte Ubl",
+        "userIdentityType": "aadUser",
+        "tenantId": "ed6e6740-934d-4088-a05e-caa14d8d89ee"
+      }
+    },
+    "body": {
+      "contentType": "html",
+      "content": "<p>11</p>"
+    },
+    "channelIdentity": {
+      "teamId": "0809b319-cd4d-4602-8b99-12a2f25a5b82",
+      "channelId": "19:8d9438b787af4481afd71a4b3d5da629@thread.tacv2"
+    },
+    "attachments": [],
+    "mentions": [],
+    "reactions": []
+  },
+  {
+    "id": "1767468477200",
+    "replyToId": "1767468438840",
+    "etag": "1767468477200",
+    "messageType": "message",
+    "createdDateTime": "2026-01-03T19:27:57.2Z",
+    "lastModifiedDateTime": "2026-01-03T19:27:57.2Z",
+    "lastEditedDateTime": null,
+    "deletedDateTime": null,
+    "subject": "",
+    "summary": null,
+    "chatId": null,
+    "importance": "normal",
+    "locale": "en-us",
+    "webUrl": "https://teams.microsoft.com/l/message/19%3A8d9438b787af4481afd71a4b3d5da629%40thread.tacv2/1767468477200?groupId=0809b319-cd4d-4602-8b99-12a2f25a5b82&tenantId=ed6e6740-934d-4088-a05e-caa14d8d89ee&createdTime=1767468477200&parentMessageId=1767468438840",
+    "policyViolation": null,
+    "eventDetail": null,
+    "from": {
+      "application": null,
+      "device": null,
+      "user": {
+        "@odata.type": "#microsoft.graph.teamworkUserIdentity",
+        "id": "7a9b12a6-4f02-43f1-b6f9-fd10e047f903",
+        "displayName": "Malte Ubl",
+        "userIdentityType": "aadUser",
+        "tenantId": "ed6e6740-934d-4088-a05e-caa14d8d89ee"
+      }
+    },
+    "body": {
+      "contentType": "html",
+      "content": "<p>12</p>"
+    },
+    "channelIdentity": {
+      "teamId": "0809b319-cd4d-4602-8b99-12a2f25a5b82",
+      "channelId": "19:8d9438b787af4481afd71a4b3d5da629@thread.tacv2"
+    },
+    "attachments": [],
+    "mentions": [],
+    "reactions": []
+  },
+  {
+    "id": "1767468477507",
+    "replyToId": "1767468438840",
+    "etag": "1767468481625",
+    "messageType": "message",
+    "createdDateTime": "2026-01-03T19:27:57.507Z",
+    "lastModifiedDateTime": "2026-01-03T19:28:01.625Z",
+    "lastEditedDateTime": "2026-01-03T19:28:01.51Z",
+    "deletedDateTime": null,
+    "subject": null,
+    "summary": null,
+    "chatId": null,
+    "importance": "normal",
+    "locale": "en-us",
+    "webUrl": "https://teams.microsoft.com/l/message/19%3A8d9438b787af4481afd71a4b3d5da629%40thread.tacv2/1767468477507?groupId=0809b319-cd4d-4602-8b99-12a2f25a5b82&tenantId=ed6e6740-934d-4088-a05e-caa14d8d89ee&createdTime=1767468477507&parentMessageId=1767468438840",
+    "policyViolation": null,
+    "eventDetail": null,
+    "from": {
+      "device": null,
+      "user": null,
+      "application": {
+        "@odata.type": "#microsoft.graph.teamworkApplicationIdentity",
+        "id": "57627569-c120-42a1-9e6f-7cb4b96cc8ef",
+        "displayName": "Chat SDK Demo",
+        "applicationIdentityType": "bot"
+      }
+    },
+    "body": {
+      "contentType": "html",
+      "content": "<p>✅ Thanks for your message!</p>"
+    },
+    "channelIdentity": {
+      "teamId": "0809b319-cd4d-4602-8b99-12a2f25a5b82",
+      "channelId": "19:8d9438b787af4481afd71a4b3d5da629@thread.tacv2"
+    },
+    "attachments": [],
+    "mentions": [],
+    "reactions": []
+  },
+  {
+    "id": "1767468478456",
+    "replyToId": "1767468438840",
+    "etag": "1767468478456",
+    "messageType": "message",
+    "createdDateTime": "2026-01-03T19:27:58.456Z",
+    "lastModifiedDateTime": "2026-01-03T19:27:58.456Z",
+    "lastEditedDateTime": null,
+    "deletedDateTime": null,
+    "subject": "",
+    "summary": null,
+    "chatId": null,
+    "importance": "normal",
+    "locale": "en-us",
+    "webUrl": "https://teams.microsoft.com/l/message/19%3A8d9438b787af4481afd71a4b3d5da629%40thread.tacv2/1767468478456?groupId=0809b319-cd4d-4602-8b99-12a2f25a5b82&tenantId=ed6e6740-934d-4088-a05e-caa14d8d89ee&createdTime=1767468478456&parentMessageId=1767468438840",
+    "policyViolation": null,
+    "eventDetail": null,
+    "from": {
+      "application": null,
+      "device": null,
+      "user": {
+        "@odata.type": "#microsoft.graph.teamworkUserIdentity",
+        "id": "7a9b12a6-4f02-43f1-b6f9-fd10e047f903",
+        "displayName": "Malte Ubl",
+        "userIdentityType": "aadUser",
+        "tenantId": "ed6e6740-934d-4088-a05e-caa14d8d89ee"
+      }
+    },
+    "body": {
+      "contentType": "html",
+      "content": "<p>13</p>"
+    },
+    "channelIdentity": {
+      "teamId": "0809b319-cd4d-4602-8b99-12a2f25a5b82",
+      "channelId": "19:8d9438b787af4481afd71a4b3d5da629@thread.tacv2"
+    },
+    "attachments": [],
+    "mentions": [],
+    "reactions": []
+  },
+  {
+    "id": "1767468486542",
+    "replyToId": "1767468438840",
+    "etag": "1767468486542",
+    "messageType": "message",
+    "createdDateTime": "2026-01-03T19:28:06.542Z",
+    "lastModifiedDateTime": "2026-01-03T19:28:06.542Z",
+    "lastEditedDateTime": null,
+    "deletedDateTime": null,
+    "subject": null,
+    "summary": null,
+    "chatId": null,
+    "importance": "normal",
+    "locale": "en-us",
+    "webUrl": "https://teams.microsoft.com/l/message/19%3A8d9438b787af4481afd71a4b3d5da629%40thread.tacv2/1767468486542?groupId=0809b319-cd4d-4602-8b99-12a2f25a5b82&tenantId=ed6e6740-934d-4088-a05e-caa14d8d89ee&createdTime=1767468486542&parentMessageId=1767468438840",
+    "policyViolation": null,
+    "eventDetail": null,
+    "from": {
+      "device": null,
+      "user": null,
+      "application": {
+        "@odata.type": "#microsoft.graph.teamworkApplicationIdentity",
+        "id": "57627569-c120-42a1-9e6f-7cb4b96cc8ef",
+        "displayName": "Chat SDK Demo",
+        "applicationIdentityType": "bot"
+      }
+    },
+    "body": {
+      "contentType": "html",
+      "content": "<attachment id=\"66bb5787fedd4b9d83da85ad80f61345\"></attachment>"
+    },
+    "channelIdentity": {
+      "teamId": "0809b319-cd4d-4602-8b99-12a2f25a5b82",
+      "channelId": "19:8d9438b787af4481afd71a4b3d5da629@thread.tacv2"
+    },
+    "attachments": [
+      {
+        "id": "66bb5787fedd4b9d83da85ad80f61345",
+        "contentType": "application/vnd.microsoft.card.adaptive",
+        "contentUrl": null,
+        "content": "{\r\n  \"type\": \"AdaptiveCard\",\r\n  \"body\": [\r\n    {\r\n      \"size\": \"large\",\r\n      \"text\": \"📝 Message Fetch Results\",\r\n      \"weight\": \"bolder\",\r\n      \"wrap\": true,\r\n      \"type\": \"TextBlock\"\r\n    },\r\n    {\r\n      \"items\": [\r\n        {\r\n          \"text\": \"**fetchMessages (backward, limit: 5)**\",\r\n          \"wrap\": true,\r\n          \"type\": \"TextBlock\"\r\n        },\r\n        {\r\n          \"text\": \"Gets most recent messages, cursor points to older\",\r\n          \"wrap\": true,\r\n          \"type\": \"TextBlock\"\r\n        },\r\n        {\r\n          \"text\": \"1. [Malte Ubl]: 10\\n2. [Malte Ubl]: 11\\n3. [Malte Ubl]: 12\\n4. [Chat SDK Demo]: ✅ Thanks for your message!\\n5. [Malte Ubl]: 13\",\r\n          \"wrap\": true,\r\n          \"type\": \"TextBlock\"\r\n        },\r\n        {\r\n          \"text\": \"Next cursor: yes\",\r\n          \"wrap\": true,\r\n          \"type\": \"TextBlock\"\r\n        }\r\n      ],\r\n      \"type\": \"Container\"\r\n    },\r\n    {\r\n      \"items\": [],\r\n      \"separator\": true,\r\n      \"type\": \"Container\"\r\n    },\r\n    {\r\n      \"items\": [\r\n        {\r\n          \"text\": \"**fetchMessages (forward, limit: 5)**\",\r\n          \"wrap\": true,\r\n          \"type\": \"TextBlock\"\r\n        },\r\n        {\r\n          \"text\": \"Gets oldest messages first, cursor points to newer\",\r\n          \"wrap\": true,\r\n          \"type\": \"TextBlock\"\r\n        },\r\n        {\r\n          \"text\": \"(no messages)\",\r\n          \"wrap\": true,\r\n          \"type\": \"TextBlock\"\r\n        },\r\n        {\r\n          \"text\": \"Next cursor: none\",\r\n          \"wrap\": true,\r\n          \"type\": \"TextBlock\"\r\n        }\r\n      ],\r\n      \"type\": \"Container\"\r\n    },\r\n    {\r\n      \"items\": [],\r\n      \"separator\": true,\r\n      \"type\": \"Container\"\r\n    },\r\n    {\r\n      \"items\": [\r\n        {\r\n          \"text\": \"**allMessages iterator**\",\r\n          \"wrap\": true,\r\n          \"type\": \"TextBlock\"\r\n        },\r\n        {\r\n          \"text\": \"Iterates from oldest to newest using forward direction\",\r\n          \"wrap\": true,\r\n          \"type\": \"TextBlock\"\r\n        },\r\n        {\r\n          \"text\": \"1. [Malte Ubl]: Chat SDK Demo&nbsp;Hey\\n2. [Chat SDK Demo]: \\n3. [Chat SDK Demo]: \\n4. [Malte Ubl]: 1\\n5. [Chat SDK Demo]: ✅ Thanks for your message!\\n6. [Malte Ubl]: 2\\n7. [Malte Ubl]: 3\\n8. [Malte Ubl]: 4\\n9. [Malte Ubl]: 5\\n10. [Chat SDK Demo]: ✅ Thanks for your message!\\n11. [Malte Ubl]: 6\\n12. [Malte Ubl]: 7\\n13. [Malte Ubl]: 8\\n14. [Malte Ubl]: 9\\n15. [Malte Ubl]: 10\\n16. [Malte Ubl]: 11\\n17. [Malte Ubl]: 12\\n18. [Chat SDK Demo]: ✅ Thanks for your message!\\n19. [Malte Ubl]: 13\",\r\n          \"wrap\": true,\r\n          \"type\": \"TextBlock\"\r\n        }\r\n      ],\r\n      \"type\": \"Container\"\r\n    }\r\n  ],\r\n  \"$schema\": \"http://adaptivecards.io/schemas/adaptive-card.json\",\r\n  \"version\": \"1.2\"\r\n}",
+        "name": null,
+        "thumbnailUrl": null,
+        "teamsAppId": null
+      }
+    ],
+    "mentions": [],
+    "reactions": []
+  }
+]

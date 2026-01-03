@@ -23,13 +23,27 @@ import {
   SLACK_RAW_MESSAGES,
   SLACK_THREAD_ID,
   SLACK_THREAD_TS,
+  TEAMS_BOT_APP_ID,
+  TEAMS_CHANNEL_ID,
+  TEAMS_HUMAN_USER_ID,
+  TEAMS_PARENT_MESSAGE_ID,
+  TEAMS_RAW_MESSAGES,
+  TEAMS_SERVICE_URL,
+  TEAMS_TEAM_ID,
 } from "./fixtures/replay/fetch-messages";
 import {
   createGchatTestContext,
   createSlackTestContext,
+  createTeamsTestContext,
   type GchatTestContext,
   type SlackTestContext,
+  type TeamsTestContext,
 } from "./replay-test-utils";
+import {
+  createMockGraphClient,
+  injectMockGraphClient,
+  type MockGraphClient,
+} from "./teams-utils";
 
 describe("fetchMessages Replay Tests", () => {
   describe("Google Chat", () => {
@@ -419,6 +433,228 @@ describe("fetchMessages Replay Tests", () => {
       expect(result.messages[4].text).toBe("2");
     });
   });
+
+  describe("Teams", () => {
+    let ctx: TeamsTestContext;
+    let mockGraphClient: MockGraphClient;
+
+    // Build Teams thread ID in the expected format
+    const conversationId = `${TEAMS_CHANNEL_ID};messageid=${TEAMS_PARENT_MESSAGE_ID}`;
+    const encodedConversationId =
+      Buffer.from(conversationId).toString("base64url");
+    const encodedServiceUrl =
+      Buffer.from(TEAMS_SERVICE_URL).toString("base64url");
+    const TEAMS_THREAD_ID = `teams:${encodedConversationId}:${encodedServiceUrl}`;
+
+    beforeEach(async () => {
+      vi.clearAllMocks();
+
+      ctx = createTeamsTestContext(
+        { botName: "Chat SDK Demo", appId: TEAMS_BOT_APP_ID },
+        {},
+      );
+
+      mockGraphClient = createMockGraphClient();
+      injectMockGraphClient(ctx.adapter, mockGraphClient);
+
+      // Connect the state adapter before using it
+      await ctx.chat.getState().connect();
+
+      // Set up channel context in state so fetchMessages can find team/channel info
+      const channelContext = {
+        teamId: TEAMS_TEAM_ID,
+        channelId: TEAMS_CHANNEL_ID,
+        tenantId: "ed6e6740-934d-4088-a05e-caa14d8d89ee",
+      };
+      await ctx.chat
+        .getState()
+        .set(
+          `teams:channelContext:${TEAMS_CHANNEL_ID}`,
+          JSON.stringify(channelContext),
+        );
+
+      // Mock Graph API to return actual recorded messages
+      // Note: Graph API returns newest first (desc order), so we reverse the fixture
+      mockGraphClient.setResponses([
+        { value: [...(TEAMS_RAW_MESSAGES as unknown[])].reverse() },
+      ]);
+    });
+
+    afterEach(async () => {
+      await ctx.chat.shutdown();
+    });
+
+    it("should call Graph API with correct endpoint", async () => {
+      await ctx.adapter.fetchMessages(TEAMS_THREAD_ID, {
+        limit: 25,
+        direction: "backward",
+      });
+
+      // Verify an API call was made
+      expect(mockGraphClient.apiCalls.length).toBeGreaterThan(0);
+      // Uses chats endpoint (channel context requires webhook handling to populate)
+      expect(mockGraphClient.apiCalls[0].url).toContain("/chats/");
+      expect(mockGraphClient.apiCalls[0].url).toContain("/messages");
+    });
+
+    it("should return all messages in chronological order", async () => {
+      const result = await ctx.adapter.fetchMessages(TEAMS_THREAD_ID, {
+        limit: 100,
+        direction: "backward",
+      });
+
+      // Should have all 19 messages from the fixture
+      expect(result.messages).toHaveLength(19);
+
+      // Extract just the numbered messages (filter out bot card messages)
+      // Note: Recording has numbers 1-13 (no "Hey" or "14" as those are parent/missing)
+      const expectedNumbers = [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9",
+        "10",
+        "11",
+        "12",
+        "13",
+      ];
+      const numberedMessages = result.messages.filter(
+        (m) => !m.author.isBot && expectedNumbers.includes(m.text || ""),
+      );
+
+      // Should have exactly 13 numbered messages (1-13)
+      expect(numberedMessages).toHaveLength(13);
+
+      // Verify they are in correct chronological order
+      const texts = numberedMessages.map((m) => m.text);
+      expect(texts).toEqual(expectedNumbers);
+    });
+
+    it("should return messages in chronological order with forward direction", async () => {
+      const result = await ctx.adapter.fetchMessages(TEAMS_THREAD_ID, {
+        limit: 100,
+        direction: "forward",
+      });
+
+      expect(result.messages).toHaveLength(19);
+
+      // Extract numbered messages and verify order
+      const expectedNumbers = [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9",
+        "10",
+        "11",
+        "12",
+        "13",
+      ];
+      const numberedMessages = result.messages.filter(
+        (m) => !m.author.isBot && expectedNumbers.includes(m.text || ""),
+      );
+      const texts = numberedMessages.map((m) => m.text);
+      expect(texts).toEqual(expectedNumbers);
+    });
+
+    it("should correctly identify bot vs human messages", async () => {
+      const result = await ctx.adapter.fetchMessages(TEAMS_THREAD_ID, {
+        limit: 100,
+      });
+
+      const botMessages = result.messages.filter((m) => m.author.isBot);
+      const humanMessages = result.messages.filter((m) => !m.author.isBot);
+
+      // 6 bot messages (2 welcome/fetch cards, 3 "Thanks", 1 additional card)
+      expect(botMessages).toHaveLength(6);
+      // 13 human messages (numbered 1-13)
+      expect(humanMessages).toHaveLength(13);
+
+      // All bot messages should have isMe: true
+      for (const msg of botMessages) {
+        expect(msg.author.isMe).toBe(true);
+        expect(msg.author.userId).toBe(TEAMS_BOT_APP_ID);
+      }
+
+      // All human messages should have isMe: false
+      for (const msg of humanMessages) {
+        expect(msg.author.isMe).toBe(false);
+        expect(msg.author.userId).toBe(TEAMS_HUMAN_USER_ID);
+      }
+    });
+
+    it("should handle adaptive card messages", async () => {
+      const result = await ctx.adapter.fetchMessages(TEAMS_THREAD_ID, {
+        limit: 100,
+      });
+
+      // Find messages that have adaptive card attachments
+      const cardMessages = result.messages.filter((m) => {
+        const raw = m.raw as {
+          attachments?: Array<{ contentType?: string }>;
+        };
+        return raw.attachments?.some(
+          (a) => a.contentType === "application/vnd.microsoft.card.adaptive",
+        );
+      });
+
+      // Should have 3 card messages in this recording
+      expect(cardMessages).toHaveLength(3);
+
+      // All should be from the bot
+      for (const msg of cardMessages) {
+        expect(msg.author.isBot).toBe(true);
+        expect(msg.author.isMe).toBe(true);
+      }
+    });
+
+    it("should extract card titles for bot messages (BUG CHECK)", async () => {
+      const result = await ctx.adapter.fetchMessages(TEAMS_THREAD_ID, {
+        limit: 100,
+      });
+
+      // Find the Welcome card message (first bot message with card)
+      const cardMessages = result.messages.filter((m) => {
+        const raw = m.raw as {
+          attachments?: Array<{ contentType?: string; content?: string }>;
+        };
+        return raw.attachments?.some(
+          (a) =>
+            a.contentType === "application/vnd.microsoft.card.adaptive" &&
+            a.content?.includes("Welcome"),
+        );
+      });
+
+      expect(cardMessages.length).toBeGreaterThan(0);
+
+      // The bug: card messages should have text extracted from the card title
+      // Before fix: text would be empty string ""
+      // After fix: text should be "👋 Welcome!" or similar
+      const welcomeCard = cardMessages[0];
+      expect(welcomeCard.text).not.toBe("");
+      expect(welcomeCard.text).toContain("Welcome");
+    });
+
+    it("should respect limit parameter with backward direction", async () => {
+      // For backward direction, we're getting the last N messages
+      const result = await ctx.adapter.fetchMessages(TEAMS_THREAD_ID, {
+        limit: 5,
+        direction: "backward",
+      });
+
+      // Backward gets last 5 from 19 messages
+      expect(result.messages).toHaveLength(5);
+    });
+  });
 });
 
 describe("allMessages Replay Tests", () => {
@@ -645,6 +881,100 @@ describe("allMessages Replay Tests", () => {
         limit: 100,
         cursor: undefined,
       });
+    });
+  });
+
+  describe("Teams", () => {
+    let ctx: TeamsTestContext;
+    let mockGraphClient: MockGraphClient;
+
+    // Build Teams thread ID in the expected format
+    const conversationId = `${TEAMS_CHANNEL_ID};messageid=${TEAMS_PARENT_MESSAGE_ID}`;
+    const encodedConversationId =
+      Buffer.from(conversationId).toString("base64url");
+    const encodedServiceUrl =
+      Buffer.from(TEAMS_SERVICE_URL).toString("base64url");
+    const TEAMS_THREAD_ID = `teams:${encodedConversationId}:${encodedServiceUrl}`;
+
+    beforeEach(async () => {
+      vi.clearAllMocks();
+
+      ctx = createTeamsTestContext(
+        { botName: "Chat SDK Demo", appId: TEAMS_BOT_APP_ID },
+        {},
+      );
+
+      mockGraphClient = createMockGraphClient();
+      injectMockGraphClient(ctx.adapter, mockGraphClient);
+
+      // Connect the state adapter before using it
+      await ctx.chat.getState().connect();
+
+      // Set up channel context in state
+      const channelContext = {
+        teamId: TEAMS_TEAM_ID,
+        channelId: TEAMS_CHANNEL_ID,
+        tenantId: "ed6e6740-934d-4088-a05e-caa14d8d89ee",
+      };
+      await ctx.chat
+        .getState()
+        .set(
+          `teams:channelContext:${TEAMS_CHANNEL_ID}`,
+          JSON.stringify(channelContext),
+        );
+
+      // Mock Graph API to return actual recorded messages
+      // Note: Graph API returns newest first (desc order), so we reverse the fixture
+      mockGraphClient.setResponses([
+        { value: [...(TEAMS_RAW_MESSAGES as unknown[])].reverse() },
+      ]);
+    });
+
+    afterEach(async () => {
+      await ctx.chat.shutdown();
+    });
+
+    it("should iterate all messages in chronological order via thread.allMessages", async () => {
+      const stateAdapter = createMemoryState();
+      const thread = new ThreadImpl({
+        id: TEAMS_THREAD_ID,
+        adapter: ctx.adapter,
+        channelId: TEAMS_CHANNEL_ID,
+        stateAdapter,
+      });
+
+      // Collect all messages from the async iterator
+      const messages = [];
+      for await (const msg of thread.allMessages) {
+        messages.push(msg);
+      }
+
+      // Should have all 19 messages
+      expect(messages).toHaveLength(19);
+
+      // Extract numbered messages and verify chronological order (1-13 in this recording)
+      const expectedNumbers = [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9",
+        "10",
+        "11",
+        "12",
+        "13",
+      ];
+      const numberedMessages = messages.filter((m) =>
+        expectedNumbers.includes(m.text || ""),
+      );
+      expect(numberedMessages).toHaveLength(13);
+
+      const texts = numberedMessages.map((m) => m.text);
+      expect(texts).toEqual(expectedNumbers);
     });
   });
 });
