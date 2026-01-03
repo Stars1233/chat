@@ -40,7 +40,7 @@ importers:
         version: link:../../packages/adapter-teams
       chat:
         specifier: workspace:*
-        version: link:../../packages/chat-sdk
+        version: link:../../packages/chat
       next:
         specifier: ^16.1.0
         version: 16.1.0(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
@@ -77,7 +77,7 @@ importers:
     dependencies:
       chat:
         specifier: workspace:*
-        version: link:../chat-sdk
+        version: link:../chat
       googleapis:
         specifier: ^144.0.0
         version: 144.0.0
@@ -102,7 +102,7 @@ importers:
         version: 7.13.0
       chat:
         specifier: workspace:*
-        version: link:../chat-sdk
+        version: link:../chat
     devDependencies:
       '@types/node':
         specifier: ^22.10.2
@@ -124,7 +124,7 @@ importers:
         version: 4.23.3
       chat:
         specifier: workspace:*
-        version: link:../chat-sdk
+        version: link:../chat
     devDependencies:
       '@types/node':
         specifier: ^22.10.2
@@ -139,7 +139,7 @@ importers:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@22.19.3)
 
-  packages/chat-sdk:
+  packages/chat:
     dependencies:
       mdast-util-to-string:
         specifier: ^4.0.0
@@ -189,7 +189,7 @@ importers:
         version: link:../adapter-teams
       chat:
         specifier: workspace:*
-        version: link:../chat-sdk
+        version: link:../chat
     devDependencies:
       '@types/node':
         specifier: ^22.10.2
@@ -205,7 +205,7 @@ importers:
     dependencies:
       chat:
         specifier: workspace:*
-        version: link:../chat-sdk
+        version: link:../chat
       ioredis:
         specifier: ^5.4.1
         version: 5.8.2
@@ -227,7 +227,7 @@ importers:
     dependencies:
       chat:
         specifier: workspace:*
-        version: link:../chat-sdk
+        version: link:../chat
     devDependencies:
       '@types/node':
         specifier: ^22.10.2
@@ -246,7 +246,7 @@ importers:
     dependencies:
       chat:
         specifier: workspace:*
-        version: link:../chat-sdk
+        version: link:../chat
       redis:
         specifier: ^4.7.0
         version: 4.7.1

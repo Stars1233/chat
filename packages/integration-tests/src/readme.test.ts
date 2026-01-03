@@ -49,7 +49,7 @@ function createTempProject(codeBlocks: string[]): string {
       // Use typeRoots to find @types/node from the repo
       typeRoots: [join(REPO_ROOT, "node_modules/@types")],
       paths: {
-        chat: [join(__dirname, "../../chat-sdk/src/index.ts")],
+        chat: [join(__dirname, "../../chat/src/index.ts")],
         "@chat-adapter/slack": [
           join(__dirname, "../../adapter-slack/src/index.ts"),
         ],
