@@ -55,6 +55,7 @@ interface GraphChatMessage {
   id: string;
   createdDateTime?: string;
   lastModifiedDateTime?: string;
+  replyToId?: string; // ID of parent message for channel threads
   body?: {
     content?: string;
     contentType?: "text" | "html";
@@ -950,9 +951,18 @@ export class TeamsAdapter implements Adapter<TeamsThreadId, unknown> {
     const cursor = options.cursor;
     const direction = options.direction ?? "backward";
 
+    // Extract thread root message ID from conversation ID if present
+    // Format: "19:xxx@thread.tacv2;messageid=1767297849909"
+    const messageIdMatch = conversationId.match(/;messageid=(\d+)/);
+    const threadRootId = messageIdMatch?.[1];
+
+    // Strip ;messageid= from conversation ID for Graph API call
+    const baseConversationId = conversationId.replace(/;messageid=\d+/, "");
+
     try {
       this.logger?.debug("Teams Graph API: fetching messages", {
-        conversationId,
+        conversationId: baseConversationId,
+        threadRootId,
         limit,
         cursor,
         direction,
@@ -971,12 +981,27 @@ export class TeamsAdapter implements Adapter<TeamsThreadId, unknown> {
       let graphMessages: GraphChatMessage[];
       let hasMoreMessages = false;
 
+      // Helper to filter messages to the thread if threadRootId is present
+      const filterToThread = (
+        messages: GraphChatMessage[],
+      ): GraphChatMessage[] => {
+        if (!threadRootId) return messages;
+        // Include messages that are:
+        // 1. The thread root message itself (id ends with the threadRootId)
+        // 2. Replies to the thread root (replyToId ends with the threadRootId)
+        return messages.filter(
+          (msg) =>
+            msg.id?.endsWith(threadRootId) ||
+            msg.replyToId?.endsWith(threadRootId),
+        );
+      };
+
       if (direction === "forward") {
         // Forward direction: need to fetch ALL messages to find the oldest ones
         // since API only supports descending order. Paginate with max 50 per request.
         const allMessages: GraphChatMessage[] = [];
         let nextLink: string | undefined;
-        const apiUrl = `/chats/${encodeURIComponent(conversationId)}/messages`;
+        const apiUrl = `/chats/${encodeURIComponent(baseConversationId)}/messages`;
 
         do {
           const request = nextLink
@@ -992,42 +1017,71 @@ export class TeamsAdapter implements Adapter<TeamsThreadId, unknown> {
           nextLink = response["@odata.nextLink"];
         } while (nextLink);
 
+        // Filter to thread if applicable
+        const threadMessages = filterToThread(allMessages);
+
         // Reverse to get chronological order (oldest first)
-        allMessages.reverse();
+        threadMessages.reverse();
 
         // Find starting position based on cursor (cursor is a timestamp)
         let startIndex = 0;
         if (cursor) {
-          startIndex = allMessages.findIndex(
+          startIndex = threadMessages.findIndex(
             (msg) => msg.createdDateTime && msg.createdDateTime > cursor,
           );
-          if (startIndex === -1) startIndex = allMessages.length;
+          if (startIndex === -1) startIndex = threadMessages.length;
         }
 
         // Check if there are more messages beyond our slice
-        hasMoreMessages = startIndex + limit < allMessages.length;
+        hasMoreMessages = startIndex + limit < threadMessages.length;
         // Take only the requested limit
-        graphMessages = allMessages.slice(startIndex, startIndex + limit);
+        graphMessages = threadMessages.slice(startIndex, startIndex + limit);
       } else {
-        // Backward direction: simple single-page fetch
-        let request = this.graphClient
-          .api(`/chats/${encodeURIComponent(conversationId)}/messages`)
-          .top(limit)
-          .orderby("createdDateTime desc");
+        // Backward direction: fetch pages and filter to thread
+        // We may need to fetch multiple pages to get enough thread messages
+        const threadMessages: GraphChatMessage[] = [];
+        let nextLink: string | undefined;
+        const apiUrl = `/chats/${encodeURIComponent(baseConversationId)}/messages`;
+        let fetchedEnough = false;
 
-        if (cursor) {
-          // Get messages older than cursor
-          request = request.filter(`createdDateTime lt ${cursor}`);
-        }
+        do {
+          let request = nextLink
+            ? this.graphClient.api(nextLink)
+            : this.graphClient
+                .api(apiUrl)
+                .top(50) // Fetch max per page
+                .orderby("createdDateTime desc");
 
-        const response = await request.get();
-        graphMessages = (response.value || []) as GraphChatMessage[];
+          if (!nextLink && cursor) {
+            // Get messages older than cursor
+            request = request.filter(`createdDateTime lt ${cursor}`);
+          }
+
+          const response = await request.get();
+          const pageMessages = (response.value || []) as GraphChatMessage[];
+
+          // Filter page to thread and add to results
+          const threadPageMessages = filterToThread(pageMessages);
+          threadMessages.push(...threadPageMessages);
+
+          nextLink = response["@odata.nextLink"];
+
+          // Stop if we have enough messages for the requested limit
+          if (threadMessages.length >= limit) {
+            fetchedEnough = true;
+          }
+        } while (nextLink && !fetchedEnough);
+
+        // Trim to requested limit (we may have more due to fetching full pages)
+        const limitedMessages = threadMessages.slice(0, limit);
 
         // API returns newest first, reverse to get chronological order
-        graphMessages = graphMessages.reverse();
+        graphMessages = limitedMessages.reverse();
 
-        // We got a full page if we got the requested limit
-        hasMoreMessages = graphMessages.length >= limit;
+        // We have more messages if we either:
+        // - Still have a nextLink (more pages available)
+        // - Or we had to trim messages
+        hasMoreMessages = !!nextLink || threadMessages.length > limit;
       }
 
       this.logger?.debug("Teams Graph API: fetched messages", {
