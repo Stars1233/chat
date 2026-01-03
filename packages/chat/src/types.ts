@@ -90,6 +90,11 @@ export interface ChatConfig<
    * Pass "silent" to disable all logging.
    */
   logger?: Logger | LogLevel;
+  /**
+   * Update interval for fallback streaming (post + edit) in milliseconds.
+   * Defaults to 500ms. Lower values provide smoother updates but may hit rate limits.
+   */
+  streamingUpdateIntervalMs?: number;
 }
 
 /**
@@ -139,14 +144,14 @@ export interface Adapter<TThreadId = unknown, TRawMessage = unknown> {
   /** Post a message to a thread */
   postMessage(
     threadId: string,
-    message: PostableMessage,
+    message: AdapterPostableMessage,
   ): Promise<RawMessage<TRawMessage>>;
 
   /** Edit an existing message */
   editMessage(
     threadId: string,
     messageId: string,
-    message: PostableMessage,
+    message: AdapterPostableMessage,
   ): Promise<RawMessage<TRawMessage>>;
 
   /** Delete a message */
@@ -218,6 +223,36 @@ export interface Adapter<TThreadId = unknown, TRawMessage = unknown> {
    * @returns True if the thread is a DM, false otherwise
    */
   isDM?(threadId: string): boolean;
+
+  /**
+   * Stream a message using platform-native streaming APIs.
+   *
+   * The adapter consumes the async iterable and handles the entire streaming lifecycle.
+   * Only available on platforms with native streaming support (e.g., Slack).
+   *
+   * @param threadId - The thread to stream to
+   * @param textStream - Async iterable of text chunks (e.g., from AI SDK)
+   * @param options - Platform-specific streaming options
+   * @returns The raw message after streaming completes
+   */
+  stream?(
+    threadId: string,
+    textStream: AsyncIterable<string>,
+    options?: StreamOptions,
+  ): Promise<RawMessage<TRawMessage>>;
+}
+
+/**
+ * Options for streaming messages.
+ * Platform-specific options are passed through to the adapter.
+ */
+export interface StreamOptions {
+  /** Slack: The user ID to stream to (for AI assistant context) */
+  recipientUserId?: string;
+  /** Slack: The team/workspace ID */
+  recipientTeamId?: string;
+  /** Minimum interval between updates in ms (default: 1000). Used for fallback mode (GChat/Teams). */
+  updateIntervalMs?: number;
 }
 
 /** Internal interface for Chat instance passed to adapters */
@@ -329,7 +364,18 @@ export interface Lock {
 // Thread
 // =============================================================================
 
-export interface Thread<TRawMessage = unknown> {
+/** Default TTL for thread state (30 days in milliseconds) */
+export const THREAD_STATE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+
+/**
+ * Thread interface with support for custom state.
+ * @template TState - Custom state type stored per-thread (default: Record<string, unknown>)
+ * @template TRawMessage - Platform-specific raw message type
+ */
+export interface Thread<
+  TState = Record<string, unknown>,
+  TRawMessage = unknown,
+> {
   /** Unique thread ID (format: "adapter:channel:thread") */
   readonly id: string;
   /** The adapter this thread belongs to */
@@ -338,6 +384,41 @@ export interface Thread<TRawMessage = unknown> {
   readonly channelId: string;
   /** Whether this is a direct message conversation */
   readonly isDM: boolean;
+
+  /**
+   * Get the current thread state.
+   * Returns null if no state has been set.
+   *
+   * @example
+   * ```typescript
+   * const state = await thread.state;
+   * if (state?.aiMode) {
+   *   // AI mode is enabled
+   * }
+   * ```
+   */
+  readonly state: Promise<TState | null>;
+
+  /**
+   * Set the thread state. Merges with existing state by default.
+   * State is persisted for 30 days.
+   *
+   * @param state - Partial state to merge, or full state if replace is true
+   * @param options - Options for setting state
+   *
+   * @example
+   * ```typescript
+   * // Merge with existing state
+   * await thread.setState({ aiMode: true });
+   *
+   * // Replace entire state
+   * await thread.setState({ aiMode: true }, { replace: true });
+   * ```
+   */
+  setState(
+    state: Partial<TState>,
+    options?: { replace?: boolean },
+  ): Promise<void>;
 
   /** Recently fetched messages (cached) */
   recentMessages: Message<TRawMessage>[];
@@ -381,7 +462,11 @@ export interface Thread<TRawMessage = unknown> {
   /**
    * Post a message to this thread.
    *
-   * @param message - String, PostableMessage, or JSX Card element to send
+   * Supports text, markdown, cards, and streaming from async iterables.
+   * When posting a stream (e.g., from AI SDK), uses platform-native streaming
+   * APIs when available (Slack), or falls back to post + edit with throttling.
+   *
+   * @param message - String, PostableMessage, JSX Card, or AsyncIterable<string>
    * @returns A SentMessage with methods to edit, delete, or add reactions
    *
    * @example
@@ -395,12 +480,16 @@ export interface Thread<TRawMessage = unknown> {
    * // With emoji
    * await thread.post(`${emoji.thumbs_up} Great job!`);
    *
-   * // JSX Card (with @jsxImportSource chat-sdk)
+   * // JSX Card (with @jsxImportSource chat)
    * await thread.post(
    *   <Card title="Welcome!">
    *     <Text>Hello world</Text>
    *   </Card>
    * );
+   *
+   * // Stream from AI SDK
+   * const result = await agent.stream({ prompt: message.text });
+   * await thread.post(result.textStream);
    * ```
    */
   post(
@@ -554,6 +643,18 @@ export interface SentMessage<TRawMessage = unknown>
 // =============================================================================
 
 /**
+ * Input type for adapter postMessage/editMessage methods.
+ * This excludes streams since adapters handle content synchronously.
+ */
+export type AdapterPostableMessage =
+  | string
+  | PostableRaw
+  | PostableMarkdown
+  | PostableAst
+  | PostableCard
+  | CardElement;
+
+/**
  * A message that can be posted to a thread.
  *
  * - `string` - Raw text, passed through as-is to the platform
@@ -562,14 +663,9 @@ export interface SentMessage<TRawMessage = unknown>
  * - `{ ast: Root }` - mdast AST, converted to platform format
  * - `{ card: CardElement }` - Rich card with buttons (Block Kit / Adaptive Cards / GChat Cards)
  * - `CardElement` - Direct card element
+ * - `AsyncIterable<string>` - Streaming text (e.g., from AI SDK's textStream)
  */
-export type PostableMessage =
-  | string
-  | PostableRaw
-  | PostableMarkdown
-  | PostableAst
-  | PostableCard
-  | CardElement;
+export type PostableMessage = AdapterPostableMessage | AsyncIterable<string>;
 
 export interface PostableRaw {
   /** Raw text passed through as-is to the platform */
@@ -674,8 +770,8 @@ export interface FileUpload {
  * });
  * ```
  */
-export type MentionHandler = (
-  thread: Thread,
+export type MentionHandler<TState = Record<string, unknown>> = (
+  thread: Thread<TState>,
   message: Message,
 ) => Promise<void>;
 
@@ -685,8 +781,8 @@ export type MentionHandler = (
  * Registered via `chat.onNewMessage(pattern, handler)`. Called when a message
  * matches the pattern in an unsubscribed thread.
  */
-export type MessageHandler = (
-  thread: Thread,
+export type MessageHandler<TState = Record<string, unknown>> = (
+  thread: Thread<TState>,
   message: Message,
 ) => Promise<void>;
 
@@ -713,8 +809,8 @@ export type MessageHandler = (
  * });
  * ```
  */
-export type SubscribedMessageHandler = (
-  thread: Thread,
+export type SubscribedMessageHandler<TState = Record<string, unknown>> = (
+  thread: Thread<TState>,
   message: Message,
 ) => Promise<void>;
 

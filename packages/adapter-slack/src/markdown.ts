@@ -11,6 +11,7 @@
  */
 
 import {
+  type AdapterPostableMessage,
   BaseFormatConverter,
   type Code,
   type Content,
@@ -19,7 +20,6 @@ import {
   type InlineCode,
   type Link,
   type Paragraph,
-  type PostableMessage,
   parseMarkdown,
   type Root,
   type Strong,
@@ -38,7 +38,7 @@ export class SlackFormatConverter extends BaseFormatConverter {
   /**
    * Override renderPostable to convert @mentions in plain strings.
    */
-  override renderPostable(message: PostableMessage): string {
+  override renderPostable(message: AdapterPostableMessage): string {
     if (typeof message === "string") {
       return this.convertMentionsToSlack(message);
     }

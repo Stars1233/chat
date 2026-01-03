@@ -1,6 +1,7 @@
 import type {
   ActionEvent,
   Adapter,
+  AdapterPostableMessage,
   Attachment,
   ChatInstance,
   EmojiValue,
@@ -9,7 +10,6 @@ import type {
   FormattedContent,
   Logger,
   Message,
-  PostableMessage,
   RawMessage,
   ReactionEvent,
   StateAdapter,
@@ -270,6 +270,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
     // Note: chat.spaces.create requires domain-wide delegation to work
     const scopes = [
       "https://www.googleapis.com/auth/chat.bot",
+      "https://www.googleapis.com/auth/chat.messages.readonly",
       "https://www.googleapis.com/auth/chat.messages.reactions.create",
       "https://www.googleapis.com/auth/chat.messages.reactions",
       "https://www.googleapis.com/auth/chat.spaces.create",
@@ -316,6 +317,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
           scopes: [
             "https://www.googleapis.com/auth/chat.spaces",
             "https://www.googleapis.com/auth/chat.spaces.create",
+            "https://www.googleapis.com/auth/chat.messages.readonly",
           ],
           subject: this.impersonateUser,
         });
@@ -329,6 +331,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
           scopes: [
             "https://www.googleapis.com/auth/chat.spaces",
             "https://www.googleapis.com/auth/chat.spaces.create",
+            "https://www.googleapis.com/auth/chat.messages.readonly",
           ],
           clientOptions: {
             subject: this.impersonateUser,
@@ -1112,7 +1115,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
 
   async postMessage(
     threadId: string,
-    message: PostableMessage,
+    message: AdapterPostableMessage,
   ): Promise<RawMessage<unknown>> {
     const { spaceName, threadName } = this.decodeThreadId(threadId);
 
@@ -1208,10 +1211,10 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
   }
 
   /**
-   * Extract card element from a PostableMessage if present.
+   * Extract card element from a message if present.
    */
   private extractCard(
-    message: PostableMessage,
+    message: AdapterPostableMessage,
   ): import("chat").CardElement | null {
     if (isCardElement(message)) {
       return message;
@@ -1223,9 +1226,9 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
   }
 
   /**
-   * Extract files from a PostableMessage if present.
+   * Extract files from a message if present.
    */
-  private extractFiles(message: PostableMessage): FileUpload[] {
+  private extractFiles(message: AdapterPostableMessage): FileUpload[] {
     if (typeof message === "object" && message !== null && "files" in message) {
       return (message as { files?: FileUpload[] }).files ?? [];
     }
@@ -1296,7 +1299,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
   async editMessage(
     threadId: string,
     messageId: string,
-    message: PostableMessage,
+    message: AdapterPostableMessage,
   ): Promise<RawMessage<unknown>> {
     try {
       // Check if message contains a card
@@ -1569,13 +1572,17 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
   ): Promise<Message<unknown>[]> {
     const { spaceName } = this.decodeThreadId(threadId);
 
+    // Use impersonated client if available (has better permissions for listing messages)
+    const api = this.impersonatedChatApi || this.chatApi;
+
     try {
       this.logger?.debug("GChat API: spaces.messages.list", {
         spaceName,
         pageSize: options.limit || 100,
+        impersonated: !!this.impersonatedChatApi,
       });
 
-      const response = await this.chatApi.spaces.messages.list({
+      const response = await api.spaces.messages.list({
         parent: spaceName,
         pageSize: options.limit || 100,
         pageToken: options.before,

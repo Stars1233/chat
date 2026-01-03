@@ -1,0 +1,97 @@
+{
+  "botName": "Chat SDK Bot",
+  "botUserId": "U0A56JUFP9A",
+  "aiMention": {
+    "token": "VeYDktLdwHw0CTvugbEfRazy",
+    "team_id": "T03SH7G01GU",
+    "context_team_id": "T03SH7G01GU",
+    "context_enterprise_id": null,
+    "api_app_id": "A0A5FUXP1ED",
+    "event": {
+      "type": "message",
+      "user": "U03STHCA1JM",
+      "ts": "1767406613.568609",
+      "client_msg_id": "8c5824aa-018c-4df5-9cc6-aa9b44ec8d8b",
+      "text": "<@U0A56JUFP9A> AI What is love?",
+      "team": "T03SH7G01GU",
+      "blocks": [
+        {
+          "type": "rich_text",
+          "block_id": "Z8Zz/",
+          "elements": [
+            {
+              "type": "rich_text_section",
+              "elements": [
+                { "type": "user", "user_id": "U0A56JUFP9A" },
+                { "type": "text", "text": " AI What is love?" }
+              ]
+            }
+          ]
+        }
+      ],
+      "channel": "C0A511MBCUW",
+      "event_ts": "1767406613.568609",
+      "channel_type": "channel"
+    },
+    "type": "event_callback",
+    "event_id": "Ev0A6CPRGKL3",
+    "event_time": 1767406613,
+    "authorizations": [
+      {
+        "enterprise_id": null,
+        "team_id": "T03SH7G01GU",
+        "user_id": "U0A56JUFP9A",
+        "is_bot": true,
+        "is_enterprise_install": false
+      }
+    ],
+    "is_ext_shared_channel": false,
+    "event_context": "4-eyJldCI6Im1lc3NhZ2UiLCJ0aWQiOiJUMDNTSDdHMDFHVSIsImFpZCI6IkEwQTVGVVhQMUVEIiwiY2lkIjoiQzBBNTExTUJDVVcifQ"
+  },
+  "followUp": {
+    "token": "VeYDktLdwHw0CTvugbEfRazy",
+    "team_id": "T03SH7G01GU",
+    "context_team_id": "T03SH7G01GU",
+    "context_enterprise_id": null,
+    "api_app_id": "A0A5FUXP1ED",
+    "event": {
+      "type": "message",
+      "user": "U03STHCA1JM",
+      "ts": "1767406631.679539",
+      "client_msg_id": "452f5bd0-7ea2-462d-ab9e-5efcea8ece92",
+      "text": "Who are you?",
+      "team": "T03SH7G01GU",
+      "thread_ts": "1767406613.568609",
+      "parent_user_id": "U03STHCA1JM",
+      "blocks": [
+        {
+          "type": "rich_text",
+          "block_id": "Ls7Lf",
+          "elements": [
+            {
+              "type": "rich_text_section",
+              "elements": [{ "type": "text", "text": "Who are you?" }]
+            }
+          ]
+        }
+      ],
+      "channel": "C0A511MBCUW",
+      "event_ts": "1767406631.679539",
+      "channel_type": "channel"
+    },
+    "type": "event_callback",
+    "event_id": "Ev0A6K5EK4SW",
+    "event_time": 1767406631,
+    "authorizations": [
+      {
+        "enterprise_id": null,
+        "team_id": "T03SH7G01GU",
+        "user_id": "U0A56JUFP9A",
+        "is_bot": true,
+        "is_enterprise_install": false
+      }
+    ],
+    "is_ext_shared_channel": false,
+    "event_context": "4-eyJldCI6Im1lc3NhZ2UiLCJ0aWQiOiJUMDNTSDdHMDFHVSIsImFpZCI6IkEwQTVGVVhQMUVEIiwiY2lkIjoiQzBBNTExTUJDVVcifQ"
+  }
+}

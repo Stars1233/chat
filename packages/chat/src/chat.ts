@@ -25,9 +25,9 @@ const DEFAULT_LOCK_TTL_MS = 30_000; // 30 seconds
 /** TTL for message deduplication entries */
 const DEDUPE_TTL_MS = 60_000; // 60 seconds
 
-interface MessagePattern {
+interface MessagePattern<TState = Record<string, unknown>> {
   pattern: RegExp;
-  handler: MessageHandler;
+  handler: MessageHandler<TState>;
 }
 
 /** Filter can be EmojiValue objects, emoji names, or raw emoji formats */
@@ -61,10 +61,19 @@ type Webhooks<TAdapters extends Record<string, Adapter>> = {
 };
 
 /**
- * Main Chat class with type-safe adapter inference.
+ * Main Chat class with type-safe adapter inference and custom thread state.
+ *
+ * @template TAdapters - Map of adapter names to Adapter instances
+ * @template TState - Custom state type stored per-thread (default: Record<string, unknown>)
  *
  * @example
- * const chat = new Chat({
+ * // Define custom thread state type
+ * interface MyThreadState {
+ *   aiMode?: boolean;
+ *   userName?: string;
+ * }
+ *
+ * const chat = new Chat<typeof adapters, MyThreadState>({
  *   userName: "mybot",
  *   adapters: {
  *     slack: createSlackAdapter({ ... }),
@@ -73,21 +82,26 @@ type Webhooks<TAdapters extends Record<string, Adapter>> = {
  *   state: createMemoryState(),
  * });
  *
- * // Type-safe: only 'slack' and 'teams' are valid
- * chat.webhooks.slack(request, { waitUntil });
+ * // Type-safe thread state
+ * chat.onNewMention(async (thread, message) => {
+ *   await thread.setState({ aiMode: true });
+ *   const state = await thread.state; // Type: MyThreadState | null
+ * });
  */
 export class Chat<
   TAdapters extends Record<string, Adapter> = Record<string, Adapter>,
+  TState = Record<string, unknown>,
 > implements ChatInstance
 {
   private adapters: Map<string, Adapter>;
-  private state: StateAdapter;
+  private _stateAdapter: StateAdapter;
   private userName: string;
   private logger: Logger;
+  private _streamingUpdateIntervalMs: number;
 
-  private mentionHandlers: MentionHandler[] = [];
-  private messagePatterns: MessagePattern[] = [];
-  private subscribedMessageHandlers: SubscribedMessageHandler[] = [];
+  private mentionHandlers: MentionHandler<TState>[] = [];
+  private messagePatterns: MessagePattern<TState>[] = [];
+  private subscribedMessageHandlers: SubscribedMessageHandler<TState>[] = [];
   private reactionHandlers: ReactionPattern[] = [];
   private actionHandlers: ActionPattern[] = [];
 
@@ -104,8 +118,9 @@ export class Chat<
 
   constructor(config: ChatConfig<TAdapters>) {
     this.userName = config.userName;
-    this.state = config.state;
+    this._stateAdapter = config.state;
     this.adapters = new Map();
+    this._streamingUpdateIntervalMs = config.streamingUpdateIntervalMs ?? 500;
 
     // Initialize logger
     if (!config.logger) {
@@ -170,7 +185,7 @@ export class Chat<
 
   private async doInitialize(): Promise<void> {
     this.logger.info("Initializing chat instance...");
-    await this.state.connect();
+    await this._stateAdapter.connect();
     this.logger.debug("State connected");
 
     const initPromises = Array.from(this.adapters.values()).map(
@@ -194,7 +209,7 @@ export class Chat<
    */
   async shutdown(): Promise<void> {
     this.logger.info("Shutting down chat instance...");
-    await this.state.disconnect();
+    await this._stateAdapter.disconnect();
     this.initialized = false;
     this.initPromise = null;
     this.logger.info("Chat instance shut down");
@@ -226,7 +241,7 @@ export class Chat<
    * });
    * ```
    */
-  onNewMention(handler: MentionHandler): void {
+  onNewMention(handler: MentionHandler<TState>): void {
     this.mentionHandlers.push(handler);
     this.logger.debug("Registered mention handler");
   }
@@ -245,7 +260,7 @@ export class Chat<
    * });
    * ```
    */
-  onNewMessage(pattern: RegExp, handler: MessageHandler): void {
+  onNewMessage(pattern: RegExp, handler: MessageHandler<TState>): void {
     this.messagePatterns.push({ pattern, handler });
     this.logger.debug("Registered message pattern handler", {
       pattern: pattern.toString(),
@@ -275,7 +290,7 @@ export class Chat<
    * });
    * ```
    */
-  onSubscribedMessage(handler: SubscribedMessageHandler): void {
+  onSubscribedMessage(handler: SubscribedMessageHandler<TState>): void {
     this.subscribedMessageHandlers.push(handler);
     this.logger.debug("Registered subscribed message handler");
   }
@@ -470,7 +485,7 @@ export class Chat<
     }
 
     // Create thread for the action event
-    const isSubscribed = await this.state.isSubscribed(event.threadId);
+    const isSubscribed = await this._stateAdapter.isSubscribed(event.threadId);
     const thread = await this.createThread(
       event.adapter,
       event.threadId,
@@ -539,7 +554,7 @@ export class Chat<
     }
 
     // Create thread for the reaction event
-    const isSubscribed = await this.state.isSubscribed(event.threadId);
+    const isSubscribed = await this._stateAdapter.isSubscribed(event.threadId);
     const thread = await this.createThread(
       event.adapter,
       event.threadId,
@@ -598,7 +613,7 @@ export class Chat<
   }
 
   getState(): StateAdapter {
-    return this.state;
+    return this._stateAdapter;
   }
 
   getUserName(): string {
@@ -638,7 +653,7 @@ export class Chat<
    * });
    * ```
    */
-  async openDM(user: string | Author): Promise<Thread> {
+  async openDM(user: string | Author): Promise<Thread<TState>> {
     const userId = typeof user === "string" ? user : user.userId;
     const adapter = this.inferAdapterFromUserId(userId);
     if (!adapter.openDM) {
@@ -719,7 +734,7 @@ export class Chat<
     // Deduplicate messages - same message can arrive via multiple paths
     // (e.g., Slack message + app_mention events, GChat direct webhook + Pub/Sub)
     const dedupeKey = `dedupe:${adapter.name}:${message.id}`;
-    const alreadyProcessed = await this.state.get<boolean>(dedupeKey);
+    const alreadyProcessed = await this._stateAdapter.get<boolean>(dedupeKey);
     if (alreadyProcessed) {
       this.logger.debug("Skipping duplicate message", {
         adapter: adapter.name,
@@ -727,10 +742,13 @@ export class Chat<
       });
       return;
     }
-    await this.state.set(dedupeKey, true, DEDUPE_TTL_MS);
+    await this._stateAdapter.set(dedupeKey, true, DEDUPE_TTL_MS);
 
     // Try to acquire lock on thread
-    const lock = await this.state.acquireLock(threadId, DEFAULT_LOCK_TTL_MS);
+    const lock = await this._stateAdapter.acquireLock(
+      threadId,
+      DEFAULT_LOCK_TTL_MS,
+    );
     if (!lock) {
       this.logger.warn("Could not acquire lock on thread", { threadId });
       throw new LockError(
@@ -745,7 +763,7 @@ export class Chat<
       message.isMention = this.detectMention(adapter, message);
 
       // Check if this is a subscribed thread first
-      const isSubscribed = await this.state.isSubscribed(threadId);
+      const isSubscribed = await this._stateAdapter.isSubscribed(threadId);
       this.logger.debug("Subscription check", {
         threadId,
         isSubscribed,
@@ -810,7 +828,7 @@ export class Chat<
         });
       }
     } finally {
-      await this.state.releaseLock(lock);
+      await this._stateAdapter.releaseLock(lock);
       this.logger.debug("Lock released", { threadId });
     }
   }
@@ -820,7 +838,7 @@ export class Chat<
     threadId: string,
     initialMessage: Message,
     isSubscribedContext = false,
-  ): Promise<Thread> {
+  ): Promise<Thread<TState>> {
     // Parse thread ID to get channel info
     // Format: "adapter:channel:thread"
     const parts = threadId.split(":");
@@ -829,14 +847,16 @@ export class Chat<
     // Check if this is a DM
     const isDM = adapter.isDM?.(threadId) ?? false;
 
-    return new ThreadImpl({
+    return new ThreadImpl<TState>({
       id: threadId,
       adapter,
       channelId,
-      state: this.state,
+      stateAdapter: this._stateAdapter,
       initialMessage,
       isSubscribedContext,
       isDM,
+      currentMessage: initialMessage,
+      streamingUpdateIntervalMs: this._streamingUpdateIntervalMs,
     });
   }
 
@@ -876,8 +896,10 @@ export class Chat<
   }
 
   private async runHandlers(
-    handlers: Array<(thread: Thread, message: Message) => Promise<void>>,
-    thread: Thread,
+    handlers: Array<
+      (thread: Thread<TState>, message: Message) => Promise<void>
+    >,
+    thread: Thread<TState>,
     message: Message,
   ): Promise<void> {
     for (const handler of handlers) {

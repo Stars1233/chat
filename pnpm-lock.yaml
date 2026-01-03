@@ -38,12 +38,15 @@ importers:
       '@chat-adapter/teams':
         specifier: workspace:*
         version: link:../../packages/adapter-teams
+      ai:
+        specifier: ^6.0.5
+        version: 6.0.6(zod@4.3.3)
       chat:
         specifier: workspace:*
         version: link:../../packages/chat
       next:
         specifier: ^16.1.0
-        version: 16.1.0(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
+        version: 16.1.0(@opentelemetry/api@1.9.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
       react:
         specifier: ^19.0.0
         version: 19.2.3
@@ -119,6 +122,12 @@ importers:
 
   packages/adapter-teams:
     dependencies:
+      '@azure/identity':
+        specifier: ^4.13.0
+        version: 4.13.0
+      '@microsoft/microsoft-graph-client':
+        specifier: ^3.0.7
+        version: 3.0.7(@azure/identity@4.13.0)
       botbuilder:
         specifier: ^4.23.1
         version: 4.23.3
@@ -265,6 +274,22 @@ importers:
         version: 2.1.9(@types/node@22.19.3)
 
 packages:
+
+  '@ai-sdk/gateway@3.0.5':
+    resolution: {integrity: sha512-AtxA1wcoKTHr9uFoC5KZEXqJP4SMW4j3VbcliUECUYssbWbePJ9+b3AaCny1lxf1xhDK9EIyAgBOKhXoQSr9nA==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      zod: ^3.25.76 || ^4.1.8
+
+  '@ai-sdk/provider-utils@4.0.2':
+    resolution: {integrity: sha512-KaykkuRBdF/ffpI5bwpL4aSCmO/99p8/ci+VeHwJO8tmvXtiVAb99QeyvvvXmL61e9Zrvv4GBGoajW19xdjkVQ==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      zod: ^3.25.76 || ^4.1.8
+
+  '@ai-sdk/provider@3.0.1':
+    resolution: {integrity: sha512-2lR4w7mr9XrydzxBSjir4N6YMGdXD+Np1Sh0RXABh7tWdNFFwIeRI1Q+SaYZMbfL8Pg8RRLcrxQm51yxTLhokg==}
+    engines: {node: '>=18'}
 
   '@azure/abort-controller@2.1.2':
     resolution: {integrity: sha512-nBrLsEWm4J2u5LpAPjxADTlq3trDgVZZXHNKabeXZtpq3d3AbN/KGO82R87rdDz5/lYB024rtEf10/q0urNgsA==}
@@ -905,6 +930,24 @@ packages:
   '@manypkg/get-packages@1.1.3':
     resolution: {integrity: sha512-fo+QhuU3qE/2TQMQmbVMqaQ6EWbMhi4ABWP+O4AM1NqPBuy0OrApV5LO6BrrgnhtAHS2NH6RrVk9OL181tTi8A==}
 
+  '@microsoft/microsoft-graph-client@3.0.7':
+    resolution: {integrity: sha512-/AazAV/F+HK4LIywF9C+NYHcJo038zEnWkteilcxC1FM/uK/4NVGDKGrxx7nNq1ybspAroRKT4I1FHfxQzxkUw==}
+    engines: {node: '>=12.0.0'}
+    peerDependencies:
+      '@azure/identity': '*'
+      '@azure/msal-browser': '*'
+      buffer: '*'
+      stream-browserify: '*'
+    peerDependenciesMeta:
+      '@azure/identity':
+        optional: true
+      '@azure/msal-browser':
+        optional: true
+      buffer:
+        optional: true
+      stream-browserify:
+        optional: true
+
   '@napi-rs/wasm-runtime@1.1.1':
     resolution: {integrity: sha512-p64ah1M1ld8xjWv3qbvFwHiFVWrq1yFvV4f7w+mzaqiR4IlSgkqhcRdHwsGgomwzBH51sRY4NEowLxnaBjcW/A==}
 
@@ -970,6 +1013,10 @@ packages:
   '@nodelib/fs.walk@1.2.8':
     resolution: {integrity: sha512-oGB+UxlgWcgQkgwo8GcEGwemoTFt3FIO9ababBmaGwXIoBKZ+GTy0pP185beGg7Llih/NSHSV2XAs1lnznocSg==}
     engines: {node: '>= 8'}
+
+  '@opentelemetry/api@1.9.0':
+    resolution: {integrity: sha512-3giAOQvZiH5F9bMlMiv8+GSPMeqg0dbaeo58/0SlA9sxSqZhnUtxzX9/2FzyhS9sWQf5S0GJE0AKBrFqjpeYcg==}
+    engines: {node: '>=8.0.0'}
 
   '@oxc-resolver/binding-android-arm-eabi@11.16.2':
     resolution: {integrity: sha512-lVJbvydLQIDZHKUb6Zs9Rq80QVTQ9xdCQE30eC9/cjg4wsMoEOg65QZPymUAIVJotpUAWJD0XYcwE7ugfxx5kQ==}
@@ -1222,6 +1269,9 @@ packages:
     resolution: {integrity: sha512-ERcExbWrnkDN8ovoWWe6Wgt/usanj1dWUd18dJLpctUI4mlPS0nKt81Joh8VI+OPbNnY1lIilVt9gdMBD9U2ig==}
     engines: {node: '>= 18', npm: '>= 8.6.0'}
 
+  '@standard-schema/spec@1.1.0':
+    resolution: {integrity: sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w==}
+
   '@swc/helpers@0.5.15':
     resolution: {integrity: sha512-JQ5TuMi45Owi4/BIMAJBoSQoOJu12oOk/gADqlcUL9JEdHB8vyjUSsxqeNXnmXHjYKMi2WcYtezGEEhqUI/E2g==}
 
@@ -1270,6 +1320,10 @@ packages:
     resolution: {integrity: sha512-IlqQ/Gv22xUC1r/WQm4StLkYQmaaTsXAhUVsNE0+xiyf0yRFiH5++q78U3bw6bLKDCTmh0uqKB9eG9+Bt75Dkg==}
     engines: {node: '>=20.0.0'}
 
+  '@vercel/oidc@3.0.5':
+    resolution: {integrity: sha512-fnYhv671l+eTTp48gB4zEsTW/YtRgRPnkI2nT7x6qw5rkI1Lq2hTmQIpHPgyThI0znLK+vX2n9XxKdXZ7BUbbw==}
+    engines: {node: '>= 20'}
+
   '@vitest/expect@2.1.9':
     resolution: {integrity: sha512-UJCIkTBenHeKT1TTlKMJWy1laZewsRIzYighyYiJKZreqtdxSos/S1t+ktRMQWu2CKqaarrkeszJx1cgC5tGZw==}
 
@@ -1310,6 +1364,12 @@ packages:
   agent-base@7.1.4:
     resolution: {integrity: sha512-MnA+YT8fwfJPgBx3m60MNqakm30XOkyIoH1y6huTQvC0PwZG7ki8NacLBcrPbNoo8vEZy7Jpuk7+jMO+CUovTQ==}
     engines: {node: '>= 14'}
+
+  ai@6.0.6:
+    resolution: {integrity: sha512-LM0eAMWVn3RTj+0X5O1m/8g+7QiTeWG5aN5FsDbdmCkAQHVg93XxLbljFOLzi0NMjuJgf7fKLKmWoPsrdMyqfw==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      zod: ^3.25.76 || ^4.1.8
 
   ansi-colors@4.1.3:
     resolution: {integrity: sha512-/6w/C21Pm1A7aZitlI5Ni/2J6FFQN8i1Cvz3kHABAAbw93v/NlvKdVOqz7CCWz/3iv/JplRSEEZ83XION15ovw==}
@@ -1617,6 +1677,10 @@ packages:
   eventemitter3@5.0.1:
     resolution: {integrity: sha512-GWkBvjiSZK87ELrYOSESUYeVIc9mvLLf/nXalMOS5dYrgZq9o5OVkbZAVM06CVxYsCwH9BDZFPlQTlPA1j4ahA==}
 
+  eventsource-parser@3.0.6:
+    resolution: {integrity: sha512-Vo1ab+QXPzZ4tCa8SwIHJFaSzy4R6SHf7BY79rFBDf0idraZWAkYrDjDj8uWaSm3S2TK+hJ7/t1CEmZ7jXw+pg==}
+    engines: {node: '>=18.0.0'}
+
   expect-type@1.3.0:
     resolution: {integrity: sha512-knvyeauYhqjOYvQ66MznSMs83wmHrCycNEN6Ao+2AeYEfxUIkuiVxdEa1qlGEPK+We3n0THiDciYSsCcgW/DoA==}
     engines: {node: '>=12.0.0'}
@@ -1869,6 +1933,9 @@ packages:
 
   json-bigint@1.0.0:
     resolution: {integrity: sha512-SiPv/8VpZuWbvLSMtTDU8hEfrZWg/mH/nV/b4o0CYbSxu1UIQPLdwKOCIyLQX+VIPO5vrLX3i8qtqFyhdPSUSQ==}
+
+  json-schema@0.4.0:
+    resolution: {integrity: sha512-es94M3nTIfsEPisRafak+HDLfHXnKBhV3vU5eqPcS3flIWqcxJWgXHXiey3YrpaNsanY5ei1VoYEbOzijuq9BA==}
 
   jsonfile@4.0.0:
     resolution: {integrity: sha512-m6F1R3z8jjlf2imQHS2Qez5sjKWQzbuuhuJ/FKYFRZvPE3PuHcSMVZzfsLhGVOkfd20obL5SWEBew5ShlquNxg==}
@@ -2741,6 +2808,24 @@ packages:
 
 snapshots:
 
+  '@ai-sdk/gateway@3.0.5(zod@4.3.3)':
+    dependencies:
+      '@ai-sdk/provider': 3.0.1
+      '@ai-sdk/provider-utils': 4.0.2(zod@4.3.3)
+      '@vercel/oidc': 3.0.5
+      zod: 4.3.3
+
+  '@ai-sdk/provider-utils@4.0.2(zod@4.3.3)':
+    dependencies:
+      '@ai-sdk/provider': 3.0.1
+      '@standard-schema/spec': 1.1.0
+      eventsource-parser: 3.0.6
+      zod: 4.3.3
+
+  '@ai-sdk/provider@3.0.1':
+    dependencies:
+      json-schema: 0.4.0
+
   '@azure/abort-controller@2.1.2':
     dependencies:
       tslib: 2.8.1
@@ -3320,6 +3405,13 @@ snapshots:
       globby: 11.1.0
       read-yaml-file: 1.1.0
 
+  '@microsoft/microsoft-graph-client@3.0.7(@azure/identity@4.13.0)':
+    dependencies:
+      '@babel/runtime': 7.28.4
+      tslib: 2.8.1
+    optionalDependencies:
+      '@azure/identity': 4.13.0
+
   '@napi-rs/wasm-runtime@1.1.1':
     dependencies:
       '@emnapi/core': 1.7.1
@@ -3364,6 +3456,8 @@ snapshots:
     dependencies:
       '@nodelib/fs.scandir': 2.1.5
       fastq: 1.20.1
+
+  '@opentelemetry/api@1.9.0': {}
 
   '@oxc-resolver/binding-android-arm-eabi@11.16.2':
     optional: true
@@ -3542,6 +3636,8 @@ snapshots:
     transitivePeerDependencies:
       - debug
 
+  '@standard-schema/spec@1.1.0': {}
+
   '@swc/helpers@0.5.15':
     dependencies:
       tslib: 2.8.1
@@ -3597,6 +3693,8 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
+  '@vercel/oidc@3.0.5': {}
+
   '@vitest/expect@2.1.9':
     dependencies:
       '@vitest/spy': 2.1.9
@@ -3642,6 +3740,14 @@ snapshots:
   adaptivecards@1.2.3: {}
 
   agent-base@7.1.4: {}
+
+  ai@6.0.6(zod@4.3.3):
+    dependencies:
+      '@ai-sdk/gateway': 3.0.5(zod@4.3.3)
+      '@ai-sdk/provider': 3.0.1
+      '@ai-sdk/provider-utils': 4.0.2(zod@4.3.3)
+      '@opentelemetry/api': 1.9.0
+      zod: 4.3.3
 
   ansi-colors@4.1.3: {}
 
@@ -4019,6 +4125,8 @@ snapshots:
 
   eventemitter3@5.0.1: {}
 
+  eventsource-parser@3.0.6: {}
+
   expect-type@1.3.0: {}
 
   extend@3.0.2: {}
@@ -4309,6 +4417,8 @@ snapshots:
   json-bigint@1.0.0:
     dependencies:
       bignumber.js: 9.3.1
+
+  json-schema@0.4.0: {}
 
   jsonfile@4.0.0:
     optionalDependencies:
@@ -4730,7 +4840,7 @@ snapshots:
 
   nanoid@3.3.11: {}
 
-  next@16.1.0(react-dom@19.2.3(react@19.2.3))(react@19.2.3):
+  next@16.1.0(@opentelemetry/api@1.9.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3):
     dependencies:
       '@next/env': 16.1.0
       '@swc/helpers': 0.5.15
@@ -4749,6 +4859,7 @@ snapshots:
       '@next/swc-linux-x64-musl': 16.1.0
       '@next/swc-win32-arm64-msvc': 16.1.0
       '@next/swc-win32-x64-msvc': 16.1.0
+      '@opentelemetry/api': 1.9.0
       sharp: 0.34.5
     transitivePeerDependencies:
       - '@babel/core'

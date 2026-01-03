@@ -17,12 +17,17 @@ import type {
   Strong,
   Text,
 } from "mdast";
+
 import { toString } from "mdast-util-to-string";
 import remarkGfm from "remark-gfm";
 import remarkParse from "remark-parse";
 import remarkStringify from "remark-stringify";
 import { unified } from "unified";
 import type { CardChild, CardElement } from "./cards";
+import type { AdapterPostableMessage } from "./types";
+
+// Alias for use within this file
+type PostableMessageInput = AdapterPostableMessage;
 
 // Re-export types for adapters
 export type {
@@ -313,14 +318,3 @@ export abstract class BaseFormatConverter implements FormatConverter {
     }
   }
 }
-
-/**
- * Type for PostableMessage input (for rendering to text)
- */
-type PostableMessageInput =
-  | string
-  | { raw: string }
-  | { markdown: string }
-  | { ast: Root }
-  | { card: CardElement; fallbackText?: string }
-  | CardElement;

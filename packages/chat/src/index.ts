@@ -109,6 +109,7 @@ export type {
   ActionEvent,
   ActionHandler,
   Adapter,
+  AdapterPostableMessage,
   Attachment,
   Author,
   ChatConfig,
@@ -137,6 +138,7 @@ export type {
   ReactionHandler,
   SentMessage,
   StateAdapter,
+  StreamOptions,
   SubscribedMessageHandler,
   Thread,
   ThreadInfo,
@@ -150,4 +152,5 @@ export {
   LockError,
   NotImplementedError,
   RateLimitError,
+  THREAD_STATE_TTL_MS,
 } from "./types";

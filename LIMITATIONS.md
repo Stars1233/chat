@@ -13,7 +13,7 @@ This document outlines the capabilities and limitations of each chat platform ad
 | `removeReaction` | ✅ | ❌ | ⚠️* |
 | `onReaction` events | ✅ | ✅ | ✅* |
 | `startTyping` | ❌ | ✅ | ❌ |
-| `fetchMessages` | ✅ | ❌ | ✅ |
+| `fetchMessages` | ✅ | ⚠️* | ⚠️* |
 | `fetchThread` | ✅ | ✅ | ✅ |
 
 ## Platform-Specific Details
@@ -32,22 +32,28 @@ This document outlines the capabilities and limitations of each chat platform ad
 
 **Limitations:**
 - **Adding reactions**: Teams Bot Framework does not expose APIs for bots to add reactions. `addReaction` and `removeReaction` will throw `NotImplementedError`.
-- **Message history**: Teams does not provide a bot API to fetch message history. `fetchMessages` will throw `NotImplementedError`.
 
 **Supported:**
 - **Reaction events**: Bots can receive `MessageReaction` activities when users add/remove reactions via `onReaction()`.
 - **Typing indicators**: Supported via `ActivityTypes.Typing`
+- **Message history (fetchMessages)**: Supported via Microsoft Graph API. Requires:
+  - `appTenantId` in adapter config
+  - Azure AD app permission (one of): `ChatMessage.Read.Chat`, `Chat.Read.All`, `Chat.Read.WhereInstalled`
 
 **Notes:**
 - Bot identification uses `appId` matching against `activity.from.id`
 - Service URL varies by tenant and must be preserved per conversation
 - Proactive messaging requires storing conversation references
+- `fetchMessages` uses Microsoft Graph API client credentials flow
 
 ### Google Chat
 
 **Limitations:**
 - **Typing indicators**: Google Chat does not provide an API for typing indicators. The `startTyping` method is a no-op.
 - **Reactions (addReaction/removeReaction)**: The Google Chat API does not support service account (app) authentication for adding or removing reactions. To use these methods, you must use domain-wide delegation to impersonate a user, but the reaction will appear as coming from that user, not the bot. This is a Google Chat API limitation.
+
+**Supported:**
+- **Message history (fetchMessages)**: Requires domain-wide delegation with `impersonateUser` config (see SETUP.md for OAuth scopes)
 
 **Notes:**
 - Bot user ID is learned dynamically from message annotations (when bot is @mentioned)

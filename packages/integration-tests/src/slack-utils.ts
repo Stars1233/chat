@@ -100,7 +100,7 @@ export function createSlackWebhookRequest(
  * Create mock Slack Web API client
  */
 export function createMockSlackClient() {
-  return {
+  const client = {
     auth: {
       test: vi.fn().mockResolvedValue({
         ok: true,
@@ -122,6 +122,16 @@ export function createMockSlackClient() {
       }),
       delete: vi.fn().mockResolvedValue({ ok: true }),
     },
+    // Mock chatStream for streaming support - returns streamer object with append/stop
+    chatStream: vi.fn().mockImplementation(() => ({
+      append: vi.fn().mockResolvedValue(undefined),
+      stop: vi.fn().mockResolvedValue({
+        ok: true,
+        ts: "1234567890.123456",
+        channel: "C123456",
+        message: { ts: "1234567890.123456" },
+      }),
+    })),
     reactions: {
       add: vi.fn().mockResolvedValue({ ok: true }),
       remove: vi.fn().mockResolvedValue({ ok: true }),
@@ -156,7 +166,23 @@ export function createMockSlackClient() {
         files: [{ id: "F123456" }],
       }),
     },
+    clearMocks: () => {
+      client.auth.test.mockClear();
+      client.chat.postMessage.mockClear();
+      client.chat.update.mockClear();
+      client.chat.delete.mockClear();
+      client.chatStream.mockClear();
+      client.reactions.add.mockClear();
+      client.reactions.remove.mockClear();
+      client.conversations.info.mockClear();
+      client.conversations.history.mockClear();
+      client.conversations.replies.mockClear();
+      client.conversations.open.mockClear();
+      client.users.info.mockClear();
+      client.files.uploadV2.mockClear();
+    },
   };
+  return client;
 }
 
 export type MockSlackClient = ReturnType<typeof createMockSlackClient>;

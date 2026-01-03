@@ -1,3 +1,9 @@
+import { ClientSecretCredential } from "@azure/identity";
+import { Client } from "@microsoft/microsoft-graph-client";
+import {
+  TokenCredentialAuthenticationProvider,
+  type TokenCredentialAuthenticationProviderOptions,
+} from "@microsoft/microsoft-graph-client/authProviders/azureTokenCredentials";
 import type { Activity, ConversationReference } from "botbuilder";
 import {
   ActivityTypes,
@@ -20,6 +26,7 @@ class ServerlessCloudAdapter extends CloudAdapter {
 import type {
   ActionEvent,
   Adapter,
+  AdapterPostableMessage,
   Attachment,
   ChatInstance,
   EmojiValue,
@@ -28,7 +35,6 @@ import type {
   FormattedContent,
   Logger,
   Message,
-  PostableMessage,
   RawMessage,
   ReactionEvent,
   ThreadInfo,
@@ -42,6 +48,33 @@ import {
 } from "chat";
 import { cardToAdaptiveCard } from "./cards";
 import { TeamsFormatConverter } from "./markdown";
+
+/** Microsoft Graph API chat message type */
+interface GraphChatMessage {
+  id: string;
+  createdDateTime?: string;
+  lastModifiedDateTime?: string;
+  body?: {
+    content?: string;
+    contentType?: "text" | "html";
+  };
+  from?: {
+    user?: {
+      id?: string;
+      displayName?: string;
+    };
+    application?: {
+      id?: string;
+      displayName?: string;
+    };
+  };
+  attachments?: Array<{
+    id?: string;
+    contentType?: string;
+    contentUrl?: string;
+    name?: string;
+  }>;
+}
 
 export interface TeamsAdapterConfig {
   /** Microsoft App ID */
@@ -69,6 +102,7 @@ export class TeamsAdapter implements Adapter<TeamsThreadId, unknown> {
   readonly botUserId?: string;
 
   private botAdapter: ServerlessCloudAdapter;
+  private graphClient: Client | null = null;
   private chat: ChatInstance | null = null;
   private logger: Logger | null = null;
   private formatConverter = new TeamsFormatConverter();
@@ -92,6 +126,24 @@ export class TeamsAdapter implements Adapter<TeamsThreadId, unknown> {
     });
 
     this.botAdapter = new ServerlessCloudAdapter(auth);
+
+    // Initialize Microsoft Graph client for message history (requires tenant ID)
+    if (config.appTenantId) {
+      const credential = new ClientSecretCredential(
+        config.appTenantId,
+        config.appId,
+        config.appPassword,
+      );
+
+      const authProvider = new TokenCredentialAuthenticationProvider(
+        credential,
+        {
+          scopes: ["https://graph.microsoft.com/.default"],
+        } as TokenCredentialAuthenticationProviderOptions,
+      );
+
+      this.graphClient = Client.initWithMiddleware({ authProvider });
+    }
   }
 
   async initialize(chat: ChatInstance): Promise<void> {
@@ -509,7 +561,7 @@ export class TeamsAdapter implements Adapter<TeamsThreadId, unknown> {
 
   async postMessage(
     threadId: string,
-    message: PostableMessage,
+    message: AdapterPostableMessage,
   ): Promise<RawMessage<unknown>> {
     const { conversationId, serviceUrl } = this.decodeThreadId(threadId);
 
@@ -593,10 +645,10 @@ export class TeamsAdapter implements Adapter<TeamsThreadId, unknown> {
   }
 
   /**
-   * Extract card element from a PostableMessage if present.
+   * Extract card element from a AdapterPostableMessage if present.
    */
   private extractCard(
-    message: PostableMessage,
+    message: AdapterPostableMessage,
   ): import("chat").CardElement | null {
     if (isCardElement(message)) {
       return message;
@@ -608,9 +660,9 @@ export class TeamsAdapter implements Adapter<TeamsThreadId, unknown> {
   }
 
   /**
-   * Extract files from a PostableMessage if present.
+   * Extract files from a AdapterPostableMessage if present.
    */
-  private extractFiles(message: PostableMessage): FileUpload[] {
+  private extractFiles(message: AdapterPostableMessage): FileUpload[] {
     if (typeof message === "object" && message !== null && "files" in message) {
       return (message as { files?: FileUpload[] }).files ?? [];
     }
@@ -662,7 +714,7 @@ export class TeamsAdapter implements Adapter<TeamsThreadId, unknown> {
   async editMessage(
     threadId: string,
     messageId: string,
-    message: PostableMessage,
+    message: AdapterPostableMessage,
   ): Promise<RawMessage<unknown>> {
     const { conversationId, serviceUrl } = this.decodeThreadId(threadId);
 
@@ -882,13 +934,125 @@ export class TeamsAdapter implements Adapter<TeamsThreadId, unknown> {
   }
 
   async fetchMessages(
-    _threadId: string,
-    _options: FetchOptions = {},
+    threadId: string,
+    options: FetchOptions = {},
   ): Promise<Message<unknown>[]> {
-    throw new NotImplementedError(
-      "Teams does not provide a bot API to fetch message history. Use Microsoft Graph API instead.",
-      "fetchMessages",
-    );
+    if (!this.graphClient) {
+      throw new NotImplementedError(
+        "Teams fetchMessages requires appTenantId to be configured for Microsoft Graph API access.",
+        "fetchMessages",
+      );
+    }
+
+    const { conversationId } = this.decodeThreadId(threadId);
+    const limit = options.limit || 50;
+
+    try {
+      this.logger?.debug("Teams Graph API: fetching messages", {
+        conversationId,
+        limit,
+      });
+
+      // Teams conversation IDs:
+      // - Channels: "19:xxx@thread.tacv2"
+      // - Group chats: "19:xxx@thread.v2"
+      // - 1:1 chats: other formats (e.g., "a]xxx", "8:orgid:xxx")
+      // For Graph API, we use /chats/{chat-id}/messages for all chat types
+
+      const response = await this.graphClient
+        .api(`/chats/${encodeURIComponent(conversationId)}/messages`)
+        .top(limit)
+        .orderby("createdDateTime desc")
+        .get();
+
+      const graphMessages = response.value || [];
+
+      this.logger?.debug("Teams Graph API: fetched messages", {
+        count: graphMessages.length,
+      });
+
+      return graphMessages.map((msg: GraphChatMessage) => {
+        const isFromBot =
+          msg.from?.application?.id === this.config.appId ||
+          msg.from?.user?.id === this.config.appId;
+
+        return {
+          id: msg.id,
+          threadId,
+          text: this.extractTextFromGraphMessage(msg),
+          formatted: this.formatConverter.toAst(
+            this.extractTextFromGraphMessage(msg),
+          ),
+          raw: msg,
+          author: {
+            userId:
+              msg.from?.user?.id || msg.from?.application?.id || "unknown",
+            userName:
+              msg.from?.user?.displayName ||
+              msg.from?.application?.displayName ||
+              "unknown",
+            fullName:
+              msg.from?.user?.displayName ||
+              msg.from?.application?.displayName ||
+              "unknown",
+            isBot: !!msg.from?.application,
+            isMe: isFromBot,
+          },
+          metadata: {
+            dateSent: msg.createdDateTime
+              ? new Date(msg.createdDateTime)
+              : new Date(),
+            edited: !!msg.lastModifiedDateTime,
+          },
+          attachments: this.extractAttachmentsFromGraphMessage(msg),
+        };
+      });
+    } catch (error) {
+      this.logger?.error("Teams Graph API: fetchMessages error", { error });
+
+      // Check if it's a permission error
+      if (error instanceof Error && error.message?.includes("403")) {
+        throw new NotImplementedError(
+          "Teams fetchMessages requires one of these Azure AD app permissions: ChatMessage.Read.Chat, Chat.Read.All, or Chat.Read.WhereInstalled",
+          "fetchMessages",
+        );
+      }
+
+      throw error;
+    }
+  }
+
+  /**
+   * Extract plain text from a Graph API message.
+   */
+  private extractTextFromGraphMessage(msg: GraphChatMessage): string {
+    // body.content contains the message text (HTML or text depending on contentType)
+    if (msg.body?.contentType === "text") {
+      return msg.body.content || "";
+    }
+    // For HTML content, strip tags (basic implementation)
+    if (msg.body?.content) {
+      return msg.body.content.replace(/<[^>]*>/g, "").trim();
+    }
+    return "";
+  }
+
+  /**
+   * Extract attachments from a Graph API message.
+   */
+  private extractAttachmentsFromGraphMessage(
+    msg: GraphChatMessage,
+  ): Attachment[] {
+    if (!msg.attachments?.length) {
+      return [];
+    }
+
+    return msg.attachments.map((att) => ({
+      type: att.contentType?.includes("image") ? "image" : "file",
+      name: att.name || undefined,
+      url: att.contentUrl || undefined,
+      mimeType: att.contentType || undefined,
+    }));
   }
 
   async fetchThread(threadId: string): Promise<ThreadInfo> {

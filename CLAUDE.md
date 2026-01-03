@@ -110,6 +110,17 @@ Uses **Biome** with strict rules:
 - `noExplicitAny` - avoid `any` types
 - `noNonNullAssertion` - avoid `!` assertions
 
+## Recording & Replay Tests
+
+Production webhook interactions can be recorded and converted into replay tests:
+
+1. **Recording**: Enable `RECORDING_ENABLED=true` in deployed environment. Recordings are tagged with git SHA.
+2. **Export**: Use `pnpm recording:list` and `pnpm recording:export <session-id>` from `examples/nextjs-chat`
+3. **Convert**: Extract webhook payloads and create JSON fixtures in `packages/integration-tests/fixtures/replay/`
+4. **Test**: Write replay tests using helpers from `replay-test-utils.ts`
+
+See `packages/integration-tests/fixtures/replay/README.md` for detailed workflow.
+
 ## Environment Variables
 
 Key env vars used (see `turbo.json` for full list):
