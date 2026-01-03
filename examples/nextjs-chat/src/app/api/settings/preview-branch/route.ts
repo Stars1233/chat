@@ -21,7 +21,7 @@ async function getRedisClient() {
 
   if (!redisClient.isOpen) {
     if (!redisConnectPromise) {
-      redisConnectPromise = redisClient.connect();
+      redisConnectPromise = redisClient.connect().then(() => {});
     }
     await redisConnectPromise;
   }
@@ -39,7 +39,7 @@ export async function GET(): Promise<Response> {
     console.error("[settings] Error getting preview branch URL:", error);
     return Response.json(
       { error: error instanceof Error ? error.message : "Unknown error" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -69,7 +69,7 @@ export async function POST(request: Request): Promise<Response> {
     console.error("[settings] Error setting preview branch URL:", error);
     return Response.json(
       { error: error instanceof Error ? error.message : "Unknown error" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

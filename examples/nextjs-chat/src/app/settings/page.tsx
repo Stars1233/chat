@@ -1,11 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 
 export default function SettingsPage() {
   const [previewBranchUrl, setPreviewBranchUrl] = useState("");
   const [savedUrl, setSavedUrl] = useState<string | null>(null);
-  const [status, setStatus] = useState<"idle" | "loading" | "saving" | "error">("loading");
+  const [status, setStatus] = useState<"idle" | "loading" | "saving" | "error">(
+    "loading",
+  );
   const [error, setError] = useState<string | null>(null);
 
   // Load current setting on mount
@@ -82,14 +84,21 @@ export default function SettingsPage() {
   };
 
   return (
-    <main style={{ padding: "2rem", fontFamily: "system-ui, sans-serif", maxWidth: "600px" }}>
+    <main
+      style={{
+        padding: "2rem",
+        fontFamily: "system-ui, sans-serif",
+        maxWidth: "600px",
+      }}
+    >
       <h1>Settings</h1>
 
       <section style={{ marginTop: "2rem" }}>
         <h2>Preview Branch</h2>
         <p style={{ color: "#666", marginBottom: "1rem" }}>
-          Configure a preview branch URL to proxy webhook requests to a different deployment.
-          This allows testing a preview branch with real webhook traffic.
+          Configure a preview branch URL to proxy webhook requests to a
+          different deployment. This allows testing a preview branch with real
+          webhook traffic.
         </p>
 
         {status === "loading" ? (
@@ -97,7 +106,14 @@ export default function SettingsPage() {
         ) : (
           <>
             <div style={{ marginBottom: "1rem" }}>
-              <label htmlFor="preview-url" style={{ display: "block", marginBottom: "0.5rem", fontWeight: 500 }}>
+              <label
+                htmlFor="preview-url"
+                style={{
+                  display: "block",
+                  marginBottom: "0.5rem",
+                  fontWeight: 500,
+                }}
+              >
                 Preview Branch URL
               </label>
               <input
@@ -123,6 +139,7 @@ export default function SettingsPage() {
 
             <div style={{ display: "flex", gap: "0.5rem" }}>
               <button
+                type="button"
                 onClick={handleSave}
                 disabled={status === "saving"}
                 style={{
@@ -141,6 +158,7 @@ export default function SettingsPage() {
 
               {savedUrl && (
                 <button
+                  type="button"
                   onClick={handleClear}
                   disabled={status === "saving"}
                   style={{
@@ -160,14 +178,30 @@ export default function SettingsPage() {
             </div>
 
             {savedUrl && (
-              <p style={{ marginTop: "1rem", padding: "0.75rem", backgroundColor: "#d4edda", borderRadius: "4px" }}>
-                Webhook requests are being proxied to: <strong>{savedUrl}</strong>
+              <p
+                style={{
+                  marginTop: "1rem",
+                  padding: "0.75rem",
+                  backgroundColor: "#d4edda",
+                  borderRadius: "4px",
+                }}
+              >
+                Webhook requests are being proxied to:{" "}
+                <strong>{savedUrl}</strong>
               </p>
             )}
 
             {!savedUrl && status === "idle" && (
-              <p style={{ marginTop: "1rem", padding: "0.75rem", backgroundColor: "#f8f9fa", borderRadius: "4px" }}>
-                No preview branch configured. Webhooks are handled by this deployment.
+              <p
+                style={{
+                  marginTop: "1rem",
+                  padding: "0.75rem",
+                  backgroundColor: "#f8f9fa",
+                  borderRadius: "4px",
+                }}
+              >
+                No preview branch configured. Webhooks are handled by this
+                deployment.
               </p>
             )}
           </>
@@ -175,7 +209,9 @@ export default function SettingsPage() {
       </section>
 
       <section style={{ marginTop: "3rem" }}>
-        <a href="/" style={{ color: "#0070f3" }}>&larr; Back to Home</a>
+        <a href="/" style={{ color: "#0070f3" }}>
+          &larr; Back to Home
+        </a>
       </section>
     </main>
   );

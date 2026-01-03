@@ -1,6 +1,6 @@
-import { createClient } from "redis";
-import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { NextResponse } from "next/server";
+import { createClient } from "redis";
 
 export const runtime = "nodejs";
 
@@ -26,7 +26,7 @@ async function getRedisClient() {
 
   if (!redisClient.isOpen) {
     if (!redisConnectPromise) {
-      redisConnectPromise = redisClient.connect();
+      redisConnectPromise = redisClient.connect().then(() => {});
     }
     await redisConnectPromise;
   }
@@ -72,7 +72,7 @@ export async function middleware(request: NextRequest) {
   // Rewrite the request to the preview branch URL
   const targetUrl = new URL(
     pathname + request.nextUrl.search,
-    previewBranchUrl
+    previewBranchUrl,
   );
 
   console.warn(`[middleware] Proxying ${pathname} to ${targetUrl.hostname}`);
