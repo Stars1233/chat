@@ -22,6 +22,7 @@ const SLACK_METHODS = [
   "startTyping",
   "stream",
   "openDM",
+  "fetchMessages",
 ];
 const TEAMS_METHODS = [
   "postMessage",
@@ -31,6 +32,7 @@ const TEAMS_METHODS = [
   "removeReaction",
   "startTyping",
   "openDM",
+  "fetchMessages",
 ];
 const GCHAT_METHODS = [
   "postMessage",
@@ -39,6 +41,7 @@ const GCHAT_METHODS = [
   "addReaction",
   "removeReaction",
   "openDM",
+  "fetchMessages",
 ];
 
 /**

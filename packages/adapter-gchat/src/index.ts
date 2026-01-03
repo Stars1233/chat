@@ -1570,14 +1570,19 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
     threadId: string,
     options: FetchOptions = {},
   ): Promise<Message<unknown>[]> {
-    const { spaceName } = this.decodeThreadId(threadId);
+    const { spaceName, threadName } = this.decodeThreadId(threadId);
 
     // Use impersonated client if available (has better permissions for listing messages)
     const api = this.impersonatedChatApi || this.chatApi;
 
     try {
+      // Build filter to scope to specific thread if threadName is available
+      const filter = threadName ? `thread.name = "${threadName}"` : undefined;
+
       this.logger?.debug("GChat API: spaces.messages.list", {
         spaceName,
+        threadName,
+        filter,
         pageSize: options.limit || 100,
         impersonated: !!this.impersonatedChatApi,
       });
@@ -1586,6 +1591,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
         parent: spaceName,
         pageSize: options.limit || 100,
         pageToken: options.before,
+        filter,
       });
 
       const messages = response.data.messages || [];
