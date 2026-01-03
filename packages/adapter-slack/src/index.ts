@@ -1124,8 +1124,8 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
       hasNextCursor: !!nextCursor,
     });
 
-    const messages = slackMessages.map((msg) =>
-      this.parseSlackMessageSync(msg, threadId),
+    const messages = await Promise.all(
+      slackMessages.map((msg) => this.parseSlackMessage(msg, threadId)),
     );
 
     return {
@@ -1188,8 +1188,8 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
     const startIndex = Math.max(0, slackMessages.length - limit);
     const selectedMessages = slackMessages.slice(startIndex);
 
-    const messages = selectedMessages.map((msg) =>
-      this.parseSlackMessageSync(msg, threadId),
+    const messages = await Promise.all(
+      selectedMessages.map((msg) => this.parseSlackMessage(msg, threadId)),
     );
 
     // For backward pagination, nextCursor points to older messages

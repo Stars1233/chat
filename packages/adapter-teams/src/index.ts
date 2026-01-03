@@ -98,6 +98,13 @@ export interface TeamsThreadId {
   replyToId?: string;
 }
 
+/** Teams channel context extracted from activity.channelData */
+interface TeamsChannelContext {
+  teamId: string;
+  channelId: string;
+  tenantId: string;
+}
+
 export class TeamsAdapter implements Adapter<TeamsThreadId, unknown> {
   readonly name = "teams";
   readonly userName: string;
@@ -209,8 +216,12 @@ export class TeamsAdapter implements Adapter<TeamsThreadId, unknown> {
     // Cache serviceUrl and tenantId for the user - needed for opening DMs later
     if (activity.from?.id && activity.serviceUrl) {
       const userId = activity.from.id;
-      const tenantId = (activity.channelData as { tenant?: { id?: string } })
-        ?.tenant?.id;
+      const channelData = activity.channelData as {
+        tenant?: { id?: string };
+        team?: { id?: string };
+        channel?: { id?: string };
+      };
+      const tenantId = channelData?.tenant?.id;
       const ttl = 30 * 24 * 60 * 60 * 1000; // 30 days
 
       // Store serviceUrl and tenantId for DM creation
@@ -219,6 +230,31 @@ export class TeamsAdapter implements Adapter<TeamsThreadId, unknown> {
         .set(`teams:serviceUrl:${userId}`, activity.serviceUrl, ttl);
       if (tenantId) {
         this.chat.getState().set(`teams:tenantId:${userId}`, tenantId, ttl);
+      }
+
+      // Cache team/channel context for proper message fetching in channel threads
+      // This allows fetchMessages to use the channel-specific endpoint for thread filtering
+      if (channelData?.team?.id && channelData?.channel?.id && tenantId) {
+        const conversationId = activity.conversation?.id || "";
+        // Extract the base channel ID (without ;messageid=) for mapping
+        const baseChannelId = conversationId.replace(/;messageid=\d+/, "");
+        const context: TeamsChannelContext = {
+          teamId: channelData.team.id,
+          channelId: channelData.channel.id,
+          tenantId,
+        };
+        this.chat
+          .getState()
+          .set(
+            `teams:channelContext:${baseChannelId}`,
+            JSON.stringify(context),
+            ttl,
+          );
+        this.logger?.debug("Cached Teams channel context", {
+          conversationId: baseChannelId,
+          teamId: context.teamId,
+          channelId: context.channelId,
+        });
       }
     }
 
@@ -951,22 +987,48 @@ export class TeamsAdapter implements Adapter<TeamsThreadId, unknown> {
     const cursor = options.cursor;
     const direction = options.direction ?? "backward";
 
-    // Extract thread root message ID from conversation ID if present
-    // Format: "19:xxx@thread.tacv2;messageid=1767297849909"
+    // Extract message ID for thread filtering (format: "19:xxx@thread.tacv2;messageid=123456")
     const messageIdMatch = conversationId.match(/;messageid=(\d+)/);
-    const threadRootId = messageIdMatch?.[1];
+    const threadMessageId = messageIdMatch?.[1];
 
-    // Strip ;messageid= from conversation ID for Graph API call
+    // Strip ;messageid= from conversation ID
     const baseConversationId = conversationId.replace(/;messageid=\d+/, "");
+
+    // Try to get cached channel context for proper thread-level message fetching
+    let channelContext: TeamsChannelContext | null = null;
+    if (threadMessageId && this.chat) {
+      const cachedContext = await this.chat
+        .getState()
+        .get<string>(`teams:channelContext:${baseConversationId}`);
+      if (cachedContext) {
+        try {
+          channelContext = JSON.parse(cachedContext) as TeamsChannelContext;
+        } catch {
+          // Invalid cached data, ignore
+        }
+      }
+    }
 
     try {
       this.logger?.debug("Teams Graph API: fetching messages", {
         conversationId: baseConversationId,
-        threadRootId,
+        threadMessageId,
+        hasChannelContext: !!channelContext,
         limit,
         cursor,
         direction,
       });
+
+      // If we have channel context and a thread message ID, use the channel replies endpoint
+      // This gives us proper thread-level filtering instead of all messages in the channel
+      if (channelContext && threadMessageId) {
+        return this.fetchChannelThreadMessages(
+          channelContext,
+          threadMessageId,
+          threadId,
+          options,
+        );
+      }
 
       // Teams conversation IDs:
       // - Channels: "19:xxx@thread.tacv2"
@@ -980,21 +1042,6 @@ export class TeamsAdapter implements Adapter<TeamsThreadId, unknown> {
 
       let graphMessages: GraphChatMessage[];
       let hasMoreMessages = false;
-
-      // Helper to filter messages to the thread if threadRootId is present
-      const filterToThread = (
-        messages: GraphChatMessage[],
-      ): GraphChatMessage[] => {
-        if (!threadRootId) return messages;
-        // Include messages that are:
-        // 1. The thread root message itself (id ends with the threadRootId)
-        // 2. Replies to the thread root (replyToId ends with the threadRootId)
-        return messages.filter(
-          (msg) =>
-            msg.id?.endsWith(threadRootId) ||
-            msg.replyToId?.endsWith(threadRootId),
-        );
-      };
 
       if (direction === "forward") {
         // Forward direction: need to fetch ALL messages to find the oldest ones
@@ -1017,71 +1064,42 @@ export class TeamsAdapter implements Adapter<TeamsThreadId, unknown> {
           nextLink = response["@odata.nextLink"];
         } while (nextLink);
 
-        // Filter to thread if applicable
-        const threadMessages = filterToThread(allMessages);
-
         // Reverse to get chronological order (oldest first)
-        threadMessages.reverse();
+        allMessages.reverse();
 
         // Find starting position based on cursor (cursor is a timestamp)
         let startIndex = 0;
         if (cursor) {
-          startIndex = threadMessages.findIndex(
+          startIndex = allMessages.findIndex(
             (msg) => msg.createdDateTime && msg.createdDateTime > cursor,
           );
-          if (startIndex === -1) startIndex = threadMessages.length;
+          if (startIndex === -1) startIndex = allMessages.length;
         }
 
         // Check if there are more messages beyond our slice
-        hasMoreMessages = startIndex + limit < threadMessages.length;
+        hasMoreMessages = startIndex + limit < allMessages.length;
         // Take only the requested limit
-        graphMessages = threadMessages.slice(startIndex, startIndex + limit);
+        graphMessages = allMessages.slice(startIndex, startIndex + limit);
       } else {
-        // Backward direction: fetch pages and filter to thread
-        // We may need to fetch multiple pages to get enough thread messages
-        const threadMessages: GraphChatMessage[] = [];
-        let nextLink: string | undefined;
-        const apiUrl = `/chats/${encodeURIComponent(baseConversationId)}/messages`;
-        let fetchedEnough = false;
+        // Backward direction: simple pagination
+        let request = this.graphClient
+          .api(`/chats/${encodeURIComponent(baseConversationId)}/messages`)
+          .top(limit)
+          .orderby("createdDateTime desc");
 
-        do {
-          let request = nextLink
-            ? this.graphClient.api(nextLink)
-            : this.graphClient
-                .api(apiUrl)
-                .top(50) // Fetch max per page
-                .orderby("createdDateTime desc");
+        if (cursor) {
+          // Get messages older than cursor
+          request = request.filter(`createdDateTime lt ${cursor}`);
+        }
 
-          if (!nextLink && cursor) {
-            // Get messages older than cursor
-            request = request.filter(`createdDateTime lt ${cursor}`);
-          }
-
-          const response = await request.get();
-          const pageMessages = (response.value || []) as GraphChatMessage[];
-
-          // Filter page to thread and add to results
-          const threadPageMessages = filterToThread(pageMessages);
-          threadMessages.push(...threadPageMessages);
-
-          nextLink = response["@odata.nextLink"];
-
-          // Stop if we have enough messages for the requested limit
-          if (threadMessages.length >= limit) {
-            fetchedEnough = true;
-          }
-        } while (nextLink && !fetchedEnough);
-
-        // Trim to requested limit (we may have more due to fetching full pages)
-        const limitedMessages = threadMessages.slice(0, limit);
+        const response = await request.get();
+        graphMessages = (response.value || []) as GraphChatMessage[];
 
         // API returns newest first, reverse to get chronological order
-        graphMessages = limitedMessages.reverse();
+        graphMessages.reverse();
 
-        // We have more messages if we either:
-        // - Still have a nextLink (more pages available)
-        // - Or we had to trim messages
-        hasMoreMessages = !!nextLink || threadMessages.length > limit;
+        // We have more if we got a full page
+        hasMoreMessages = graphMessages.length >= limit;
       }
 
       this.logger?.debug("Teams Graph API: fetched messages", {
@@ -1159,6 +1177,165 @@ export class TeamsAdapter implements Adapter<TeamsThreadId, unknown> {
 
       throw error;
     }
+  }
+
+  /**
+   * Fetch messages from a Teams channel thread using the channel-specific Graph API endpoint.
+   * This provides proper thread-level filtering by fetching only replies to a specific message.
+   *
+   * Endpoint: GET /teams/{team-id}/channels/{channel-id}/messages/{message-id}/replies
+   */
+  private async fetchChannelThreadMessages(
+    context: TeamsChannelContext,
+    threadMessageId: string,
+    threadId: string,
+    options: FetchOptions,
+  ): Promise<FetchResult<unknown>> {
+    const limit = options.limit || 50;
+    const cursor = options.cursor;
+    const direction = options.direction ?? "backward";
+
+    this.logger?.debug("Teams Graph API: fetching channel thread messages", {
+      teamId: context.teamId,
+      channelId: context.channelId,
+      threadMessageId,
+      limit,
+      cursor,
+      direction,
+    });
+
+    // Build the endpoint URL:
+    // /teams/{team-id}/channels/{channel-id}/messages/{message-id}/replies
+    const apiUrl = `/teams/${encodeURIComponent(context.teamId)}/channels/${encodeURIComponent(context.channelId)}/messages/${encodeURIComponent(threadMessageId)}/replies`;
+
+    let graphMessages: GraphChatMessage[];
+    let hasMoreMessages = false;
+
+    if (direction === "forward") {
+      // Forward direction: fetch all replies and paginate in chronological order
+      const allMessages: GraphChatMessage[] = [];
+      let nextLink: string | undefined;
+
+      do {
+        const request = nextLink
+          ? this.graphClient!.api(nextLink)
+          : this.graphClient!.api(apiUrl).top(50);
+
+        const response = await request.get();
+        const pageMessages = (response.value || []) as GraphChatMessage[];
+        allMessages.push(...pageMessages);
+        nextLink = response["@odata.nextLink"];
+      } while (nextLink);
+
+      // Find starting position based on cursor
+      let startIndex = 0;
+      if (cursor) {
+        startIndex = allMessages.findIndex(
+          (msg) => msg.createdDateTime && msg.createdDateTime > cursor,
+        );
+        if (startIndex === -1) startIndex = allMessages.length;
+      }
+
+      hasMoreMessages = startIndex + limit < allMessages.length;
+      graphMessages = allMessages.slice(startIndex, startIndex + limit);
+    } else {
+      // Backward direction: replies endpoint returns in chronological order (oldest first)
+      // We need to get all and then return the most recent
+      const allMessages: GraphChatMessage[] = [];
+      let nextLink: string | undefined;
+
+      do {
+        const request = nextLink
+          ? this.graphClient!.api(nextLink)
+          : this.graphClient!.api(apiUrl).top(50);
+
+        const response = await request.get();
+        const pageMessages = (response.value || []) as GraphChatMessage[];
+        allMessages.push(...pageMessages);
+        nextLink = response["@odata.nextLink"];
+      } while (nextLink);
+
+      // For backward, we want most recent first, then reverse for chronological output
+      if (cursor) {
+        // Find position of cursor and take messages before it
+        const cursorIndex = allMessages.findIndex(
+          (msg) => msg.createdDateTime && msg.createdDateTime >= cursor,
+        );
+        if (cursorIndex > 0) {
+          const sliceStart = Math.max(0, cursorIndex - limit);
+          graphMessages = allMessages.slice(sliceStart, cursorIndex);
+          hasMoreMessages = sliceStart > 0;
+        } else {
+          graphMessages = allMessages.slice(-limit);
+          hasMoreMessages = allMessages.length > limit;
+        }
+      } else {
+        // No cursor - get the most recent messages
+        graphMessages = allMessages.slice(-limit);
+        hasMoreMessages = allMessages.length > limit;
+      }
+    }
+
+    this.logger?.debug("Teams Graph API: fetched channel thread messages", {
+      count: graphMessages.length,
+      direction,
+      hasMoreMessages,
+    });
+
+    const messages = graphMessages.map((msg: GraphChatMessage) => {
+      const isFromBot =
+        msg.from?.application?.id === this.config.appId ||
+        msg.from?.user?.id === this.config.appId;
+
+      return {
+        id: msg.id,
+        threadId,
+        text: this.extractTextFromGraphMessage(msg),
+        formatted: this.formatConverter.toAst(
+          this.extractTextFromGraphMessage(msg),
+        ),
+        raw: msg,
+        author: {
+          userId:
+            msg.from?.user?.id || msg.from?.application?.id || "unknown",
+          userName:
+            msg.from?.user?.displayName ||
+            msg.from?.application?.displayName ||
+            "unknown",
+          fullName:
+            msg.from?.user?.displayName ||
+            msg.from?.application?.displayName ||
+            "unknown",
+          isBot: !!msg.from?.application,
+          isMe: isFromBot,
+        },
+        metadata: {
+          dateSent: msg.createdDateTime
+            ? new Date(msg.createdDateTime)
+            : new Date(),
+          edited: !!msg.lastModifiedDateTime,
+        },
+        attachments: this.extractAttachmentsFromGraphMessage(msg),
+      };
+    });
+
+    // Determine nextCursor
+    let nextCursor: string | undefined;
+    if (hasMoreMessages && graphMessages.length > 0) {
+      if (direction === "forward") {
+        const lastMsg = graphMessages[graphMessages.length - 1];
+        if (lastMsg?.createdDateTime) {
+          nextCursor = lastMsg.createdDateTime;
+        }
+      } else {
+        const oldestMsg = graphMessages[0];
+        if (oldestMsg?.createdDateTime) {
+          nextCursor = oldestMsg.createdDateTime;
+        }
+      }
+    }
+
+    return { messages, nextCursor };
   }
 
   /**

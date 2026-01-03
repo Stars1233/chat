@@ -2043,6 +2043,11 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
       return providedDisplayName;
     }
 
+    // If this is our bot's user ID, use the configured bot name
+    if (this.botUserId && userId === this.botUserId) {
+      return this.userName;
+    }
+
     // Try to get from cache
     const cached = await this.getCachedUserInfo(userId);
     if (cached?.displayName) {
