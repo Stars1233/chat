@@ -51,8 +51,15 @@ async function getPreviewBranchUrl(): Promise<string | null> {
 }
 
 export async function middleware(request: NextRequest) {
+  if (process.env.NODE_ENV !== "production") {
+    return NextResponse.next();
+  }
+
+  if (process.env.VERCEL_ENV !== "production") {
+    return NextResponse.next();
+  }
+
   const { pathname } = request.nextUrl;
-  const method = request.method;
 
   // Check if we have a preview branch configured
   const previewBranchUrl = await getPreviewBranchUrl();
@@ -68,7 +75,7 @@ export async function middleware(request: NextRequest) {
     previewBranchUrl
   );
 
-  console.log(`[middleware] Proxying ${pathname} to ${targetUrl.toString()}`);
+  console.log(`[middleware] Proxying ${pathname} to ${targetUrl.hostname}`);
 
   // Proxy the request to the preview branch
   return NextResponse.rewrite(targetUrl);
