@@ -4,7 +4,7 @@ import {
 } from "@chat-adapter/gchat";
 import { createSlackAdapter, type SlackAdapter } from "@chat-adapter/slack";
 import { createTeamsAdapter, type TeamsAdapter } from "@chat-adapter/teams";
-import { withRecording } from "./recorder";
+import { recorder, withRecording } from "./recorder";
 
 export type Adapters = {
   slack?: SlackAdapter;
@@ -49,6 +49,9 @@ const GCHAT_METHODS = [
  * Adapters are only created if their required env vars are present.
  */
 export function buildAdapters(): Adapters {
+  // Start fetch recording to capture all Graph/Slack/GChat API calls
+  recorder.startFetchRecording();
+
   const adapters: Adapters = {};
 
   // Slack adapter (optional)

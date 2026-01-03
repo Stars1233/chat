@@ -36,7 +36,46 @@ export interface ApiCallRecord {
   error?: string;
 }
 
-export type RecordEntry = WebhookRecord | ApiCallRecord;
+export interface FetchRecord {
+  type: "fetch";
+  timestamp: number;
+  method: string;
+  url: string;
+  requestHeaders?: Record<string, string>;
+  requestBody?: string;
+  status?: number;
+  responseHeaders?: Record<string, string>;
+  responseBody?: string;
+  error?: string;
+  durationMs: number;
+}
+
+export type RecordEntry = WebhookRecord | ApiCallRecord | FetchRecord;
+
+// Headers that contain sensitive data - values will be redacted
+const SENSITIVE_HEADERS = new Set([
+  "authorization",
+  "cookie",
+  "set-cookie",
+  "x-api-key",
+  "x-auth-token",
+  "x-access-token",
+  "x-refresh-token",
+  "x-csrf-token",
+  "x-xsrf-token",
+]);
+
+/**
+ * Sanitize header values by redacting sensitive information.
+ */
+function sanitizeHeaderValue(key: string, value: string): string {
+  if (SENSITIVE_HEADERS.has(key.toLowerCase())) {
+    // Keep first few chars for debugging (e.g., "Bearer ey...")
+    const prefix = value.slice(0, 10);
+    return `${prefix}...[REDACTED]`;
+  }
+  return value;
+}
 
 const RECORDING_TTL_SECONDS = 1 * 60 * 60; // 1 hour
 
@@ -45,6 +84,8 @@ class Recorder {
   private sessionId: string;
   private enabled: boolean;
   private connectPromise: Promise<void> | null = null;
+  private originalFetch: typeof fetch | null = null;
+  private fetchUrlPatterns: RegExp[] = [];
 
   constructor() {
     this.enabled = process.env.RECORDING_ENABLED === "true";
@@ -189,6 +230,135 @@ class Recorder {
   async exportRecords(sessionId?: string): Promise<string> {
     const records = await this.getRecords(sessionId);
     return JSON.stringify(records, null, 2);
+  }
+
+  /**
+   * Start recording fetch calls that match the given URL patterns.
+   * This monkey-patches globalThis.fetch to intercept all HTTP calls.
+   *
+   * @param urlPatterns - Array of regex patterns to match URLs (default: Graph API)
+   */
+  startFetchRecording(
+    urlPatterns: RegExp[] = [
+      /graph\.microsoft\.com/,
+      /\.slack\.com/,
+      /chat\.googleapis\.com/,
+    ],
+  ): void {
+    if (!this.isEnabled || this.originalFetch) return;
+
+    this.fetchUrlPatterns = urlPatterns;
+    this.originalFetch = globalThis.fetch;
+
+    const self = this;
+    globalThis.fetch = async function recordingFetch(
+      input: RequestInfo | URL,
+      init?: RequestInit,
+    ): Promise<Response> {
+      const url =
+        typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.href
+            : input.url;
+      const method = init?.method || "GET";
+      const startTime = Date.now();
+
+      // Check if URL matches any pattern
+      const shouldRecord = self.fetchUrlPatterns.some((pattern) =>
+        pattern.test(url),
+      );
+
+      // Get original fetch (we know it's set because we checked in startFetchRecording)
+      const originalFetch = self.originalFetch as typeof fetch;
+
+      if (!shouldRecord) {
+        return originalFetch(input, init);
+      }
+
+      let response: Response | undefined;
+      let error: Error | undefined;
+
+      try {
+        response = await originalFetch(input, init);
+        return response;
+      } catch (err) {
+        error = err as Error;
+        throw err;
+      } finally {
+        const durationMs = Date.now() - startTime;
+
+        // Clone response to read body without consuming it
+        let responseBody: string | undefined;
+        let responseHeaders: Record<string, string> | undefined;
+        if (response) {
+          try {
+            const cloned = response.clone();
+            responseBody = await cloned.text();
+            const respHeaders: Record<string, string> = {};
+            cloned.headers.forEach((value, key) => {
+              respHeaders[key] = sanitizeHeaderValue(key, value);
+            });
+            responseHeaders = respHeaders;
+          } catch {
+            // Body might not be readable
+          }
+        }
+
+        // Extract request headers
+        let requestHeaders: Record<string, string> | undefined;
+        if (init?.headers) {
+          const reqHeaders: Record<string, string> = {};
+          if (init.headers instanceof Headers) {
+            init.headers.forEach((value, key) => {
+              reqHeaders[key] = sanitizeHeaderValue(key, value);
+            });
+          } else if (Array.isArray(init.headers)) {
+            for (const [key, value] of init.headers) {
+              reqHeaders[key] = sanitizeHeaderValue(key, value);
+            }
+          } else {
+            const headerObj = init.headers as Record<string, string>;
+            for (const [key, value] of Object.entries(headerObj)) {
+              reqHeaders[key] = sanitizeHeaderValue(key, value);
+            }
+          }
+          requestHeaders = reqHeaders;
+        }
+
+        const record: FetchRecord = {
+          type: "fetch",
+          timestamp: Date.now(),
+          method,
+          url,
+          requestHeaders,
+          requestBody: typeof init?.body === "string" ? init.body : undefined,
+          status: response?.status,
+          responseHeaders,
+          responseBody,
+          error: error?.message,
+          durationMs,
+        };
+
+        // Don't await - fire and forget to avoid slowing down requests
+        self.appendRecord(record).catch(() => {});
+      }
+    };
+
+    console.log(
+      `[recorder] Fetch recording started for patterns: ${urlPatterns.map((p) => p.source).join(", ")}`,
+    );
+  }
+
+  /**
+   * Stop recording fetch calls and restore original fetch.
+   */
+  stopFetchRecording(): void {
+    if (this.originalFetch) {
+      globalThis.fetch = this.originalFetch;
+      this.originalFetch = null;
+      console.log("[recorder] Fetch recording stopped");
+    }
   }
 }
 

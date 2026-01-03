@@ -267,12 +267,16 @@ export class TeamsAdapter implements Adapter<TeamsThreadId, unknown> {
             .set(`teams:teamContext:${teamThreadId}`, contextJson, ttl);
         }
 
-        this.logger?.debug("Cached Teams channel context", {
-          conversationId: baseChannelId,
-          teamThreadId,
-          teamId: context.teamId,
-          channelId: context.channelId,
-        });
+        this.logger?.info(
+          "Cached Teams team GUID from installation/update event",
+          {
+            activityType: activity.type,
+            conversationId: baseChannelId,
+            teamThreadId,
+            teamGuid: context.teamId,
+            channelId: context.channelId,
+          },
+        );
       } else if (teamThreadId && channelData?.channel?.id && tenantId) {
         // Regular message event - no aadGroupId, but try to look up from previous cache
         const cachedTeamContext = await this.chat
@@ -288,13 +292,10 @@ export class TeamsAdapter implements Adapter<TeamsThreadId, unknown> {
               cachedTeamContext,
               ttl,
             );
-          this.logger?.debug(
-            "Propagated Teams channel context from team cache",
-            {
-              conversationId: baseChannelId,
-              teamThreadId,
-            },
-          );
+          this.logger?.info("Using cached Teams team GUID for channel", {
+            conversationId: baseChannelId,
+            teamThreadId,
+          });
         }
       }
     }
@@ -586,11 +587,12 @@ export class TeamsAdapter implements Adapter<TeamsThreadId, unknown> {
       attachments: (activity.attachments || [])
         .filter(
           (att) =>
-            // Filter out adaptive cards (handled separately)
+            // Filter out adaptive cards (handled separately as cards, not attachments)
             att.contentType !== "application/vnd.microsoft.card.adaptive" &&
-            // Filter out text/html - this is just the formatted version of the message text,
-            // not an actual file attachment
-            att.contentType !== "text/html",
+            // Filter out text/html without contentUrl - this is just the formatted
+            // version of the message text, not an actual file attachment.
+            // Real HTML file attachments would have a contentUrl.
+            !(att.contentType === "text/html" && !att.contentUrl),
         )
         .map((att) => this.createAttachment(att)),
     };
@@ -1052,6 +1054,11 @@ export class TeamsAdapter implements Adapter<TeamsThreadId, unknown> {
           // Invalid cached data, ignore
         }
       }
+
+      // If no cached context and this looks like a channel (tacv2), try to find the team GUID
+      if (!channelContext && baseConversationId.includes("@thread.tacv2")) {
+        channelContext = await this.lookupChannelContext(baseConversationId);
+      }
     }
 
     try {
@@ -1145,6 +1152,20 @@ export class TeamsAdapter implements Adapter<TeamsThreadId, unknown> {
 
         // We have more if we got a full page
         hasMoreMessages = graphMessages.length >= limit;
+      }
+
+      // For group chats (non-channel), filter to only messages from the "thread" onwards.
+      // Teams group chats don't have real threading - the messageid in the conversation ID
+      // is just UI context. We filter by message ID (which is a timestamp) to simulate threading.
+      if (threadMessageId && !channelContext) {
+        graphMessages = graphMessages.filter((msg) => {
+          // Include messages with ID >= thread message ID (IDs are timestamps)
+          return msg.id && msg.id >= threadMessageId;
+        });
+        this.logger?.debug("Filtered group chat messages to thread", {
+          threadMessageId,
+          filteredCount: graphMessages.length,
+        });
       }
 
       this.logger?.debug("Teams Graph API: fetched messages", {
@@ -1421,6 +1442,79 @@ export class TeamsAdapter implements Adapter<TeamsThreadId, unknown> {
       url: att.contentUrl || undefined,
       mimeType: att.contentType || undefined,
     }));
+  }
+
+  /**
+   * Look up channel context (team GUID) by querying Graph API.
+   * This is a fallback when we don't have cached context from installation events.
+   */
+  private async lookupChannelContext(
+    channelId: string,
+  ): Promise<TeamsChannelContext | null> {
+    if (!this.graphClient) {
+      return null;
+    }
+
+    try {
+      this.logger?.debug("Looking up team GUID for channel", { channelId });
+
+      // Get all teams the bot is a member of
+      const teamsResponse = await this.graphClient.api("/me/joinedTeams").get();
+      const teams = teamsResponse.value as Array<{
+        id: string;
+        displayName: string;
+      }>;
+
+      // For each team, check if the channel exists
+      for (const team of teams) {
+        try {
+          const channelsResponse = await this.graphClient
+            .api(`/teams/${team.id}/channels`)
+            .get();
+          const channels = channelsResponse.value as Array<{
+            id: string;
+            displayName: string;
+          }>;
+
+          const matchingChannel = channels.find((ch) => ch.id === channelId);
+          if (matchingChannel) {
+            this.logger?.info("Found team GUID for channel via Graph API", {
+              channelId,
+              teamId: team.id,
+              teamName: team.displayName,
+            });
+
+            const context: TeamsChannelContext = {
+              teamId: team.id,
+              channelId,
+              tenantId: "", // Not strictly needed for fetching
+            };
+
+            // Cache for future use
+            if (this.chat) {
+              const ttl = 30 * 24 * 60 * 60 * 1000; // 30 days
+              this.chat
+                .getState()
+                .set(
+                  `teams:channelContext:${channelId}`,
+                  JSON.stringify(context),
+                  ttl,
+                );
+            }
+
+            return context;
+          }
+        } catch {
+          // Team might not be accessible, continue to next
+        }
+      }
+
+      this.logger?.warn("Could not find team GUID for channel", { channelId });
+      return null;
+    } catch (error) {
+      this.logger?.warn("Failed to lookup team GUID", { channelId, error });
+      return null;
+    }
   }
 
   async fetchThread(threadId: string): Promise<ThreadInfo> {
