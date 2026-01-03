@@ -9,6 +9,7 @@ import {
   ActivityTypes,
   CloudAdapter,
   ConfigurationBotFrameworkAuthentication,
+  TeamsInfo,
   type TurnContext,
 } from "botbuilder";
 
@@ -74,6 +75,7 @@ interface GraphChatMessage {
     id?: string;
     contentType?: string;
     contentUrl?: string;
+    content?: string; // JSON string for adaptive cards
     name?: string;
   }>;
 }
@@ -296,6 +298,46 @@ export class TeamsAdapter implements Adapter<TeamsThreadId, unknown> {
             conversationId: baseChannelId,
             teamThreadId,
           });
+        } else {
+          // No cached context - try to fetch team details via Bot Framework API
+          // TeamsInfo.getTeamDetails() calls /v3/teams/{teamId} and returns aadGroupId
+          try {
+            const teamDetails = await TeamsInfo.getTeamDetails(context);
+            if (teamDetails?.aadGroupId) {
+              const fetchedContext: TeamsChannelContext = {
+                teamId: teamDetails.aadGroupId,
+                channelId: channelData.channel.id,
+                tenantId,
+              };
+              const contextJson = JSON.stringify(fetchedContext);
+
+              // Cache by conversation ID
+              this.chat
+                .getState()
+                .set(`teams:channelContext:${baseChannelId}`, contextJson, ttl);
+
+              // Also cache by team thread-style ID
+              this.chat
+                .getState()
+                .set(`teams:teamContext:${teamThreadId}`, contextJson, ttl);
+
+              this.logger?.info(
+                "Fetched and cached Teams team GUID via TeamsInfo API",
+                {
+                  conversationId: baseChannelId,
+                  teamThreadId,
+                  teamGuid: teamDetails.aadGroupId,
+                  teamName: teamDetails.name,
+                },
+              );
+            }
+          } catch (error) {
+            // TeamsInfo.getTeamDetails() only works in team scope
+            this.logger?.debug(
+              "Could not fetch team details (may not be a team scope)",
+              { teamThreadId, error },
+            );
+          }
         }
       }
     }
@@ -1055,10 +1097,8 @@ export class TeamsAdapter implements Adapter<TeamsThreadId, unknown> {
         }
       }
 
-      // If no cached context and this looks like a channel (tacv2), try to find the team GUID
-      if (!channelContext && baseConversationId.includes("@thread.tacv2")) {
-        channelContext = await this.lookupChannelContext(baseConversationId);
-      }
+      // Note: Team GUID is cached during webhook handling via TeamsInfo.getTeamDetails()
+      // If no cached context, we'll fall back to the chat endpoint (less accurate for channels)
     }
 
     try {
@@ -1419,11 +1459,81 @@ export class TeamsAdapter implements Adapter<TeamsThreadId, unknown> {
     if (msg.body?.contentType === "text") {
       return msg.body.content || "";
     }
+
     // For HTML content, strip tags (basic implementation)
+    let text = "";
     if (msg.body?.content) {
-      return msg.body.content.replace(/<[^>]*>/g, "").trim();
+      text = msg.body.content.replace(/<[^>]*>/g, "").trim();
     }
-    return "";
+
+    // If text is empty but message has adaptive card attachments, try to extract card title
+    if (!text && msg.attachments?.length) {
+      for (const att of msg.attachments) {
+        if (att.contentType === "application/vnd.microsoft.card.adaptive") {
+          try {
+            const card = JSON.parse(att.content || "{}");
+            // Look for title in common locations
+            const title = this.extractCardTitle(card);
+            if (title) {
+              return title;
+            }
+            return "[Card]";
+          } catch {
+            return "[Card]";
+          }
+        }
+      }
+    }
+
+    return text;
+  }
+
+  /**
+   * Extract a title/summary from an Adaptive Card structure.
+   */
+  private extractCardTitle(card: unknown): string | null {
+    if (!card || typeof card !== "object") return null;
+
+    const cardObj = card as Record<string, unknown>;
+
+    // Check for body array and find first TextBlock with large/bolder style (likely title)
+    if (Array.isArray(cardObj.body)) {
+      for (const element of cardObj.body) {
+        if (
+          element &&
+          typeof element === "object" &&
+          (element as Record<string, unknown>).type === "TextBlock"
+        ) {
+          const textBlock = element as Record<string, unknown>;
+          // Title blocks often have weight: "bolder" or size: "large"
+          if (
+            textBlock.weight === "bolder" ||
+            textBlock.size === "large" ||
+            textBlock.size === "extraLarge"
+          ) {
+            const text = textBlock.text;
+            if (typeof text === "string") {
+              return text;
+            }
+          }
+        }
+      }
+      // Fallback: just get first TextBlock's text
+      for (const element of cardObj.body) {
+        if (
+          element &&
+          typeof element === "object" &&
+          (element as Record<string, unknown>).type === "TextBlock"
+        ) {
+          const text = (element as Record<string, unknown>).text;
+          if (typeof text === "string") {
+            return text;
+          }
+        }
+      }
+    }
+
+    return null;
   }
 
   /**
@@ -1442,79 +1552,6 @@ export class TeamsAdapter implements Adapter<TeamsThreadId, unknown> {
       url: att.contentUrl || undefined,
       mimeType: att.contentType || undefined,
     }));
-  }
-
-  /**
-   * Look up channel context (team GUID) by querying Graph API.
-   * This is a fallback when we don't have cached context from installation events.
-   */
-  private async lookupChannelContext(
-    channelId: string,
-  ): Promise<TeamsChannelContext | null> {
-    if (!this.graphClient) {
-      return null;
-    }
-
-    try {
-      this.logger?.debug("Looking up team GUID for channel", { channelId });
-
-      // Get all teams the bot is a member of
-      const teamsResponse = await this.graphClient.api("/me/joinedTeams").get();
-      const teams = teamsResponse.value as Array<{
-        id: string;
-        displayName: string;
-      }>;
-
-      // For each team, check if the channel exists
-      for (const team of teams) {
-        try {
-          const channelsResponse = await this.graphClient
-            .api(`/teams/${team.id}/channels`)
-            .get();
-          const channels = channelsResponse.value as Array<{
-            id: string;
-            displayName: string;
-          }>;
-
-          const matchingChannel = channels.find((ch) => ch.id === channelId);
-          if (matchingChannel) {
-            this.logger?.info("Found team GUID for channel via Graph API", {
-              channelId,
-              teamId: team.id,
-              teamName: team.displayName,
-            });
-
-            const context: TeamsChannelContext = {
-              teamId: team.id,
-              channelId,
-              tenantId: "", // Not strictly needed for fetching
-            };
-
-            // Cache for future use
-            if (this.chat) {
-              const ttl = 30 * 24 * 60 * 60 * 1000; // 30 days
-              this.chat
-                .getState()
-                .set(
-                  `teams:channelContext:${channelId}`,
-                  JSON.stringify(context),
-                  ttl,
-                );
-            }
-
-            return context;
-          }
-        } catch {
-          // Team might not be accessible, continue to next
-        }
-      }
-
-      this.logger?.warn("Could not find team GUID for channel", { channelId });
-      return null;
-    } catch (error) {
-      this.logger?.warn("Failed to lookup team GUID", { channelId, error });
-      return null;
-    }
   }
 
   async fetchThread(threadId: string): Promise<ThreadInfo> {
