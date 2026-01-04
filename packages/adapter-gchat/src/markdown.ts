@@ -32,13 +32,7 @@ export class GoogleChatFormatConverter extends BaseFormatConverter {
    * Render an AST to Google Chat format.
    */
   fromAst(ast: Root): string {
-    const parts: string[] = [];
-
-    for (const node of ast.children) {
-      parts.push(this.nodeToGChat(node as Content));
-    }
-
-    return parts.join("\n\n");
+    return this.fromAstWithNodeConverter(ast, (node) => this.nodeToGChat(node));
   }
 
   /**

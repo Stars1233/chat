@@ -334,8 +334,8 @@ describe("cardToFallbackText", () => {
     expect(text).toContain("*Order Update*");
     expect(text).toContain("Status changed");
     expect(text).toContain("Your order is ready");
-    expect(text).toContain("*Order ID*: #1234");
-    expect(text).toContain("*Status*: Ready");
+    expect(text).toContain("Order ID: #1234");
+    expect(text).toContain("Status: Ready");
     expect(text).toContain("[Schedule Pickup] [Delay]");
   });
 

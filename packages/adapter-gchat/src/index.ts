@@ -1,3 +1,11 @@
+import {
+  AdapterRateLimitError,
+  AuthenticationError,
+  extractCard,
+  extractFiles,
+  NetworkError,
+  ValidationError,
+} from "@chat-adapter/shared";
 import type {
   ActionEvent,
   Adapter,
@@ -7,7 +15,6 @@ import type {
   EmojiValue,
   FetchOptions,
   FetchResult,
-  FileUpload,
   FormattedContent,
   Logger,
   Message,
@@ -17,12 +24,7 @@ import type {
   ThreadInfo,
   WebhookOptions,
 } from "chat";
-import {
-  convertEmojiPlaceholders,
-  defaultEmojiResolver,
-  isCardElement,
-  RateLimitError,
-} from "chat";
+import { convertEmojiPlaceholders, defaultEmojiResolver } from "chat";
 import { type chat_v1, google } from "googleapis";
 import { cardToGoogleCard } from "./cards";
 import { GoogleChatFormatConverter } from "./markdown";
@@ -302,7 +304,8 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
       this.customAuth = config.auth;
       auth = config.auth;
     } else {
-      throw new Error(
+      throw new ValidationError(
+        "gchat",
         "GoogleChatAdapter requires one of: credentials, useApplicationDefaultCredentials, or auth",
       );
     }
@@ -890,7 +893,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
   ): Promise<Message<unknown>> {
     const message = notification.message;
     if (!message) {
-      throw new Error("PubSub notification missing message");
+      throw new ValidationError("gchat", "PubSub notification missing message");
     }
     const text = this.normalizeBotMentions(message);
     const isBot = message.sender?.type === "BOT";
@@ -1074,7 +1077,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
   ): Message<unknown> {
     const message = event.chat?.messagePayload?.message;
     if (!message) {
-      throw new Error("Event has no message payload");
+      throw new ValidationError("gchat", "Event has no message payload");
     }
 
     // Normalize bot mentions: replace @BotDisplayName with @{userName}
@@ -1124,7 +1127,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
 
     try {
       // Check for files - currently not implemented for GChat
-      const files = this.extractFiles(message);
+      const files = extractFiles(message);
       if (files.length > 0) {
         this.logger?.warn(
           "File uploads are not yet supported for Google Chat. Files will be ignored.",
@@ -1134,7 +1137,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
       }
 
       // Check if message contains a card
-      const card = this.extractCard(message);
+      const card = extractCard(message);
 
       if (card) {
         // Render card as Google Chat Card
@@ -1214,31 +1217,6 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
   }
 
   /**
-   * Extract card element from a message if present.
-   */
-  private extractCard(
-    message: AdapterPostableMessage,
-  ): import("chat").CardElement | null {
-    if (isCardElement(message)) {
-      return message;
-    }
-    if (typeof message === "object" && message !== null && "card" in message) {
-      return message.card;
-    }
-    return null;
-  }
-
-  /**
-   * Extract files from a message if present.
-   */
-  private extractFiles(message: AdapterPostableMessage): FileUpload[] {
-    if (typeof message === "object" && message !== null && "files" in message) {
-      return (message as { files?: FileUpload[] }).files ?? [];
-    }
-    return [];
-  }
-
-  /**
    * Create an Attachment object from a Google Chat attachment.
    */
   private createAttachment(att: {
@@ -1272,7 +1250,10 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
         ? async () => {
             // Get access token for authenticated download
             if (typeof auth === "string" || !auth) {
-              throw new Error("Cannot fetch file: no auth client configured");
+              throw new AuthenticationError(
+                "gchat",
+                "Cannot fetch file: no auth client configured",
+              );
             }
             const tokenResult = await auth.getAccessToken();
             const token =
@@ -1280,7 +1261,10 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
                 ? tokenResult
                 : tokenResult?.token;
             if (!token) {
-              throw new Error("Failed to get access token");
+              throw new AuthenticationError(
+                "gchat",
+                "Failed to get access token",
+              );
             }
             const response = await fetch(url, {
               headers: {
@@ -1288,7 +1272,8 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
               },
             });
             if (!response.ok) {
-              throw new Error(
+              throw new NetworkError(
+                "gchat",
                 `Failed to fetch file: ${response.status} ${response.statusText}`,
               );
             }
@@ -1306,7 +1291,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
   ): Promise<RawMessage<unknown>> {
     try {
       // Check if message contains a card
-      const card = this.extractCard(message);
+      const card = extractCard(message);
 
       if (card) {
         // Render card as Google Chat Card
@@ -1558,7 +1543,10 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
       const spaceName = response.data.name;
 
       if (!spaceName) {
-        throw new Error("Failed to create DM - no space name returned");
+        throw new NetworkError(
+          "gchat",
+          "Failed to create DM - no space name returned",
+        );
       }
 
       this.logger?.debug("GChat API: spaces.setup response", { spaceName });
@@ -1853,7 +1841,10 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
 
     const parts = cleanId.split(":");
     if (parts.length < 2 || parts[0] !== "gchat") {
-      throw new Error(`Invalid Google Chat thread ID: ${threadId}`);
+      throw new ValidationError(
+        "gchat",
+        `Invalid Google Chat thread ID: ${threadId}`,
+      );
     }
 
     const spaceName = parts[1] as string;
@@ -1868,7 +1859,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
     const event = raw as GoogleChatEvent;
     const messagePayload = event.chat?.messagePayload;
     if (!messagePayload) {
-      throw new Error("Cannot parse non-message event");
+      throw new ValidationError("gchat", "Cannot parse non-message event");
     }
     const threadName =
       messagePayload.message.thread?.name || messagePayload.message.name;
@@ -2074,11 +2065,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
     });
 
     if (gError.code === 429) {
-      throw new RateLimitError(
-        "Google Chat rate limit exceeded",
-        undefined,
-        error,
-      );
+      throw new AdapterRateLimitError("gchat");
     }
 
     throw error;

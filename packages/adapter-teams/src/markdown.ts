@@ -60,13 +60,7 @@ export class TeamsFormatConverter extends BaseFormatConverter {
    * Teams accepts standard markdown, so we just stringify cleanly.
    */
   fromAst(ast: Root): string {
-    const parts: string[] = [];
-
-    for (const node of ast.children) {
-      parts.push(this.nodeToTeams(node as Content));
-    }
-
-    return parts.join("\n\n");
+    return this.fromAstWithNodeConverter(ast, (node) => this.nodeToTeams(node));
   }
 
   /**

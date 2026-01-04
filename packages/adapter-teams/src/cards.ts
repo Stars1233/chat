@@ -6,24 +6,26 @@
  */
 
 import {
-  type ActionsElement,
-  type ButtonElement,
-  type CardChild,
-  type CardElement,
-  convertEmojiPlaceholders,
-  type DividerElement,
-  type FieldsElement,
-  type ImageElement,
-  type SectionElement,
-  type TextElement,
+  createEmojiConverter,
+  mapButtonStyle,
+  cardToFallbackText as sharedCardToFallbackText,
+} from "@chat-adapter/shared";
+import type {
+  ActionsElement,
+  ButtonElement,
+  CardChild,
+  CardElement,
+  DividerElement,
+  FieldsElement,
+  ImageElement,
+  SectionElement,
+  TextElement,
 } from "chat";
 
 /**
  * Convert emoji placeholders in text to Teams format.
  */
-function convertEmoji(text: string): string {
-  return convertEmojiPlaceholders(text, "teams");
-}
+const convertEmoji = createEmojiConverter("teams");
 
 // Adaptive Card types (simplified)
 export interface AdaptiveCard {
@@ -190,10 +192,9 @@ function convertButtonToAction(button: ButtonElement): AdaptiveCardAction {
     },
   };
 
-  if (button.style === "primary") {
-    action.style = "positive";
-  } else if (button.style === "danger") {
-    action.style = "destructive";
+  const style = mapButtonStyle(button.style, "teams");
+  if (style) {
+    action.style = style;
   }
 
   return action;
@@ -240,42 +241,9 @@ function convertFieldsToElement(element: FieldsElement): AdaptiveCardElement {
  * Used when adaptive cards aren't supported.
  */
 export function cardToFallbackText(card: CardElement): string {
-  const parts: string[] = [];
-
-  if (card.title) {
-    parts.push(`**${convertEmoji(card.title)}**`);
-  }
-
-  if (card.subtitle) {
-    parts.push(convertEmoji(card.subtitle));
-  }
-
-  for (const child of card.children) {
-    const text = childToFallbackText(child);
-    if (text) {
-      parts.push(text);
-    }
-  }
-
-  return parts.join("\n\n");
-}
-
-function childToFallbackText(child: CardChild): string | null {
-  switch (child.type) {
-    case "text":
-      return convertEmoji(child.content);
-    case "fields":
-      return child.children
-        .map((f) => `**${convertEmoji(f.label)}**: ${convertEmoji(f.value)}`)
-        .join("\n");
-    case "actions":
-      return `[${child.children.map((b) => convertEmoji(b.label)).join("] [")}]`;
-    case "section":
-      return child.children
-        .map((c) => childToFallbackText(c))
-        .filter(Boolean)
-        .join("\n");
-    default:
-      return null;
-  }
+  return sharedCardToFallbackText(card, {
+    boldFormat: "**",
+    lineBreak: "\n\n",
+    platform: "teams",
+  });
 }

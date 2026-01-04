@@ -58,13 +58,9 @@ export class SlackFormatConverter extends BaseFormatConverter {
    * Render an AST to Slack mrkdwn format.
    */
   fromAst(ast: Root): string {
-    const parts: string[] = [];
-
-    for (const node of ast.children) {
-      parts.push(this.nodeToMrkdwn(node as Content));
-    }
-
-    return parts.join("\n\n");
+    return this.fromAstWithNodeConverter(ast, (node) =>
+      this.nodeToMrkdwn(node),
+    );
   }
 
   /**

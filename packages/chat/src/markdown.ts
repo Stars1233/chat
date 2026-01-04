@@ -215,6 +215,26 @@ export abstract class BaseFormatConverter implements FormatConverter {
   abstract fromAst(ast: Root): string;
   abstract toAst(platformText: string): Root;
 
+  /**
+   * Template method for implementing fromAst with a node converter.
+   * Iterates through AST children and converts each using the provided function.
+   * Joins results with double newlines (standard paragraph separation).
+   *
+   * @param ast - The AST to convert
+   * @param nodeConverter - Function to convert each Content node to string
+   * @returns Platform-formatted string
+   */
+  protected fromAstWithNodeConverter(
+    ast: Root,
+    nodeConverter: (node: Content) => string,
+  ): string {
+    const parts: string[] = [];
+    for (const node of ast.children) {
+      parts.push(nodeConverter(node as Content));
+    }
+    return parts.join("\n\n");
+  }
+
   extractPlainText(platformText: string): string {
     return toPlainText(this.toAst(platformText));
   }

@@ -25,6 +25,7 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
+    "@chat-adapter/shared": "workspace:*",
     "chat": "workspace:*",
     "googleapis": "^144.0.0"
   },

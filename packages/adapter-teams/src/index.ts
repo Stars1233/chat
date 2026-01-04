@@ -24,6 +24,13 @@ class ServerlessCloudAdapter extends CloudAdapter {
   }
 }
 
+import {
+  AuthenticationError,
+  extractCard,
+  extractFiles,
+  NetworkError,
+  ValidationError,
+} from "@chat-adapter/shared";
 import type {
   ActionEvent,
   Adapter,
@@ -45,7 +52,6 @@ import type {
 import {
   convertEmojiPlaceholders,
   defaultEmojiResolver,
-  isCardElement,
   NotImplementedError,
 } from "chat";
 import { cardToAdaptiveCard } from "./cards";
@@ -124,7 +130,10 @@ export class TeamsAdapter implements Adapter<TeamsThreadId, unknown> {
     this.userName = config.userName || "bot";
 
     if (config.appType === "SingleTenant" && !config.appTenantId) {
-      throw new Error("appTenantId is required for SingleTenant app type");
+      throw new ValidationError(
+        "teams",
+        "appTenantId is required for SingleTenant app type",
+      );
     }
 
     // Pass empty config object, credentials go via factory
@@ -669,7 +678,8 @@ export class TeamsAdapter implements Adapter<TeamsThreadId, unknown> {
         ? async () => {
             const response = await fetch(url);
             if (!response.ok) {
-              throw new Error(
+              throw new NetworkError(
+                "teams",
                 `Failed to fetch file: ${response.status} ${response.statusText}`,
               );
             }
@@ -693,12 +703,12 @@ export class TeamsAdapter implements Adapter<TeamsThreadId, unknown> {
     const { conversationId, serviceUrl } = this.decodeThreadId(threadId);
 
     // Check for files to upload
-    const files = this.extractFiles(message);
+    const files = extractFiles(message);
     const fileAttachments =
       files.length > 0 ? await this.filesToAttachments(files) : [];
 
     // Check if message contains a card
-    const card = this.extractCard(message);
+    const card = extractCard(message);
     let activity: Partial<Activity>;
 
     if (card) {
@@ -772,31 +782,6 @@ export class TeamsAdapter implements Adapter<TeamsThreadId, unknown> {
   }
 
   /**
-   * Extract card element from a AdapterPostableMessage if present.
-   */
-  private extractCard(
-    message: AdapterPostableMessage,
-  ): import("chat").CardElement | null {
-    if (isCardElement(message)) {
-      return message;
-    }
-    if (typeof message === "object" && message !== null && "card" in message) {
-      return message.card;
-    }
-    return null;
-  }
-
-  /**
-   * Extract files from a AdapterPostableMessage if present.
-   */
-  private extractFiles(message: AdapterPostableMessage): FileUpload[] {
-    if (typeof message === "object" && message !== null && "files" in message) {
-      return (message as { files?: FileUpload[] }).files ?? [];
-    }
-    return [];
-  }
-
-  /**
    * Convert files to Teams attachments.
    * Uses inline data URIs for small files.
    */
@@ -846,7 +831,7 @@ export class TeamsAdapter implements Adapter<TeamsThreadId, unknown> {
     const { conversationId, serviceUrl } = this.decodeThreadId(threadId);
 
     // Check if message contains a card
-    const card = this.extractCard(message);
+    const card = extractCard(message);
     let activity: Partial<Activity>;
 
     if (card) {
@@ -1014,7 +999,8 @@ export class TeamsAdapter implements Adapter<TeamsThreadId, unknown> {
     });
 
     if (!tenantId) {
-      throw new Error(
+      throw new ValidationError(
+        "teams",
         "Cannot open DM: tenant ID not found. User must interact with the bot first (via @mention) to cache their tenant ID.",
       );
     }
@@ -1049,7 +1035,10 @@ export class TeamsAdapter implements Adapter<TeamsThreadId, unknown> {
     );
 
     if (!conversationId) {
-      throw new Error("Failed to create 1:1 conversation - no ID returned");
+      throw new NetworkError(
+        "teams",
+        "Failed to create 1:1 conversation - no ID returned",
+      );
     }
 
     this.logger?.debug("Teams: 1:1 conversation created", { conversationId });
@@ -1318,7 +1307,7 @@ export class TeamsAdapter implements Adapter<TeamsThreadId, unknown> {
 
     const graphClient = this.graphClient;
     if (!graphClient) {
-      throw new Error("Graph client not initialized");
+      throw new AuthenticationError("teams", "Graph client not initialized");
     }
 
     // Fetch the parent message (the original message that started the thread)
@@ -1619,7 +1608,10 @@ export class TeamsAdapter implements Adapter<TeamsThreadId, unknown> {
   decodeThreadId(threadId: string): TeamsThreadId {
     const parts = threadId.split(":");
     if (parts.length !== 3 || parts[0] !== "teams") {
-      throw new Error(`Invalid Teams thread ID: ${threadId}`);
+      throw new ValidationError(
+        "teams",
+        `Invalid Teams thread ID: ${threadId}`,
+      );
     }
     const conversationId = Buffer.from(
       parts[1] as string,

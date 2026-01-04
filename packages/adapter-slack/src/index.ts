@@ -1,4 +1,11 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
+import {
+  AdapterRateLimitError,
+  extractCard,
+  extractFiles,
+  NetworkError,
+  ValidationError,
+} from "@chat-adapter/shared";
 import { WebClient } from "@slack/web-api";
 import type {
   ActionEvent,
@@ -23,8 +30,6 @@ import {
   ChatError,
   convertEmojiPlaceholders,
   defaultEmojiResolver,
-  isCardElement,
-  RateLimitError,
 } from "chat";
 import { cardToBlockKit, cardToFallbackText } from "./cards";
 import { SlackFormatConverter } from "./markdown";
@@ -619,7 +624,8 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
               },
             });
             if (!response.ok) {
-              throw new Error(
+              throw new NetworkError(
+                "slack",
                 `Failed to fetch file: ${response.status} ${response.statusText}`,
               );
             }
@@ -638,7 +644,7 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
 
     try {
       // Check for files to upload
-      const files = this.extractFiles(message);
+      const files = extractFiles(message);
       if (files.length > 0) {
         // Upload files first (they're shared to the channel automatically)
         await this.uploadFiles(files, channel, threadTs || undefined);
@@ -649,7 +655,7 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
           (typeof message === "object" &&
             message !== null &&
             ("raw" in message || "markdown" in message || "ast" in message));
-        const card = this.extractCard(message);
+        const card = extractCard(message);
 
         if (!hasText && !card) {
           // Return a synthetic message ID since files.uploadV2 handles sharing
@@ -662,7 +668,7 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
       }
 
       // Check if message contains a card
-      const card = this.extractCard(message);
+      const card = extractCard(message);
 
       if (card) {
         // Render card as Block Kit
@@ -732,31 +738,6 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
   }
 
   /**
-   * Extract card element from a AdapterPostableMessage if present.
-   */
-  private extractCard(
-    message: AdapterPostableMessage,
-  ): import("chat").CardElement | null {
-    if (isCardElement(message)) {
-      return message;
-    }
-    if (typeof message === "object" && message !== null && "card" in message) {
-      return message.card;
-    }
-    return null;
-  }
-
-  /**
-   * Extract files from a AdapterPostableMessage if present.
-   */
-  private extractFiles(message: AdapterPostableMessage): FileUpload[] {
-    if (typeof message === "object" && message !== null && "files" in message) {
-      return (message as { files?: FileUpload[] }).files ?? [];
-    }
-    return [];
-  }
-
-  /**
    * Upload files to Slack and share them to a channel.
    * Returns the file IDs of uploaded files.
    */
@@ -780,7 +761,7 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
           const arrayBuffer = await file.data.arrayBuffer();
           fileBuffer = Buffer.from(arrayBuffer);
         } else {
-          throw new Error("Unsupported file data type");
+          throw new ValidationError("slack", "Unsupported file data type");
         }
 
         this.logger?.debug("Slack API: files.uploadV2", {
@@ -837,7 +818,7 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
 
     try {
       // Check if message contains a card
-      const card = this.extractCard(message);
+      const card = extractCard(message);
 
       if (card) {
         // Render card as Block Kit
@@ -1034,7 +1015,10 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
       const result = await this.client.conversations.open({ users: userId });
 
       if (!result.channel?.id) {
-        throw new Error("Failed to open DM - no channel returned");
+        throw new NetworkError(
+          "slack",
+          "Failed to open DM - no channel returned",
+        );
       }
 
       const channelId = result.channel.id;
@@ -1254,7 +1238,10 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
   decodeThreadId(threadId: string): SlackThreadId {
     const parts = threadId.split(":");
     if (parts.length !== 3 || parts[0] !== "slack") {
-      throw new Error(`Invalid Slack thread ID: ${threadId}`);
+      throw new ValidationError(
+        "slack",
+        `Invalid Slack thread ID: ${threadId}`,
+      );
     }
     return {
       channel: parts[1] as string,
@@ -1348,7 +1335,7 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
 
     if (slackError.code === "slack_webapi_platform_error") {
       if (slackError.data?.error === "ratelimited") {
-        throw new RateLimitError("Slack rate limit exceeded", undefined, error);
+        throw new AdapterRateLimitError("slack");
       }
     }
 
