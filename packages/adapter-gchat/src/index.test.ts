@@ -1,4 +1,4 @@
-import type { ChatInstance, Lock, StateAdapter } from "chat";
+import type { ChatInstance, Lock, Logger, StateAdapter } from "chat";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createGoogleChatAdapter,
@@ -8,6 +8,13 @@ import {
 import type { WorkspaceEventNotification } from "./workspace-events";
 
 // Test credentials
+const mockLogger: Logger = {
+  debug: vi.fn(),
+  info: vi.fn(),
+  warn: vi.fn(),
+  error: vi.fn(),
+};
+
 const TEST_CREDENTIALS = {
   client_email: "test@test.iam.gserviceaccount.com",
   private_key: "-----BEGIN PRIVATE KEY-----\ntest\n-----END PRIVATE KEY-----\n",
@@ -73,6 +80,7 @@ describe("GoogleChatAdapter", () => {
   it("should create an adapter instance", () => {
     const adapter = createGoogleChatAdapter({
       credentials: TEST_CREDENTIALS,
+      logger: mockLogger,
     });
     expect(adapter).toBeInstanceOf(GoogleChatAdapter);
     expect(adapter.name).toBe("gchat");
@@ -82,6 +90,7 @@ describe("GoogleChatAdapter", () => {
     it("should encode and decode thread IDs without thread name", () => {
       const adapter = createGoogleChatAdapter({
         credentials: TEST_CREDENTIALS,
+        logger: mockLogger,
       });
 
       const original = {
@@ -98,6 +107,7 @@ describe("GoogleChatAdapter", () => {
     it("should encode and decode thread IDs with thread name", () => {
       const adapter = createGoogleChatAdapter({
         credentials: TEST_CREDENTIALS,
+        logger: mockLogger,
       });
 
       const original = {
@@ -121,6 +131,7 @@ describe("GoogleChatAdapter", () => {
     beforeEach(async () => {
       adapter = createGoogleChatAdapter({
         credentials: TEST_CREDENTIALS,
+        logger: mockLogger,
       });
       mockState = createMockStateAdapter();
       mockChat = createMockChatInstance(mockState);

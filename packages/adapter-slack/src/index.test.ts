@@ -4,8 +4,16 @@
 
 import { createHmac } from "node:crypto";
 import { ValidationError } from "@chat-adapter/shared";
-import { describe, expect, it } from "vitest";
+import type { Logger } from "chat";
+import { describe, expect, it, vi } from "vitest";
 import { createSlackAdapter, SlackAdapter } from "./index";
+
+const mockLogger: Logger = {
+  debug: vi.fn(),
+  info: vi.fn(),
+  warn: vi.fn(),
+  error: vi.fn(),
+};
 
 // ============================================================================
 // Test Helpers
@@ -49,6 +57,7 @@ describe("createSlackAdapter", () => {
     const adapter = createSlackAdapter({
       botToken: "xoxb-test-token",
       signingSecret: "test-secret",
+      logger: mockLogger,
     });
     expect(adapter).toBeInstanceOf(SlackAdapter);
     expect(adapter.name).toBe("slack");
@@ -58,6 +67,7 @@ describe("createSlackAdapter", () => {
     const adapter = createSlackAdapter({
       botToken: "xoxb-test-token",
       signingSecret: "test-secret",
+      logger: mockLogger,
     });
     expect(adapter.userName).toBe("bot");
   });
@@ -66,6 +76,7 @@ describe("createSlackAdapter", () => {
     const adapter = createSlackAdapter({
       botToken: "xoxb-test-token",
       signingSecret: "test-secret",
+      logger: mockLogger,
       userName: "custombot",
     });
     expect(adapter.userName).toBe("custombot");
@@ -75,6 +86,7 @@ describe("createSlackAdapter", () => {
     const adapter = createSlackAdapter({
       botToken: "xoxb-test-token",
       signingSecret: "test-secret",
+      logger: mockLogger,
       botUserId: "U12345",
     });
     expect(adapter.botUserId).toBe("U12345");
@@ -89,6 +101,7 @@ describe("encodeThreadId", () => {
   const adapter = createSlackAdapter({
     botToken: "xoxb-test-token",
     signingSecret: "test-secret",
+    logger: mockLogger,
   });
 
   it("encodes channel and threadTs correctly", () => {
@@ -112,6 +125,7 @@ describe("decodeThreadId", () => {
   const adapter = createSlackAdapter({
     botToken: "xoxb-test-token",
     signingSecret: "test-secret",
+    logger: mockLogger,
   });
 
   it("decodes valid thread ID", () => {
@@ -145,6 +159,7 @@ describe("isDM", () => {
   const adapter = createSlackAdapter({
     botToken: "xoxb-test-token",
     signingSecret: "test-secret",
+    logger: mockLogger,
   });
 
   it("returns true for DM channels (D prefix)", () => {
@@ -169,6 +184,7 @@ describe("handleWebhook - signature verification", () => {
   const adapter = createSlackAdapter({
     botToken: "xoxb-test-token",
     signingSecret: secret,
+    logger: mockLogger,
   });
 
   it("rejects requests without timestamp header", async () => {
@@ -245,6 +261,7 @@ describe("handleWebhook - URL verification", () => {
   const adapter = createSlackAdapter({
     botToken: "xoxb-test-token",
     signingSecret: secret,
+    logger: mockLogger,
   });
 
   it("responds to url_verification challenge", async () => {
@@ -271,6 +288,7 @@ describe("handleWebhook - event_callback", () => {
   const adapter = createSlackAdapter({
     botToken: "xoxb-test-token",
     signingSecret: secret,
+    logger: mockLogger,
   });
 
   it("handles message events", async () => {
@@ -358,6 +376,7 @@ describe("handleWebhook - interactive payloads", () => {
   const adapter = createSlackAdapter({
     botToken: "xoxb-test-token",
     signingSecret: secret,
+    logger: mockLogger,
   });
 
   it("handles block_actions payload", async () => {
@@ -428,6 +447,7 @@ describe("handleWebhook - JSON parsing", () => {
   const adapter = createSlackAdapter({
     botToken: "xoxb-test-token",
     signingSecret: secret,
+    logger: mockLogger,
   });
 
   it("returns 400 for invalid JSON", async () => {
@@ -447,6 +467,7 @@ describe("parseMessage", () => {
   const adapter = createSlackAdapter({
     botToken: "xoxb-test-token",
     signingSecret: "test-secret",
+    logger: mockLogger,
     botUserId: "U_BOT",
   });
 
@@ -587,6 +608,7 @@ describe("renderFormatted", () => {
   const adapter = createSlackAdapter({
     botToken: "xoxb-test-token",
     signingSecret: "test-secret",
+    logger: mockLogger,
   });
 
   it("renders AST to Slack mrkdwn format", () => {
@@ -618,6 +640,7 @@ describe("edge cases", () => {
   const adapter = createSlackAdapter({
     botToken: "xoxb-test-token",
     signingSecret: "test-secret",
+    logger: mockLogger,
   });
 
   it("handles missing text in event", () => {
@@ -679,6 +702,7 @@ describe("date parsing", () => {
   const adapter = createSlackAdapter({
     botToken: "xoxb-test-token",
     signingSecret: "test-secret",
+    logger: mockLogger,
   });
 
   it("parses Slack timestamp to Date", () => {
@@ -717,6 +741,7 @@ describe("formatted text extraction", () => {
   const adapter = createSlackAdapter({
     botToken: "xoxb-test-token",
     signingSecret: "test-secret",
+    logger: mockLogger,
   });
 
   it("extracts plain text from mrkdwn", () => {

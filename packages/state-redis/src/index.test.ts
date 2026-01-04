@@ -1,5 +1,13 @@
-import { describe, expect, it } from "vitest";
+import type { Logger } from "chat";
+import { describe, expect, it, vi } from "vitest";
 import { createRedisState, RedisStateAdapter } from "./index";
+
+const mockLogger: Logger = {
+  debug: vi.fn(),
+  info: vi.fn(),
+  warn: vi.fn(),
+  error: vi.fn(),
+};
 
 describe("RedisStateAdapter", () => {
   it("should export createRedisState function", () => {
@@ -7,7 +15,10 @@ describe("RedisStateAdapter", () => {
   });
 
   it("should create an adapter instance", () => {
-    const adapter = createRedisState({ url: "redis://localhost:6379" });
+    const adapter = createRedisState({
+      url: "redis://localhost:6379",
+      logger: mockLogger,
+    });
     expect(adapter).toBeInstanceOf(RedisStateAdapter);
   });
 
@@ -18,6 +29,7 @@ describe("RedisStateAdapter", () => {
     it("should connect to Redis", async () => {
       const adapter = createRedisState({
         url: process.env.REDIS_URL || "redis://localhost:6379",
+        logger: mockLogger,
       });
       await adapter.connect();
       await adapter.disconnect();

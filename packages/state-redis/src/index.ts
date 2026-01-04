@@ -1,4 +1,4 @@
-import type { Lock, StateAdapter } from "chat";
+import type { Lock, Logger, StateAdapter } from "chat";
 import { createClient, type RedisClientType } from "redis";
 
 export interface RedisStateAdapterOptions {
@@ -6,6 +6,8 @@ export interface RedisStateAdapterOptions {
   url: string;
   /** Key prefix for all Redis keys (default: "chat-sdk") */
   keyPrefix?: string;
+  /** Logger instance for error reporting */
+  logger: Logger;
 }
 
 /**
@@ -17,16 +19,18 @@ export interface RedisStateAdapterOptions {
 export class RedisStateAdapter implements StateAdapter {
   private client: RedisClientType;
   private keyPrefix: string;
+  private logger: Logger;
   private connected = false;
   private connectPromise: Promise<void> | null = null;
 
   constructor(options: RedisStateAdapterOptions) {
     this.client = createClient({ url: options.url });
     this.keyPrefix = options.keyPrefix || "chat-sdk";
+    this.logger = options.logger;
 
     // Handle connection errors
     this.client.on("error", (err) => {
-      console.error("[chat-sdk] Redis client error:", err);
+      this.logger.error("Redis client error", { error: err });
     });
   }
 

@@ -3,7 +3,7 @@ import {
   type GoogleChatAdapter,
 } from "@chat-adapter/gchat";
 import { createMemoryState } from "@chat-adapter/state-memory";
-import { Chat } from "chat";
+import { Chat, type Logger } from "chat";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createGoogleChatEvent,
@@ -16,6 +16,14 @@ import {
   type MockGoogleChatApi,
 } from "./gchat-utils";
 import { createWaitUntilTracker } from "./test-scenarios";
+
+const mockLogger: Logger = {
+  debug: vi.fn(),
+  info: vi.fn(),
+  warn: vi.fn(),
+  error: vi.fn(),
+  child: () => mockLogger,
+};
 
 describe("Google Chat Integration", () => {
   let chat: Chat<{ gchat: GoogleChatAdapter }>;
@@ -38,6 +46,7 @@ describe("Google Chat Integration", () => {
     gchatAdapter = createGoogleChatAdapter({
       credentials: GCHAT_TEST_CREDENTIALS,
       userName: GCHAT_BOT_NAME,
+      logger: mockLogger,
     });
 
     mockChatApi = createMockGoogleChatApi();

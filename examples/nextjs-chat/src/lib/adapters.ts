@@ -4,7 +4,11 @@ import {
 } from "@chat-adapter/gchat";
 import { createSlackAdapter, type SlackAdapter } from "@chat-adapter/slack";
 import { createTeamsAdapter, type TeamsAdapter } from "@chat-adapter/teams";
+import { ConsoleLogger } from "chat";
 import { recorder, withRecording } from "./recorder";
+
+// Create a logger for adapters
+const logger = new ConsoleLogger("info");
 
 export type Adapters = {
   slack?: SlackAdapter;
@@ -61,6 +65,7 @@ export function buildAdapters(): Adapters {
         botToken: process.env.SLACK_BOT_TOKEN,
         signingSecret: process.env.SLACK_SIGNING_SECRET,
         userName: "Chat SDK Bot",
+        logger: logger.child("slack"),
       }),
       "slack",
       SLACK_METHODS,
@@ -76,6 +81,7 @@ export function buildAdapters(): Adapters {
         appType: "SingleTenant",
         appTenantId: process.env.TEAMS_APP_TENANT_ID as string,
         userName: "Chat SDK Demo",
+        logger: logger.child("teams"),
       }),
       "teams",
       TEAMS_METHODS,
@@ -94,6 +100,7 @@ export function buildAdapters(): Adapters {
           pubsubTopic: process.env.GOOGLE_CHAT_PUBSUB_TOPIC,
           // User email to impersonate for Workspace Events API (domain-wide delegation)
           impersonateUser: process.env.GOOGLE_CHAT_IMPERSONATE_USER,
+          logger: logger.child("gchat"),
         }),
         "gchat",
         GCHAT_METHODS,

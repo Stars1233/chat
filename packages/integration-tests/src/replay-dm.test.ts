@@ -17,7 +17,7 @@ import {
 import { createSlackAdapter, type SlackAdapter } from "@chat-adapter/slack";
 import { createMemoryState } from "@chat-adapter/state-memory";
 import { createTeamsAdapter, type TeamsAdapter } from "@chat-adapter/teams";
-import { Chat, type Message } from "chat";
+import { Chat, type Logger, type Message } from "chat";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import gchatFixtures from "../fixtures/replay/dm/gchat.json";
 import slackFixtures from "../fixtures/replay/dm/slack.json";
@@ -47,6 +47,14 @@ import {
   type MockBotAdapter,
   TEAMS_APP_PASSWORD,
 } from "./teams-utils";
+
+const mockLogger: Logger = {
+  debug: vi.fn(),
+  info: vi.fn(),
+  warn: vi.fn(),
+  error: vi.fn(),
+  child: () => mockLogger,
+};
 
 /**
  * DM flow state tracker for tests.
@@ -83,6 +91,7 @@ describe("DM Replay Tests", () => {
       const slackAdapter = createSlackAdapter({
         botToken: SLACK_BOT_TOKEN,
         signingSecret: SLACK_SIGNING_SECRET,
+        logger: mockLogger,
       });
       mockSlackClient = createMockSlackClient();
       mockSlackClient.auth.test.mockResolvedValue({
@@ -238,6 +247,7 @@ describe("DM Replay Tests", () => {
       gchatAdapter = createGoogleChatAdapter({
         credentials: GCHAT_TEST_CREDENTIALS,
         userName: gchatFixtures.botName,
+        logger: mockLogger,
       });
       gchatAdapter.botUserId = gchatFixtures.botUserId;
 
@@ -372,6 +382,7 @@ describe("DM Replay Tests", () => {
         appId: teamsFixtures.botUserId.split(":")[1] || "test-app-id",
         appPassword: TEAMS_APP_PASSWORD,
         userName: teamsFixtures.botName,
+        logger: mockLogger,
       });
       mockBotAdapter = createMockBotAdapter();
       injectMockBotAdapter(teamsAdapter, mockBotAdapter);

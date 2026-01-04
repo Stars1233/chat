@@ -16,6 +16,7 @@ import { createTeamsAdapter, type TeamsAdapter } from "@chat-adapter/teams";
 import {
   type ActionEvent,
   Chat,
+  type Logger,
   type Message,
   type ReactionEvent,
   type Thread,
@@ -41,6 +42,14 @@ import {
   TEAMS_APP_PASSWORD,
 } from "./teams-utils";
 import { createWaitUntilTracker } from "./test-scenarios";
+
+const mockLogger: Logger = {
+  debug: () => {},
+  info: () => {},
+  warn: () => {},
+  error: () => {},
+  child: () => mockLogger,
+};
 
 // Re-export for convenience
 export { createWaitUntilTracker } from "./test-scenarios";
@@ -140,6 +149,7 @@ export function createSlackTestContext(
     botToken: SLACK_BOT_TOKEN,
     signingSecret: SLACK_SIGNING_SECRET,
     botUserId: fixtures.botUserId,
+    logger: mockLogger,
   });
 
   const mockClient = createMockSlackClient();
@@ -246,6 +256,7 @@ export function createTeamsTestContext(
     appId,
     appPassword: TEAMS_APP_PASSWORD,
     userName: fixtures.botName,
+    logger: mockLogger,
   });
 
   const mockBotAdapter = createMockBotAdapter();
@@ -336,6 +347,7 @@ export function createGchatTestContext(
   const adapter = createGoogleChatAdapter({
     credentials: GCHAT_TEST_CREDENTIALS,
     userName: fixtures.botName,
+    logger: mockLogger,
   });
   adapter.botUserId = fixtures.botUserId;
 

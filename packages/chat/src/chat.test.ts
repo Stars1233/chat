@@ -7,10 +7,19 @@ import type {
   Adapter,
   FormattedContent,
   Lock,
+  Logger,
   Message,
   ReactionEvent,
   StateAdapter,
 } from "./types";
+
+const mockLogger: Logger = {
+  debug: vi.fn(),
+  info: vi.fn(),
+  warn: vi.fn(),
+  error: vi.fn(),
+  child: () => mockLogger,
+};
 
 // Mock adapter
 function createMockAdapter(name: string): Adapter {
@@ -140,6 +149,7 @@ describe("Chat", () => {
       userName: "testbot",
       adapters: { slack: mockAdapter },
       state: mockState,
+      logger: mockLogger,
     });
 
     // Trigger initialization by calling webhooks

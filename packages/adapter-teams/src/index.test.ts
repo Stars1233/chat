@@ -1,5 +1,13 @@
-import { describe, expect, it } from "vitest";
+import type { Logger } from "chat";
+import { describe, expect, it, vi } from "vitest";
 import { createTeamsAdapter, TeamsAdapter } from "./index";
+
+const mockLogger: Logger = {
+  debug: vi.fn(),
+  info: vi.fn(),
+  warn: vi.fn(),
+  error: vi.fn(),
+};
 
 describe("TeamsAdapter", () => {
   it("should export createTeamsAdapter function", () => {
@@ -10,6 +18,7 @@ describe("TeamsAdapter", () => {
     const adapter = createTeamsAdapter({
       appId: "test-app-id",
       appPassword: "test-password",
+      logger: mockLogger,
     });
     expect(adapter).toBeInstanceOf(TeamsAdapter);
     expect(adapter.name).toBe("teams");
@@ -20,6 +29,7 @@ describe("TeamsAdapter", () => {
       const adapter = createTeamsAdapter({
         appId: "test",
         appPassword: "test",
+        logger: mockLogger,
       });
 
       const original = {
@@ -39,6 +49,7 @@ describe("TeamsAdapter", () => {
       const adapter = createTeamsAdapter({
         appId: "test",
         appPassword: "test",
+        logger: mockLogger,
       });
 
       // Teams channel threads include ;messageid=XXX in the conversation ID

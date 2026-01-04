@@ -1,4 +1,4 @@
-import type { Lock, StateAdapter } from "chat";
+import type { Lock, Logger, StateAdapter } from "chat";
 import Redis from "ioredis";
 
 export interface IoRedisStateAdapterOptions {
@@ -6,6 +6,8 @@ export interface IoRedisStateAdapterOptions {
   url: string;
   /** Key prefix for all Redis keys (default: "chat-sdk") */
   keyPrefix?: string;
+  /** Logger instance for error reporting */
+  logger: Logger;
 }
 
 export interface IoRedisStateClientOptions {
@@ -13,6 +15,8 @@ export interface IoRedisStateClientOptions {
   client: Redis;
   /** Key prefix for all Redis keys (default: "chat-sdk") */
   keyPrefix?: string;
+  /** Logger instance for error reporting */
+  logger: Logger;
 }
 
 /**
@@ -34,6 +38,7 @@ export interface IoRedisStateClientOptions {
 export class IoRedisStateAdapter implements StateAdapter {
   private client: Redis;
   private keyPrefix: string;
+  private logger: Logger;
   private connected = false;
   private connectPromise: Promise<void> | null = null;
   private ownsClient: boolean;
@@ -47,10 +52,11 @@ export class IoRedisStateAdapter implements StateAdapter {
       this.ownsClient = true;
     }
     this.keyPrefix = options.keyPrefix || "chat-sdk";
+    this.logger = options.logger;
 
     // Handle connection errors
     this.client.on("error", (err) => {
-      console.error("[chat-sdk] ioredis client error:", err);
+      this.logger.error("ioredis client error", { error: err });
     });
   }
 

@@ -123,9 +123,7 @@ export class Chat<
     this._streamingUpdateIntervalMs = config.streamingUpdateIntervalMs ?? 500;
 
     // Initialize logger
-    if (!config.logger) {
-      this.logger = new ConsoleLogger("info");
-    } else if (typeof config.logger === "string") {
+    if (typeof config.logger === "string") {
       this.logger = new ConsoleLogger(config.logger as LogLevel);
     } else {
       this.logger = config.logger;

@@ -1,6 +1,6 @@
 import { createMemoryState } from "@chat-adapter/state-memory";
 import { createTeamsAdapter, type TeamsAdapter } from "@chat-adapter/teams";
-import { Chat } from "chat";
+import { Chat, type Logger } from "chat";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createMockBotAdapter,
@@ -16,6 +16,14 @@ import {
   TEAMS_BOT_NAME,
 } from "./teams-utils";
 import { createWaitUntilTracker } from "./test-scenarios";
+
+const mockLogger: Logger = {
+  debug: vi.fn(),
+  info: vi.fn(),
+  warn: vi.fn(),
+  error: vi.fn(),
+  child: () => mockLogger,
+};
 
 describe("Teams Integration", () => {
   let chat: Chat<{ teams: TeamsAdapter }>;
@@ -38,6 +46,7 @@ describe("Teams Integration", () => {
       appId: TEAMS_APP_ID,
       appPassword: TEAMS_APP_PASSWORD,
       userName: TEAMS_BOT_NAME,
+      logger: mockLogger,
     });
 
     mockBotAdapter = createMockBotAdapter();

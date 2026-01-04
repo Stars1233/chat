@@ -24,6 +24,9 @@
       "suspicious": {
         "noExplicitAny": "error",
         "noShadowRestrictedNames": "off"
+      },
+      "nursery": {
+        "noFloatingPromises": "error"
       }
     }
   }

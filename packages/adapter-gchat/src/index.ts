@@ -63,6 +63,8 @@ export interface ServiceAccountCredentials {
 
 /** Base config options shared by all auth methods */
 export interface GoogleChatAdapterBaseConfig {
+  /** Logger instance for error reporting */
+  logger: Logger;
   /** Override bot username (optional) */
   userName?: string;
   /**
@@ -243,7 +245,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
   private chatApi: chat_v1.Chat;
   private chat: ChatInstance | null = null;
   private state: StateAdapter | null = null;
-  private logger: Logger | null = null;
+  private logger: Logger;
   private formatConverter = new GoogleChatFormatConverter();
   private pubsubTopic?: string;
   private credentials?: ServiceAccountCredentials;
@@ -264,6 +266,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
   private userInfoCache = new Map<string, CachedUserInfo>();
 
   constructor(config: GoogleChatAdapterConfig) {
+    this.logger = config.logger;
     this.userName = config.userName || "bot";
     this.pubsubTopic = config.pubsubTopic;
     this.impersonateUser = config.impersonateUser;
@@ -354,14 +357,13 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
   async initialize(chat: ChatInstance): Promise<void> {
     this.chat = chat;
     this.state = chat.getState();
-    this.logger = chat.getLogger(this.name);
 
     // Restore persisted bot user ID from state (for serverless environments)
     if (!this.botUserId) {
       const savedBotUserId = await this.state.get<string>("gchat:botUserId");
       if (savedBotUserId) {
         this.botUserId = savedBotUserId;
-        this.logger?.debug("Restored bot user ID from state", {
+        this.logger.debug("Restored bot user ID from state", {
           botUserId: this.botUserId,
         });
       }
@@ -373,14 +375,14 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
    * Ensures the space has a Workspace Events subscription so we receive all messages.
    */
   async onThreadSubscribe(threadId: string): Promise<void> {
-    this.logger?.info("onThreadSubscribe called", {
+    this.logger.info("onThreadSubscribe called", {
       threadId,
       hasPubsubTopic: !!this.pubsubTopic,
       pubsubTopic: this.pubsubTopic,
     });
 
     if (!this.pubsubTopic) {
-      this.logger?.warn(
+      this.logger.warn(
         "No pubsubTopic configured, skipping space subscription. Set GOOGLE_CHAT_PUBSUB_TOPIC env var.",
       );
       return;
@@ -395,7 +397,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
    * Creates one if it doesn't exist or is about to expire.
    */
   private async ensureSpaceSubscription(spaceName: string): Promise<void> {
-    this.logger?.info("ensureSpaceSubscription called", {
+    this.logger.info("ensureSpaceSubscription called", {
       spaceName,
       hasPubsubTopic: !!this.pubsubTopic,
       hasState: !!this.state,
@@ -404,7 +406,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
     });
 
     if (!this.pubsubTopic || !this.state) {
-      this.logger?.warn("ensureSpaceSubscription skipped - missing config", {
+      this.logger.warn("ensureSpaceSubscription skipped - missing config", {
         hasPubsubTopic: !!this.pubsubTopic,
         hasState: !!this.state,
       });
@@ -418,13 +420,13 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
     if (cached) {
       const timeUntilExpiry = cached.expireTime - Date.now();
       if (timeUntilExpiry > SUBSCRIPTION_REFRESH_BUFFER_MS) {
-        this.logger?.debug("Space subscription still valid", {
+        this.logger.debug("Space subscription still valid", {
           spaceName,
           expiresIn: Math.round(timeUntilExpiry / 1000 / 60),
         });
         return;
       }
-      this.logger?.debug("Space subscription expiring soon, will refresh", {
+      this.logger.debug("Space subscription expiring soon, will refresh", {
         spaceName,
         expiresIn: Math.round(timeUntilExpiry / 1000 / 60),
       });
@@ -433,7 +435,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
     // Check if we're already creating a subscription for this space
     const pending = this.pendingSubscriptions.get(spaceName);
     if (pending) {
-      this.logger?.debug("Subscription creation already in progress", {
+      this.logger.debug("Subscription creation already in progress", {
         spaceName,
       });
       return pending;
@@ -461,7 +463,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
     cacheKey: string,
   ): Promise<void> {
     const authOptions = this.getAuthOptions();
-    this.logger?.info("createSpaceSubscriptionWithCache", {
+    this.logger.info("createSpaceSubscriptionWithCache", {
       spaceName,
       hasAuthOptions: !!authOptions,
       hasCredentials: !!this.credentials,
@@ -469,7 +471,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
     });
 
     if (!authOptions) {
-      this.logger?.error(
+      this.logger.error(
         "Cannot create subscription: no auth configured. Use GOOGLE_CHAT_CREDENTIALS, GOOGLE_CHAT_USE_ADC=true, or custom auth.",
       );
       return;
@@ -485,7 +487,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
         authOptions,
       );
       if (existing) {
-        this.logger?.debug("Found existing subscription", {
+        this.logger.debug("Found existing subscription", {
           spaceName,
           subscriptionName: existing.subscriptionName,
         });
@@ -500,7 +502,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
         return;
       }
 
-      this.logger?.info("Creating Workspace Events subscription", {
+      this.logger.info("Creating Workspace Events subscription", {
         spaceName,
         pubsubTopic,
       });
@@ -524,13 +526,13 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
         );
       }
 
-      this.logger?.info("Workspace Events subscription created", {
+      this.logger.info("Workspace Events subscription created", {
         spaceName,
         subscriptionName: result.name,
         expireTime: result.expireTime,
       });
     } catch (error) {
-      this.logger?.error("Failed to create Workspace Events subscription", {
+      this.logger.error("Failed to create Workspace Events subscription", {
         spaceName,
         error,
       });
@@ -561,7 +563,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
         }
       }
     } catch (error) {
-      this.logger?.debug("Error checking existing subscriptions", { error });
+      this.logger.error("Error checking existing subscriptions", { error });
     }
     return null;
   }
@@ -599,7 +601,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
         const url = new URL(request.url);
         // Preserve the full URL including query strings
         this.endpointUrl = url.toString();
-        this.logger?.debug("Auto-detected endpoint URL", {
+        this.logger.debug("Auto-detected endpoint URL", {
           endpointUrl: this.endpointUrl,
         });
       } catch {
@@ -608,7 +610,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
     }
 
     const body = await request.text();
-    this.logger?.debug("GChat webhook raw body", { body });
+    this.logger.debug("GChat webhook raw body", { body });
 
     let parsed: unknown;
     try {
@@ -629,7 +631,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
     // Handle ADDED_TO_SPACE - automatically create subscription
     const addedPayload = event.chat?.addedToSpacePayload;
     if (addedPayload) {
-      this.logger?.debug("Bot added to space", {
+      this.logger.debug("Bot added to space", {
         space: addedPayload.space.name,
         spaceType: addedPayload.space.type,
       });
@@ -639,7 +641,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
     // Handle REMOVED_FROM_SPACE (for logging)
     const removedPayload = event.chat?.removedFromSpacePayload;
     if (removedPayload) {
-      this.logger?.debug("Bot removed from space", {
+      this.logger.debug("Bot removed from space", {
         space: removedPayload.space.name,
       });
     }
@@ -661,14 +663,14 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
     // Check for message payload in the Add-ons format
     const messagePayload = event.chat?.messagePayload;
     if (messagePayload) {
-      this.logger?.debug("message event", {
+      this.logger.debug("message event", {
         space: messagePayload.space.name,
         sender: messagePayload.message.sender?.displayName,
         text: messagePayload.message.text?.slice(0, 50),
       });
       this.handleMessageEvent(event, options);
     } else if (!addedPayload && !removedPayload) {
-      this.logger?.debug("Non-message event received", {
+      this.logger.debug("Non-message event received", {
         hasChat: !!event.chat,
         hasCommonEventObject: !!event.commonEventObject,
       });
@@ -697,7 +699,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
       "google.workspace.chat.reaction.v1.deleted",
     ];
     if (eventType && !allowedEventTypes.includes(eventType)) {
-      this.logger?.debug("Skipping unsupported Pub/Sub event", { eventType });
+      this.logger.debug("Skipping unsupported Pub/Sub event", { eventType });
       return new Response(JSON.stringify({ success: true }), {
         headers: { "Content-Type": "application/json" },
       });
@@ -705,7 +707,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
 
     try {
       const notification = decodePubSubMessage(pushMessage);
-      this.logger?.debug("Pub/Sub notification decoded", {
+      this.logger.debug("Pub/Sub notification decoded", {
         eventType: notification.eventType,
         messageId: notification.message?.name,
         reactionName: notification.reaction?.name,
@@ -726,7 +728,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
         headers: { "Content-Type": "application/json" },
       });
     } catch (error) {
-      this.logger?.error("Error processing Pub/Sub message", { error });
+      this.logger.error("Error processing Pub/Sub message", { error });
       // Return 200 to avoid retries for malformed messages
       return new Response(JSON.stringify({ error: "Processing failed" }), {
         status: 200,
@@ -763,7 +765,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
     if (resolvedSpaceName && options?.waitUntil) {
       options.waitUntil(
         this.ensureSpaceSubscription(resolvedSpaceName).catch((err) => {
-          this.logger?.warn("Subscription refresh failed", {
+          this.logger.error("Subscription refresh failed", {
             spaceName: resolvedSpaceName,
             error: err,
           });
@@ -837,13 +839,13 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
             spaceName: spaceName || "",
             threadName: threadName ?? undefined,
           });
-          this.logger?.debug("Fetched thread context for reaction", {
+          this.logger.debug("Fetched thread context for reaction", {
             messageName,
             threadName,
             threadId,
           });
         } catch (error) {
-          this.logger?.warn("Failed to fetch message for thread context", {
+          this.logger.warn("Failed to fetch message for thread context", {
             messageName,
             error,
           });
@@ -931,7 +933,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
       ),
     };
 
-    this.logger?.debug("Pub/Sub parsed message", {
+    this.logger.debug("Pub/Sub parsed message", {
       threadId,
       messageId: parsedMessage.id,
       text: parsedMessage.text,
@@ -967,7 +969,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
     options?: WebhookOptions,
   ): void {
     if (!this.chat) {
-      this.logger?.warn("Chat instance not initialized, ignoring card click");
+      this.logger.warn("Chat instance not initialized, ignoring card click");
       return;
     }
 
@@ -979,7 +981,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
     const actionId =
       commonEvent?.parameters?.actionId || commonEvent?.invokedFunction;
     if (!actionId) {
-      this.logger?.debug("Card click missing actionId", {
+      this.logger.debug("Card click missing actionId", {
         parameters: commonEvent?.parameters,
         invokedFunction: commonEvent?.invokedFunction,
       });
@@ -995,7 +997,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
     const user = buttonPayload?.user || event.chat?.user;
 
     if (!space) {
-      this.logger?.warn("Card click missing space info");
+      this.logger.warn("Card click missing space info");
       return;
     }
 
@@ -1023,7 +1025,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
       raw: event,
     };
 
-    this.logger?.debug("Processing GChat card click", {
+    this.logger.debug("Processing GChat card click", {
       actionId,
       value,
       messageId: actionEvent.messageId,
@@ -1041,13 +1043,13 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
     options?: WebhookOptions,
   ): void {
     if (!this.chat) {
-      this.logger?.warn("Chat instance not initialized, ignoring event");
+      this.logger.warn("Chat instance not initialized, ignoring event");
       return;
     }
 
     const messagePayload = event.chat?.messagePayload;
     if (!messagePayload) {
-      this.logger?.debug("Ignoring event without messagePayload");
+      this.logger.debug("Ignoring event without messagePayload");
       return;
     }
 
@@ -1095,7 +1097,9 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
     const displayName = message.sender?.displayName || "unknown";
     if (userId !== "unknown" && displayName !== "unknown") {
       this.cacheUserInfo(userId, displayName, message.sender?.email).catch(
-        () => {},
+        (error) => {
+          this.logger.error("Failed to cache user info", { userId, error });
+        },
       );
     }
 
@@ -1132,7 +1136,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
       // Check for files - currently not implemented for GChat
       const files = extractFiles(message);
       if (files.length > 0) {
-        this.logger?.warn(
+        this.logger.warn(
           "File uploads are not yet supported for Google Chat. Files will be ignored.",
           { fileCount: files.length },
         );
@@ -1152,7 +1156,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
           endpointUrl: this.endpointUrl,
         });
 
-        this.logger?.debug("GChat API: spaces.messages.create (card)", {
+        this.logger.debug("GChat API: spaces.messages.create (card)", {
           spaceName,
           threadName,
           googleCard: JSON.stringify(googleCard),
@@ -1170,7 +1174,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
           },
         });
 
-        this.logger?.debug("GChat API: spaces.messages.create response", {
+        this.logger.debug("GChat API: spaces.messages.create response", {
           messageName: response.data.name,
         });
 
@@ -1187,7 +1191,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
         "gchat",
       );
 
-      this.logger?.debug("GChat API: spaces.messages.create", {
+      this.logger.debug("GChat API: spaces.messages.create", {
         spaceName,
         threadName,
         textLength: text.length,
@@ -1205,7 +1209,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
         },
       });
 
-      this.logger?.debug("GChat API: spaces.messages.create response", {
+      this.logger.debug("GChat API: spaces.messages.create response", {
         messageName: response.data.name,
       });
 
@@ -1306,7 +1310,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
           endpointUrl: this.endpointUrl,
         });
 
-        this.logger?.debug("GChat API: spaces.messages.update (card)", {
+        this.logger.debug("GChat API: spaces.messages.update (card)", {
           messageId,
           cardId,
         });
@@ -1320,7 +1324,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
           },
         });
 
-        this.logger?.debug("GChat API: spaces.messages.update response", {
+        this.logger.debug("GChat API: spaces.messages.update response", {
           messageName: response.data.name,
         });
 
@@ -1337,7 +1341,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
         "gchat",
       );
 
-      this.logger?.debug("GChat API: spaces.messages.update", {
+      this.logger.debug("GChat API: spaces.messages.update", {
         messageId,
         textLength: text.length,
       });
@@ -1350,7 +1354,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
         },
       });
 
-      this.logger?.debug("GChat API: spaces.messages.update response", {
+      this.logger.debug("GChat API: spaces.messages.update response", {
         messageName: response.data.name,
       });
 
@@ -1366,13 +1370,13 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
 
   async deleteMessage(_threadId: string, messageId: string): Promise<void> {
     try {
-      this.logger?.debug("GChat API: spaces.messages.delete", { messageId });
+      this.logger.debug("GChat API: spaces.messages.delete", { messageId });
 
       await this.chatApi.spaces.messages.delete({
         name: messageId,
       });
 
-      this.logger?.debug("GChat API: spaces.messages.delete response", {
+      this.logger.debug("GChat API: spaces.messages.delete response", {
         ok: true,
       });
     } catch (error) {
@@ -1389,7 +1393,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
     const gchatEmoji = defaultEmojiResolver.toGChat(emoji);
 
     try {
-      this.logger?.debug("GChat API: spaces.messages.reactions.create", {
+      this.logger.debug("GChat API: spaces.messages.reactions.create", {
         messageId,
         emoji: gchatEmoji,
       });
@@ -1401,7 +1405,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
         },
       });
 
-      this.logger?.debug(
+      this.logger.debug(
         "GChat API: spaces.messages.reactions.create response",
         {
           ok: true,
@@ -1423,7 +1427,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
     try {
       // Google Chat requires the reaction resource name to delete it.
       // We need to list reactions and find the one with matching emoji.
-      this.logger?.debug("GChat API: spaces.messages.reactions.list", {
+      this.logger.debug("GChat API: spaces.messages.reactions.list", {
         messageId,
       });
 
@@ -1431,7 +1435,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
         parent: messageId,
       });
 
-      this.logger?.debug("GChat API: spaces.messages.reactions.list response", {
+      this.logger.debug("GChat API: spaces.messages.reactions.list response", {
         reactionCount: response.data.reactions?.length || 0,
       });
 
@@ -1440,14 +1444,14 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
       );
 
       if (!reaction?.name) {
-        this.logger?.debug("Reaction not found to remove", {
+        this.logger.debug("Reaction not found to remove", {
           messageId,
           emoji: gchatEmoji,
         });
         return;
       }
 
-      this.logger?.debug("GChat API: spaces.messages.reactions.delete", {
+      this.logger.debug("GChat API: spaces.messages.reactions.delete", {
         reactionName: reaction.name,
       });
 
@@ -1455,7 +1459,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
         name: reaction.name,
       });
 
-      this.logger?.debug(
+      this.logger.debug(
         "GChat API: spaces.messages.reactions.delete response",
         {
           ok: true,
@@ -1483,14 +1487,14 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
     try {
       // First, try to find an existing DM space with this user
       // This works with the bot's own credentials (no impersonation needed)
-      this.logger?.debug("GChat API: spaces.findDirectMessage", { userId });
+      this.logger.debug("GChat API: spaces.findDirectMessage", { userId });
 
       const findResponse = await this.chatApi.spaces.findDirectMessage({
         name: userId,
       });
 
       if (findResponse.data.name) {
-        this.logger?.debug("GChat API: Found existing DM space", {
+        this.logger.debug("GChat API: Found existing DM space", {
           spaceName: findResponse.data.name,
         });
         return this.encodeThreadId({
@@ -1502,7 +1506,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
       // 404 means no DM exists yet - we'll try to create one
       const gError = error as { code?: number };
       if (gError.code !== 404) {
-        this.logger?.debug("GChat API: findDirectMessage failed", { error });
+        this.logger.debug("GChat API: findDirectMessage failed", { error });
       }
     }
 
@@ -1511,7 +1515,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
     const chatApi = this.impersonatedChatApi || this.chatApi;
 
     if (!this.impersonatedChatApi) {
-      this.logger?.warn(
+      this.logger.warn(
         "openDM: No existing DM found and no impersonation configured. " +
           "Creating new DMs requires domain-wide delegation. " +
           "Set 'impersonateUser' in adapter config.",
@@ -1519,7 +1523,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
     }
 
     try {
-      this.logger?.debug("GChat API: spaces.setup (DM)", {
+      this.logger.debug("GChat API: spaces.setup (DM)", {
         userId,
         hasImpersonation: !!this.impersonatedChatApi,
         impersonateUser: this.impersonateUser,
@@ -1552,7 +1556,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
         );
       }
 
-      this.logger?.debug("GChat API: spaces.setup response", { spaceName });
+      this.logger.debug("GChat API: spaces.setup response", { spaceName });
 
       return this.encodeThreadId({ spaceName, isDM: true });
     } catch (error) {
@@ -1616,7 +1620,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
     limit: number,
     cursor?: string,
   ): Promise<FetchResult<unknown>> {
-    this.logger?.debug("GChat API: spaces.messages.list (backward)", {
+    this.logger.debug("GChat API: spaces.messages.list (backward)", {
       spaceName,
       filter,
       pageSize: limit,
@@ -1634,7 +1638,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
     // API returns newest first (DESC), reverse to get chronological order within page
     const rawMessages = (response.data.messages || []).reverse();
 
-    this.logger?.debug("GChat API: spaces.messages.list response (backward)", {
+    this.logger.debug("GChat API: spaces.messages.list response (backward)", {
       messageCount: rawMessages.length,
       hasNextPageToken: !!response.data.nextPageToken,
     });
@@ -1671,7 +1675,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
     limit: number,
     cursor?: string,
   ): Promise<FetchResult<unknown>> {
-    this.logger?.debug("GChat API: spaces.messages.list (forward)", {
+    this.logger.debug("GChat API: spaces.messages.list (forward)", {
       spaceName,
       filter,
       limit,
@@ -1698,7 +1702,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
 
     // Messages are already in chronological order (oldest first) from API
 
-    this.logger?.debug(
+    this.logger.debug(
       "GChat API: fetched all messages for forward pagination",
       {
         totalCount: allRawMessages.length,
@@ -1797,11 +1801,11 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
     const { spaceName } = this.decodeThreadId(threadId);
 
     try {
-      this.logger?.debug("GChat API: spaces.get", { spaceName });
+      this.logger.debug("GChat API: spaces.get", { spaceName });
 
       const response = await this.chatApi.spaces.get({ name: spaceName });
 
-      this.logger?.debug("GChat API: spaces.get response", {
+      this.logger.debug("GChat API: spaces.get response", {
         displayName: response.data.displayName,
       });
 
@@ -1900,14 +1904,14 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
         // Learn our bot's user ID from mentions and persist to state
         if (botUser.name && !this.botUserId) {
           this.botUserId = botUser.name;
-          this.logger?.info("Learned bot user ID from mention", {
+          this.logger.info("Learned bot user ID from mention", {
             botUserId: this.botUserId,
           });
           // Persist to state for serverless environments
           this.state
             ?.set("gchat:botUserId", this.botUserId)
             .catch((err) =>
-              this.logger?.debug("Failed to persist botUserId", { error: err }),
+              this.logger.error("Failed to persist botUserId", { error: err }),
             );
         }
 
@@ -1924,7 +1928,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
             text.slice(0, startIndex) +
             `@${this.userName}` +
             text.slice(startIndex + length);
-          this.logger?.debug("Normalized bot mention", {
+          this.logger.debug("Normalized bot mention", {
             original: mentionText,
             replacement: `@${this.userName}`,
           });
@@ -1961,7 +1965,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
     // Log a debug message and return false - better to process a self-message
     // than to incorrectly filter out messages from other bots.
     if (!this.botUserId && message.sender?.type === "BOT") {
-      this.logger?.debug(
+      this.logger.debug(
         "Cannot determine isMe - bot user ID not yet learned. " +
           "Bot ID is learned from @mentions. Assuming message is not from self.",
         { senderId },
@@ -2034,7 +2038,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
     if (providedDisplayName && providedDisplayName !== "unknown") {
       // Also cache it for future use
       this.cacheUserInfo(userId, providedDisplayName).catch((err) => {
-        this.logger?.warn("Failed to cache user info", { userId, error: err });
+        this.logger.error("Failed to cache user info", { userId, error: err });
       });
       return providedDisplayName;
     }
@@ -2062,7 +2066,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
     };
 
     // Log the error at error level for visibility
-    this.logger?.error(`GChat API error${context ? ` (${context})` : ""}`, {
+    this.logger.error(`GChat API error${context ? ` (${context})` : ""}`, {
       code: gError.code,
       message: gError.message,
       errors: gError.errors,

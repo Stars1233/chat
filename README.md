@@ -20,28 +20,34 @@ A unified SDK for building chat bots across Slack, Microsoft Teams, and Google C
 ### 1. Create your bot (`lib/bot.ts`)
 
 ```typescript
-import { Chat, emoji } from "chat";
+import { Chat, ConsoleLogger, emoji } from "chat";
 import { createSlackAdapter } from "@chat-adapter/slack";
 import { createTeamsAdapter } from "@chat-adapter/teams";
 import { createGoogleChatAdapter } from "@chat-adapter/gchat";
 import { createRedisState } from "@chat-adapter/state-redis";
 
+const logger = new ConsoleLogger("info");
+
 export const bot = new Chat({
   userName: "mybot",
+  logger,
   adapters: {
     slack: createSlackAdapter({
       botToken: process.env.SLACK_BOT_TOKEN!,
       signingSecret: process.env.SLACK_SIGNING_SECRET!,
+      logger: logger.child("slack"),
     }),
     teams: createTeamsAdapter({
       appId: process.env.TEAMS_APP_ID!,
       appPassword: process.env.TEAMS_APP_PASSWORD!,
+      logger: logger.child("teams"),
     }),
     gchat: createGoogleChatAdapter({
       credentials: JSON.parse(process.env.GOOGLE_CHAT_CREDENTIALS!),
+      logger: logger.child("gchat"),
     }),
   },
-  state: createRedisState({ url: process.env.REDIS_URL! }),
+  state: createRedisState({ url: process.env.REDIS_URL!, logger }),
 });
 
 // Handle @mentions - works across all platforms

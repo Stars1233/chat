@@ -1,7 +1,7 @@
 import { createHmac } from "node:crypto";
 import { createSlackAdapter, type SlackAdapter } from "@chat-adapter/slack";
 import { createMemoryState } from "@chat-adapter/state-memory";
-import { Chat } from "chat";
+import { Chat, type Logger } from "chat";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createMockSlackClient,
@@ -17,6 +17,14 @@ import {
   SLACK_SIGNING_SECRET,
 } from "./slack-utils";
 import { createWaitUntilTracker } from "./test-scenarios";
+
+const mockLogger: Logger = {
+  debug: vi.fn(),
+  info: vi.fn(),
+  warn: vi.fn(),
+  error: vi.fn(),
+  child: () => mockLogger,
+};
 
 describe("Slack Integration", () => {
   let chat: Chat<{ slack: SlackAdapter }>;
@@ -38,6 +46,7 @@ describe("Slack Integration", () => {
       signingSecret: SLACK_SIGNING_SECRET,
       botUserId: SLACK_BOT_USER_ID,
       userName: SLACK_BOT_USERNAME,
+      logger: mockLogger,
     });
 
     mockClient = createMockSlackClient();
