@@ -5,6 +5,7 @@
  * serverless compatibility. Webhook signature verification uses Ed25519.
  */
 
+import { verify } from "node:crypto";
 import {
   extractCard,
   extractFiles,
@@ -34,7 +35,6 @@ import {
   ChannelType,
   InteractionType,
 } from "discord-api-types/v10";
-import nacl from "tweetnacl";
 import { cardToDiscordPayload, cardToFallbackText } from "./cards";
 import { DiscordFormatConverter } from "./markdown";
 import {
@@ -65,10 +65,18 @@ export class DiscordAdapter implements Adapter<DiscordThreadId, unknown> {
     config: DiscordAdapterConfig & { logger: Logger; userName?: string },
   ) {
     this.botToken = config.botToken;
-    this.publicKey = config.publicKey;
+    this.publicKey = config.publicKey.trim().toLowerCase();
     this.applicationId = config.applicationId;
     this.logger = config.logger;
     this.userName = config.userName ?? "bot";
+
+    // Validate public key format
+    if (!/^[0-9a-f]{64}$/.test(this.publicKey)) {
+      this.logger.error("Invalid Discord public key format", {
+        length: this.publicKey.length,
+        isHex: /^[0-9a-f]+$/.test(this.publicKey),
+      });
+    }
   }
 
   async initialize(chat: ChatInstance): Promise<void> {
@@ -147,10 +155,13 @@ export class DiscordAdapter implements Adapter<DiscordThreadId, unknown> {
     timestamp: string | null,
   ): boolean {
     if (!signature || !timestamp) {
-      this.logger.warn("Discord signature verification failed: missing headers", {
-        hasSignature: !!signature,
-        hasTimestamp: !!timestamp,
-      });
+      this.logger.warn(
+        "Discord signature verification failed: missing headers",
+        {
+          hasSignature: !!signature,
+          hasTimestamp: !!timestamp,
+        },
+      );
       return false;
     }
 
@@ -159,25 +170,38 @@ export class DiscordAdapter implements Adapter<DiscordThreadId, unknown> {
       const publicKeyHex = this.publicKey;
       const signatureHex = signature;
 
-      const isValid = nacl.sign.detached.verify(
-        new TextEncoder().encode(message),
-        hexToUint8Array(signatureHex),
-        hexToUint8Array(publicKeyHex),
+      // Use Node.js crypto for Ed25519 verification
+      const isValid = verify(
+        null, // Ed25519 doesn't use a separate hash algorithm
+        Buffer.from(message),
+        {
+          key: Buffer.from(`302a300506032b6570032100${publicKeyHex}`, "hex"),
+          format: "der",
+          type: "spki",
+        },
+        Buffer.from(signatureHex, "hex"),
       );
 
       if (!isValid) {
-        this.logger.warn("Discord signature verification failed: invalid signature", {
-          publicKeyLength: publicKeyHex.length,
-          signatureLength: signatureHex.length,
-          publicKeyPrefix: publicKeyHex.slice(0, 8),
-          timestamp,
-          bodyPrefix: body.slice(0, 50),
-        });
+        this.logger.warn(
+          "Discord signature verification failed: invalid signature",
+          {
+            publicKeyLength: publicKeyHex.length,
+            signatureLength: signatureHex.length,
+            publicKeyPrefix: publicKeyHex.slice(0, 8),
+            publicKeySuffix: publicKeyHex.slice(-8),
+            timestamp,
+            bodyLength: body.length,
+            bodyPrefix: body.slice(0, 50),
+          },
+        );
       }
 
       return isValid;
     } catch (error) {
-      this.logger.warn("Discord signature verification failed: exception", { error });
+      this.logger.warn("Discord signature verification failed: exception", {
+        error,
+      });
       return false;
     }
   }
@@ -810,17 +834,6 @@ export class DiscordAdapter implements Adapter<DiscordThreadId, unknown> {
 
     return response;
   }
-}
-
-/**
- * Convert hex string to Uint8Array.
- */
-function hexToUint8Array(hex: string): Uint8Array {
-  const bytes = new Uint8Array(hex.length / 2);
-  for (let i = 0; i < bytes.length; i++) {
-    bytes[i] = parseInt(hex.substr(i * 2, 2), 16);
-  }
-  return bytes;
 }
 
 /**

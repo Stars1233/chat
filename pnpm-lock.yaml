@@ -90,9 +90,6 @@ importers:
       discord-api-types:
         specifier: ^0.37.119
         version: 0.37.120
-      tweetnacl:
-        specifier: ^1.0.3
-        version: 1.0.3
     devDependencies:
       '@types/node':
         specifier: ^22.10.2
@@ -267,9 +264,6 @@ importers:
       discord-api-types:
         specifier: ^0.37.119
         version: 0.37.120
-      tweetnacl:
-        specifier: ^1.0.3
-        version: 1.0.3
     devDependencies:
       '@types/node':
         specifier: ^22.10.2
@@ -2715,9 +2709,6 @@ packages:
   turbo@2.7.1:
     resolution: {integrity: sha512-zAj9jGc7VDvuAo/5Jbos4QTtWz9uUpkMhMKGyTjDJkx//hdL2bM31qQoJSAbU+7JyK5vb0LPzpwf6DUt3zayqg==}
     hasBin: true
-
-  tweetnacl@1.0.3:
-    resolution: {integrity: sha512-6rt+RN7aOi1nGMyC4Xa5DdYiukl2UWCbcJft7YhxReBGQD7OAM8Pbxw6YMo4r2diNEA8FEmu32YOn9rhaiE5yw==}
 
   typescript@5.9.3:
     resolution: {integrity: sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==}
@@ -5405,8 +5396,6 @@ snapshots:
       turbo-linux-arm64: 2.7.1
       turbo-windows-64: 2.7.1
       turbo-windows-arm64: 2.7.1
-
-  tweetnacl@1.0.3: {}
 
   typescript@5.9.3: {}
 

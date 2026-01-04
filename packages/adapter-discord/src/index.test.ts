@@ -2,10 +2,10 @@
  * Tests for the Discord adapter - webhook handling, message operations, and format conversion.
  */
 
+import { generateKeyPairSync, sign } from "node:crypto";
 import { ValidationError } from "@chat-adapter/shared";
 import type { Logger } from "chat";
 import { InteractionType } from "discord-api-types/v10";
-import nacl from "tweetnacl";
 import { describe, expect, it, vi } from "vitest";
 import { createDiscordAdapter, DiscordAdapter } from "./index";
 import { DiscordFormatConverter } from "./markdown";
@@ -22,24 +22,25 @@ const mockLogger: Logger = {
 // Test Helpers
 // ============================================================================
 
+// Generate an Ed25519 keypair for testing using Node.js crypto
+const testKeyPair = generateKeyPairSync("ed25519");
+const testPublicKeyDer = testKeyPair.publicKey.export({
+  type: "spki",
+  format: "der",
+});
+// Extract raw 32-byte public key from DER format (skip the 12-byte header)
+const testPublicKey = testPublicKeyDer.subarray(12).toString("hex");
+
 function createDiscordSignature(
   body: string,
-  publicKey: string,
-  privateKey: Uint8Array,
+  _publicKey: string,
+  privateKey: ReturnType<typeof generateKeyPairSync>["privateKey"],
   timestamp: string,
 ): string {
   const message = timestamp + body;
-  const signature = nacl.sign.detached(
-    new TextEncoder().encode(message),
-    privateKey,
-  );
-  return Buffer.from(signature).toString("hex");
+  const signature = sign(null, Buffer.from(message), privateKey);
+  return signature.toString("hex");
 }
-
-// Generate a keypair for testing
-const testKeyPair = nacl.sign.keyPair();
-const testPublicKey = Buffer.from(testKeyPair.publicKey).toString("hex");
-const testPrivateKey = testKeyPair.secretKey;
 
 function createWebhookRequest(
   body: string,
@@ -48,7 +49,12 @@ function createWebhookRequest(
   const timestamp = options?.timestamp ?? String(Math.floor(Date.now() / 1000));
   const signature =
     options?.signature ??
-    createDiscordSignature(body, testPublicKey, testPrivateKey, timestamp);
+    createDiscordSignature(
+      body,
+      testPublicKey,
+      testKeyPair.privateKey,
+      timestamp,
+    );
 
   return new Request("https://example.com/webhook", {
     method: "POST",

@@ -2,36 +2,30 @@
  * Discord test utilities for creating mock API, interactions, and webhook requests.
  */
 
+import { generateKeyPairSync, sign } from "node:crypto";
 import { InteractionType } from "discord-api-types/v10";
-import nacl from "tweetnacl";
 import { vi } from "vitest";
 
-// Generate a test keypair for Ed25519 signatures
-const testKeyPair = nacl.sign.keyPair();
-
-export const DISCORD_PUBLIC_KEY = uint8ArrayToHex(testKeyPair.publicKey);
-const DISCORD_PRIVATE_KEY = testKeyPair.secretKey;
+// Generate an Ed25519 keypair for testing using Node.js crypto
+const testKeyPair = generateKeyPairSync("ed25519");
+const testPublicKeyDer = testKeyPair.publicKey.export({
+  type: "spki",
+  format: "der",
+});
+// Extract raw 32-byte public key from DER format (skip the 12-byte header)
+export const DISCORD_PUBLIC_KEY = testPublicKeyDer.subarray(12).toString("hex");
 export const DISCORD_BOT_TOKEN = "test-bot-token";
 export const DISCORD_APPLICATION_ID = "APP123456";
 const DISCORD_BOT_USER_ID = "BOT_USER_123";
 export const DISCORD_BOT_USERNAME = "testbot";
 
 /**
- * Convert Uint8Array to hex string.
- */
-function uint8ArrayToHex(bytes: Uint8Array): string {
-  return Array.from(bytes)
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-}
-
-/**
  * Create a valid Ed25519 signature for Discord webhook verification.
  */
 function createDiscordSignature(body: string, timestamp: string): string {
-  const message = new TextEncoder().encode(timestamp + body);
-  const signature = nacl.sign.detached(message, DISCORD_PRIVATE_KEY);
-  return uint8ArrayToHex(signature);
+  const message = timestamp + body;
+  const signature = sign(null, Buffer.from(message), testKeyPair.privateKey);
+  return signature.toString("hex");
 }
 
 /**

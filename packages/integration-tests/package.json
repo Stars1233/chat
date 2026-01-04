@@ -22,7 +22,6 @@
     "@chat-adapter/state-memory": "workspace:*",
     "@chat-adapter/teams": "workspace:*",
     "chat": "workspace:*",
-    "discord-api-types": "^0.37.119",
-    "tweetnacl": "^1.0.3"
+    "discord-api-types": "^0.37.119"
   }
 }
