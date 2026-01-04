@@ -132,14 +132,24 @@ export class DiscordAdapter implements Adapter<DiscordThreadId, unknown> {
       return new Response("Invalid JSON", { status: 400 });
     }
 
-    this.logger.debug("Discord webhook received", {
+    this.logger.info("Discord interaction parsed", {
       type: interaction.type,
+      typeIsPing: interaction.type === InteractionType.Ping,
+      expectedPingType: InteractionType.Ping,
       id: interaction.id,
     });
 
     // Handle PING (Discord verification)
     if (interaction.type === InteractionType.Ping) {
-      return this.respondToInteraction({ type: InteractionResponseType.Pong });
+      this.logger.info("Discord PING received, responding with PONG");
+      const response = this.respondToInteraction({
+        type: InteractionResponseType.Pong,
+      });
+      this.logger.info("Discord PONG response", {
+        status: response.status,
+        headers: Object.fromEntries(response.headers.entries()),
+      });
+      return response;
     }
 
     // Handle MESSAGE_COMPONENT (button clicks)
