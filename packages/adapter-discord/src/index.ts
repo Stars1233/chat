@@ -169,6 +169,9 @@ export class DiscordAdapter implements Adapter<DiscordThreadId, unknown> {
         this.logger.warn("Discord signature verification failed: invalid signature", {
           publicKeyLength: publicKeyHex.length,
           signatureLength: signatureHex.length,
+          publicKeyPrefix: publicKeyHex.slice(0, 8),
+          timestamp,
+          bodyPrefix: body.slice(0, 50),
         });
       }
 
