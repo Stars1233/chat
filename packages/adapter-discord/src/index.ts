@@ -57,6 +57,7 @@ import {
 } from "./types";
 
 const DISCORD_API_BASE = "https://discord.com/api/v10";
+const DISCORD_MAX_CONTENT_LENGTH = 2000;
 
 export class DiscordAdapter implements Adapter<DiscordThreadId, unknown> {
   readonly name = "discord";
@@ -344,13 +345,15 @@ export class DiscordAdapter implements Adapter<DiscordThreadId, unknown> {
       const cardPayload = cardToDiscordPayload(card);
       embeds.push(...cardPayload.embeds);
       components.push(...cardPayload.components);
-      // Fallback text
-      payload.content = cardToFallbackText(card);
+      // Fallback text (truncated to Discord's limit)
+      payload.content = this.truncateContent(cardToFallbackText(card));
     } else {
-      // Regular text message
-      payload.content = convertEmojiPlaceholders(
-        this.formatConverter.renderPostable(message),
-        "discord",
+      // Regular text message (truncated to Discord's limit)
+      payload.content = this.truncateContent(
+        convertEmojiPlaceholders(
+          this.formatConverter.renderPostable(message),
+          "discord",
+        ),
       );
     }
 
@@ -402,6 +405,17 @@ export class DiscordAdapter implements Adapter<DiscordThreadId, unknown> {
       threadId,
       raw: result,
     };
+  }
+
+  /**
+   * Truncate content to Discord's maximum length.
+   */
+  private truncateContent(content: string): string {
+    if (content.length <= DISCORD_MAX_CONTENT_LENGTH) {
+      return content;
+    }
+    // Truncate and add ellipsis
+    return `${content.slice(0, DISCORD_MAX_CONTENT_LENGTH - 3)}...`;
   }
 
   /**
@@ -517,11 +531,15 @@ export class DiscordAdapter implements Adapter<DiscordThreadId, unknown> {
       const cardPayload = cardToDiscordPayload(card);
       embeds.push(...cardPayload.embeds);
       components.push(...cardPayload.components);
-      payload.content = cardToFallbackText(card);
+      // Fallback text (truncated to Discord's limit)
+      payload.content = this.truncateContent(cardToFallbackText(card));
     } else {
-      payload.content = convertEmojiPlaceholders(
-        this.formatConverter.renderPostable(message),
-        "discord",
+      // Regular text message (truncated to Discord's limit)
+      payload.content = this.truncateContent(
+        convertEmojiPlaceholders(
+          this.formatConverter.renderPostable(message),
+          "discord",
+        ),
       );
     }
 
