@@ -25,11 +25,13 @@ class ServerlessCloudAdapter extends CloudAdapter {
 }
 
 import {
+  AdapterRateLimitError,
   AuthenticationError,
   bufferToDataUri,
   extractCard,
   extractFiles,
   NetworkError,
+  PermissionError,
   toBuffer,
   ValidationError,
 } from "@chat-adapter/shared";
@@ -811,14 +813,22 @@ export class TeamsAdapter implements Adapter<TeamsThreadId, unknown> {
 
     let messageId = "";
 
-    await this.botAdapter.continueConversationAsync(
-      this.config.appId,
-      conversationReference as Partial<ConversationReference>,
-      async (context) => {
-        const response = await context.sendActivity(activity);
-        messageId = response?.id || "";
-      },
-    );
+    try {
+      await this.botAdapter.continueConversationAsync(
+        this.config.appId,
+        conversationReference as Partial<ConversationReference>,
+        async (context) => {
+          const response = await context.sendActivity(activity);
+          messageId = response?.id || "";
+        },
+      );
+    } catch (error) {
+      this.logger.error("Teams API: sendActivity failed", {
+        conversationId,
+        error,
+      });
+      this.handleTeamsError(error, "postMessage");
+    }
 
     this.logger.debug("Teams API: sendActivity response", { messageId });
 
@@ -924,13 +934,22 @@ export class TeamsAdapter implements Adapter<TeamsThreadId, unknown> {
       conversation: { id: conversationId },
     };
 
-    await this.botAdapter.continueConversationAsync(
-      this.config.appId,
-      conversationReference as Partial<ConversationReference>,
-      async (context) => {
-        await context.updateActivity(activity);
-      },
-    );
+    try {
+      await this.botAdapter.continueConversationAsync(
+        this.config.appId,
+        conversationReference as Partial<ConversationReference>,
+        async (context) => {
+          await context.updateActivity(activity);
+        },
+      );
+    } catch (error) {
+      this.logger.error("Teams API: updateActivity failed", {
+        conversationId,
+        messageId,
+        error,
+      });
+      this.handleTeamsError(error, "editMessage");
+    }
 
     this.logger.debug("Teams API: updateActivity response", { ok: true });
 
@@ -955,13 +974,22 @@ export class TeamsAdapter implements Adapter<TeamsThreadId, unknown> {
       messageId,
     });
 
-    await this.botAdapter.continueConversationAsync(
-      this.config.appId,
-      conversationReference as Partial<ConversationReference>,
-      async (context) => {
-        await context.deleteActivity(messageId);
-      },
-    );
+    try {
+      await this.botAdapter.continueConversationAsync(
+        this.config.appId,
+        conversationReference as Partial<ConversationReference>,
+        async (context) => {
+          await context.deleteActivity(messageId);
+        },
+      );
+    } catch (error) {
+      this.logger.error("Teams API: deleteActivity failed", {
+        conversationId,
+        messageId,
+        error,
+      });
+      this.handleTeamsError(error, "deleteMessage");
+    }
 
     this.logger.debug("Teams API: deleteActivity response", { ok: true });
   }
@@ -999,13 +1027,21 @@ export class TeamsAdapter implements Adapter<TeamsThreadId, unknown> {
 
     this.logger.debug("Teams API: sendActivity (typing)", { conversationId });
 
-    await this.botAdapter.continueConversationAsync(
-      this.config.appId,
-      conversationReference as Partial<ConversationReference>,
-      async (context) => {
-        await context.sendActivity({ type: ActivityTypes.Typing });
-      },
-    );
+    try {
+      await this.botAdapter.continueConversationAsync(
+        this.config.appId,
+        conversationReference as Partial<ConversationReference>,
+        async (context) => {
+          await context.sendActivity({ type: ActivityTypes.Typing });
+        },
+      );
+    } catch (error) {
+      this.logger.error("Teams API: sendActivity (typing) failed", {
+        conversationId,
+        error,
+      });
+      this.handleTeamsError(error, "startTyping");
+    }
 
     this.logger.debug("Teams API: sendActivity (typing) response", {
       ok: true,
@@ -1707,6 +1743,69 @@ export class TeamsAdapter implements Adapter<TeamsThreadId, unknown> {
 
   renderFormatted(content: FormattedContent): string {
     return this.formatConverter.fromAst(content);
+  }
+
+  /**
+   * Convert Teams/BotBuilder errors to standardized AdapterError types.
+   */
+  private handleTeamsError(error: unknown, operation: string): never {
+    // Handle BotBuilder errors with status codes
+    if (error && typeof error === "object") {
+      const err = error as Record<string, unknown>;
+
+      // Check for HTTP status code
+      const statusCode =
+        (err.statusCode as number) ||
+        (err.status as number) ||
+        (err.code as number);
+
+      if (statusCode === 401 || statusCode === 403) {
+        throw new AuthenticationError(
+          "teams",
+          `Authentication failed for ${operation}: ${err.message || "unauthorized"}`,
+        );
+      }
+
+      if (statusCode === 404) {
+        throw new NetworkError(
+          "teams",
+          `Resource not found during ${operation}: conversation or message may no longer exist`,
+          error instanceof Error ? error : undefined,
+        );
+      }
+
+      if (statusCode === 429) {
+        const retryAfter =
+          typeof err.retryAfter === "number" ? err.retryAfter : undefined;
+        throw new AdapterRateLimitError("teams", retryAfter);
+      }
+
+      // Permission errors
+      if (
+        statusCode === 403 ||
+        (err.message &&
+          typeof err.message === "string" &&
+          err.message.toLowerCase().includes("permission"))
+      ) {
+        throw new PermissionError("teams", operation);
+      }
+
+      // Generic error with message
+      if (err.message && typeof err.message === "string") {
+        throw new NetworkError(
+          "teams",
+          `Teams API error during ${operation}: ${err.message}`,
+          error instanceof Error ? error : undefined,
+        );
+      }
+    }
+
+    // Fallback for unknown error types
+    throw new NetworkError(
+      "teams",
+      `Teams API error during ${operation}: ${String(error)}`,
+      error instanceof Error ? error : undefined,
+    );
   }
 }
 
