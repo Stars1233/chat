@@ -110,8 +110,20 @@ export class DiscordAdapter implements Adapter<DiscordThreadId, unknown> {
       hasTimestamp: !!request.headers.get("x-signature-timestamp"),
     });
 
-    // XXX TEMPORARY: Skip ALL signature verification for debugging
-    this.logger.info("XXX Skipping signature verification entirely");
+    // Verify Ed25519 signature using raw bytes
+    const signature = request.headers.get("x-signature-ed25519");
+    const timestamp = request.headers.get("x-signature-timestamp");
+
+    const signatureValid = await this.verifySignature(
+      bodyBytes,
+      signature,
+      timestamp,
+    );
+    if (!signatureValid) {
+      this.logger.warn("Discord signature verification failed, returning 401");
+      return new Response("Invalid signature", { status: 401 });
+    }
+    this.logger.info("Discord signature verification passed");
 
     let interaction: DiscordInteraction;
     try {
@@ -183,6 +195,17 @@ export class DiscordAdapter implements Adapter<DiscordThreadId, unknown> {
     }
 
     try {
+      // Log exactly what we're verifying
+      this.logger.info("Discord signature verification attempt", {
+        bodyBytesLength: bodyBytes.length,
+        signatureLength: signature.length,
+        timestampLength: timestamp.length,
+        publicKeyLength: this.publicKey.length,
+        timestamp,
+        signaturePrefix: signature.slice(0, 16),
+        publicKey: this.publicKey,
+      });
+
       // Use the official discord-interactions library for verification with raw bytes
       const isValid = await verifyKey(
         bodyBytes,

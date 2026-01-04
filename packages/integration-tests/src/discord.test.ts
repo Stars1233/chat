@@ -84,8 +84,7 @@ describe("Discord Integration", () => {
     });
   });
 
-  // XXX TEMPORARY: Skip signature tests while bypass is active
-  describe.skip("signature verification", () => {
+  describe("signature verification", () => {
     it("should reject requests with missing signature headers", async () => {
       const request = new Request("https://example.com/webhook/discord", {
         method: "POST",
@@ -551,13 +550,12 @@ describe("Discord Integration", () => {
     });
   });
 
-  // XXX TEMPORARY: Updated to expect 400 while signature bypass is active
   describe("error handling", () => {
-    it("should return 400 for invalid JSON", async () => {
+    it("should return 401 for invalid signature before checking JSON", async () => {
       const body = "not valid json";
       const timestamp = Math.floor(Date.now() / 1000).toString();
 
-      // Create a request with invalid JSON body
+      // Create a request with invalid JSON body - signature check happens first
       const request = new Request("https://example.com/webhook/discord", {
         method: "POST",
         headers: {
@@ -569,8 +567,8 @@ describe("Discord Integration", () => {
       });
 
       const response = await chat.webhooks.discord(request);
-      // XXX With signature bypass, this now returns 400 (invalid JSON) instead of 401
-      expect(response.status).toBe(400);
+      // Should fail at signature verification first
+      expect(response.status).toBe(401);
     });
   });
 });

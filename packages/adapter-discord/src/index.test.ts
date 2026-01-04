@@ -216,8 +216,7 @@ describe("isDM", () => {
 // Webhook Signature Verification Tests
 // ============================================================================
 
-// XXX TEMPORARY: Skip signature tests while bypass is active
-describe.skip("handleWebhook - signature verification", () => {
+describe("handleWebhook - signature verification", () => {
   const adapter = createDiscordAdapter({
     botToken: "test-token",
     publicKey: testPublicKey,
