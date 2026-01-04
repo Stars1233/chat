@@ -76,6 +76,7 @@ export class DiscordAdapter implements Adapter<DiscordThreadId, unknown> {
     this.botToken = config.botToken;
     this.publicKey = config.publicKey.trim().toLowerCase();
     this.applicationId = config.applicationId;
+    this.botUserId = config.applicationId; // Discord app ID is the bot's user ID
     this.logger = config.logger;
     this.userName = config.userName ?? "bot";
 

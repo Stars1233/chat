@@ -767,7 +767,9 @@ export class Chat<
 
     try {
       // Set isMention on the message for handler access
-      message.isMention = this.detectMention(adapter, message);
+      // Preserve existing isMention if already set (e.g., from Gateway detection)
+      message.isMention =
+        message.isMention || this.detectMention(adapter, message);
 
       // Check if this is a subscribed thread first
       const isSubscribed = await this._stateAdapter.isSubscribed(threadId);
@@ -891,6 +893,15 @@ export class Chat<
         "i",
       );
       if (userIdPattern.test(message.text)) {
+        return true;
+      }
+
+      // Discord format: <@USER_ID> or <@!USER_ID>
+      const discordPattern = new RegExp(
+        `<@!?${this.escapeRegex(botUserId)}>`,
+        "i",
+      );
+      if (discordPattern.test(message.text)) {
         return true;
       }
     }
