@@ -16,10 +16,13 @@
     "vitest": "^2.1.8"
   },
   "dependencies": {
-    "chat": "workspace:*",
-    "@chat-adapter/slack": "workspace:*",
-    "@chat-adapter/teams": "workspace:*",
+    "@chat-adapter/discord": "workspace:*",
     "@chat-adapter/gchat": "workspace:*",
-    "@chat-adapter/state-memory": "workspace:*"
+    "@chat-adapter/slack": "workspace:*",
+    "@chat-adapter/state-memory": "workspace:*",
+    "@chat-adapter/teams": "workspace:*",
+    "chat": "workspace:*",
+    "discord-api-types": "^0.37.119",
+    "tweetnacl": "^1.0.3"
   }
 }

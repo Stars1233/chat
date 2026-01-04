@@ -26,6 +26,9 @@ importers:
 
   examples/nextjs-chat:
     dependencies:
+      '@chat-adapter/discord':
+        specifier: workspace:*
+        version: link:../../packages/adapter-discord
       '@chat-adapter/gchat':
         specifier: workspace:*
         version: link:../../packages/adapter-gchat
@@ -75,6 +78,34 @@ importers:
       typescript:
         specifier: ^5.7.2
         version: 5.9.3
+
+  packages/adapter-discord:
+    dependencies:
+      '@chat-adapter/shared':
+        specifier: workspace:*
+        version: link:../adapter-shared
+      chat:
+        specifier: workspace:*
+        version: link:../chat
+      discord-api-types:
+        specifier: ^0.37.119
+        version: 0.37.120
+      tweetnacl:
+        specifier: ^1.0.3
+        version: 1.0.3
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.2
+        version: 22.19.3
+      tsup:
+        specifier: ^8.3.5
+        version: 8.5.1(jiti@2.6.1)(postcss@8.5.6)(tsx@4.21.0)(typescript@5.9.3)
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.19.3)
 
   packages/adapter-gchat:
     dependencies:
@@ -215,6 +246,9 @@ importers:
 
   packages/integration-tests:
     dependencies:
+      '@chat-adapter/discord':
+        specifier: workspace:*
+        version: link:../adapter-discord
       '@chat-adapter/gchat':
         specifier: workspace:*
         version: link:../adapter-gchat
@@ -230,6 +264,12 @@ importers:
       chat:
         specifier: workspace:*
         version: link:../chat
+      discord-api-types:
+        specifier: ^0.37.119
+        version: 0.37.120
+      tweetnacl:
+        specifier: ^1.0.3
+        version: 1.0.3
     devDependencies:
       '@types/node':
         specifier: ^22.10.2
@@ -1629,6 +1669,9 @@ packages:
     resolution: {integrity: sha512-WkrWp9GR4KXfKGYzOLmTuGVi1UWFfws377n9cc55/tb6DuqyF6pcQ5AbiHEshaDpY9v6oaSr2XCDidGmMwdzIA==}
     engines: {node: '>=8'}
 
+  discord-api-types@0.37.120:
+    resolution: {integrity: sha512-7xpNK0EiWjjDFp2nAhHXezE4OUWm7s1zhc/UXXN6hnFFU8dfoPHgV0Hx0RPiCa3ILRpdeh152icc68DGCyXYIw==}
+
   dom-serializer@2.0.0:
     resolution: {integrity: sha512-wIkAryiqt/nV5EQKqQpo3SToSOV9J0DnbJqwK7Wv/Trc92zIAYZ4FlMu+JPFW1DfGFt81ZTCGgDEabffXeLyJg==}
 
@@ -2672,6 +2715,9 @@ packages:
   turbo@2.7.1:
     resolution: {integrity: sha512-zAj9jGc7VDvuAo/5Jbos4QTtWz9uUpkMhMKGyTjDJkx//hdL2bM31qQoJSAbU+7JyK5vb0LPzpwf6DUt3zayqg==}
     hasBin: true
+
+  tweetnacl@1.0.3:
+    resolution: {integrity: sha512-6rt+RN7aOi1nGMyC4Xa5DdYiukl2UWCbcJft7YhxReBGQD7OAM8Pbxw6YMo4r2diNEA8FEmu32YOn9rhaiE5yw==}
 
   typescript@5.9.3:
     resolution: {integrity: sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==}
@@ -4035,6 +4081,8 @@ snapshots:
     dependencies:
       path-type: 4.0.0
 
+  discord-api-types@0.37.120: {}
+
   dom-serializer@2.0.0:
     dependencies:
       domelementtype: 2.3.0
@@ -5357,6 +5405,8 @@ snapshots:
       turbo-linux-arm64: 2.7.1
       turbo-windows-64: 2.7.1
       turbo-windows-arm64: 2.7.1
+
+  tweetnacl@1.0.3: {}
 
   typescript@5.9.3: {}
 

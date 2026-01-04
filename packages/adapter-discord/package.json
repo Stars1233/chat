@@ -1,0 +1,58 @@
+{
+  "name": "@chat-adapter/discord",
+  "version": "0.1.0",
+  "description": "Discord adapter for chat",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check src",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@chat-adapter/shared": "workspace:*",
+    "chat": "workspace:*",
+    "discord-api-types": "^0.37.119",
+    "tweetnacl": "^1.0.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "tsup": "^8.3.5",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vercel-labs/chat.git",
+    "directory": "packages/adapter-discord"
+  },
+  "homepage": "https://github.com/vercel-labs/chat#readme",
+  "bugs": {
+    "url": "https://github.com/vercel-labs/chat/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "keywords": [
+    "chat",
+    "discord",
+    "bot",
+    "adapter"
+  ],
+  "license": "MIT"
+}

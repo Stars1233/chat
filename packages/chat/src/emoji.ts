@@ -267,6 +267,15 @@ export class EmojiResolver {
   }
 
   /**
+   * Convert a normalized emoji (or EmojiValue) to Discord format (unicode).
+   * Discord uses unicode emoji, same as Google Chat.
+   */
+  toDiscord(emoji: EmojiValue | string): string {
+    // Discord uses unicode emoji like GChat
+    return this.toGChat(emoji);
+  }
+
+  /**
    * Check if an emoji (in any format) matches a normalized emoji name or EmojiValue.
    */
   matches(rawEmoji: string, normalized: EmojiValue | string): boolean {
@@ -320,7 +329,7 @@ const EMOJI_PLACEHOLDER_REGEX = /\{\{emoji:([a-z0-9_]+)\}\}/gi;
  */
 export function convertEmojiPlaceholders(
   text: string,
-  platform: "slack" | "gchat" | "teams",
+  platform: "slack" | "gchat" | "teams" | "discord",
   resolver: EmojiResolver = defaultEmojiResolver,
 ): string {
   return text.replace(EMOJI_PLACEHOLDER_REGEX, (_, emojiName: string) => {
@@ -332,6 +341,9 @@ export function convertEmojiPlaceholders(
       case "teams":
         // Teams uses unicode emoji
         return resolver.toGChat(emojiName);
+      case "discord":
+        // Discord uses unicode emoji
+        return resolver.toDiscord(emojiName);
       default:
         return resolver.toGChat(emojiName);
     }

@@ -1,0 +1,247 @@
+/**
+ * Discord Embed and Component converter for cross-platform cards.
+ *
+ * Converts CardElement to Discord Embeds and Action Row Components.
+ * @see https://discord.com/developers/docs/resources/message#embed-object
+ * @see https://discord.com/developers/docs/interactions/message-components
+ */
+
+import type {
+  ActionsElement,
+  ButtonElement,
+  CardChild,
+  CardElement,
+  FieldsElement,
+  SectionElement,
+  TextElement,
+} from "chat";
+import type { APIEmbed, APIEmbedField } from "discord-api-types/v10";
+import { ButtonStyle } from "discord-api-types/v10";
+import type { DiscordActionRow, DiscordButton } from "./types";
+
+/**
+ * Convert a CardElement to Discord message payload (embeds + components).
+ */
+export function cardToDiscordPayload(card: CardElement): {
+  embeds: APIEmbed[];
+  components: DiscordActionRow[];
+} {
+  const embed: APIEmbed = {};
+  const fields: APIEmbedField[] = [];
+  const components: DiscordActionRow[] = [];
+
+  // Set title and description
+  if (card.title) {
+    embed.title = card.title;
+  }
+
+  if (card.subtitle) {
+    embed.description = card.subtitle;
+  }
+
+  // Set header image
+  if (card.imageUrl) {
+    embed.image = {
+      url: card.imageUrl,
+    };
+  }
+
+  // Set color (default to Discord blurple)
+  embed.color = 0x5865f2;
+
+  // Process children
+  const textParts: string[] = [];
+
+  for (const child of card.children) {
+    processChild(child, textParts, fields, components);
+  }
+
+  // If we have text parts and no description, set them as description
+  if (textParts.length > 0) {
+    if (embed.description) {
+      embed.description += `\n\n${textParts.join("\n\n")}`;
+    } else {
+      embed.description = textParts.join("\n\n");
+    }
+  }
+
+  // Add fields if we have any
+  if (fields.length > 0) {
+    embed.fields = fields;
+  }
+
+  return {
+    embeds: [embed],
+    components,
+  };
+}
+
+/**
+ * Process a card child element.
+ */
+function processChild(
+  child: CardChild,
+  textParts: string[],
+  fields: APIEmbedField[],
+  components: DiscordActionRow[],
+): void {
+  switch (child.type) {
+    case "text":
+      textParts.push(convertTextElement(child));
+      break;
+    case "image":
+      // Discord embeds can only have one image, handled at card level
+      // Additional images could be added as separate embeds
+      break;
+    case "divider":
+      // No direct equivalent, add a horizontal line marker
+      textParts.push("───────────");
+      break;
+    case "actions":
+      components.push(convertActionsElement(child));
+      break;
+    case "section":
+      processSectionElement(child, textParts, fields, components);
+      break;
+    case "fields":
+      convertFieldsElement(child, fields);
+      break;
+  }
+}
+
+/**
+ * Convert a text element to Discord markdown.
+ */
+function convertTextElement(element: TextElement): string {
+  let text = element.content;
+
+  // Apply style
+  if (element.style === "bold") {
+    text = `**${text}**`;
+  } else if (element.style === "muted") {
+    // Discord doesn't have muted, use italic as approximation
+    text = `*${text}*`;
+  }
+
+  return text;
+}
+
+/**
+ * Convert an actions element to a Discord action row.
+ */
+function convertActionsElement(element: ActionsElement): DiscordActionRow {
+  const buttons: DiscordButton[] = element.children.map((button) =>
+    convertButtonElement(button),
+  );
+
+  return {
+    type: 1, // Action Row
+    components: buttons,
+  };
+}
+
+/**
+ * Convert a button element to a Discord button.
+ */
+function convertButtonElement(button: ButtonElement): DiscordButton {
+  const discordButton: DiscordButton = {
+    type: 2, // Button
+    style: getButtonStyle(button.style),
+    label: button.label,
+    custom_id: button.id,
+  };
+
+  return discordButton;
+}
+
+/**
+ * Map button style to Discord button style.
+ */
+function getButtonStyle(style?: ButtonElement["style"]): ButtonStyle {
+  switch (style) {
+    case "primary":
+      return ButtonStyle.Primary;
+    case "danger":
+      return ButtonStyle.Danger;
+    default:
+      return ButtonStyle.Secondary;
+  }
+}
+
+/**
+ * Process a section element.
+ */
+function processSectionElement(
+  element: SectionElement,
+  textParts: string[],
+  fields: APIEmbedField[],
+  components: DiscordActionRow[],
+): void {
+  for (const child of element.children) {
+    processChild(child, textParts, fields, components);
+  }
+}
+
+/**
+ * Convert fields element to Discord embed fields.
+ */
+function convertFieldsElement(
+  element: FieldsElement,
+  fields: APIEmbedField[],
+): void {
+  for (const field of element.children) {
+    fields.push({
+      name: field.label,
+      value: field.value,
+      inline: true, // Discord fields can be inline
+    });
+  }
+}
+
+/**
+ * Generate fallback text from a card element.
+ * Used when embeds aren't supported or for notifications.
+ */
+export function cardToFallbackText(card: CardElement): string {
+  const parts: string[] = [];
+
+  if (card.title) {
+    parts.push(`**${card.title}**`);
+  }
+
+  if (card.subtitle) {
+    parts.push(card.subtitle);
+  }
+
+  for (const child of card.children) {
+    const text = childToFallbackText(child);
+    if (text) {
+      parts.push(text);
+    }
+  }
+
+  return parts.join("\n\n");
+}
+
+/**
+ * Convert a card child element to fallback text.
+ */
+function childToFallbackText(child: CardChild): string | null {
+  switch (child.type) {
+    case "text":
+      return child.content;
+    case "fields":
+      return child.children.map((f) => `**${f.label}**: ${f.value}`).join("\n");
+    case "actions":
+      return `[${child.children.map((b) => b.label).join("] [")}]`;
+    case "section":
+      return child.children
+        .map((c) => childToFallbackText(c))
+        .filter(Boolean)
+        .join("\n");
+    case "divider":
+      return "---";
+    default:
+      return null;
+  }
+}

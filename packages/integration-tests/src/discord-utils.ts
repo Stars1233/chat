@@ -1,0 +1,418 @@
+/**
+ * Discord test utilities for creating mock API, interactions, and webhook requests.
+ */
+
+import { InteractionType } from "discord-api-types/v10";
+import nacl from "tweetnacl";
+import { vi } from "vitest";
+
+// Generate a test keypair for Ed25519 signatures
+const testKeyPair = nacl.sign.keyPair();
+
+export const DISCORD_PUBLIC_KEY = uint8ArrayToHex(testKeyPair.publicKey);
+const DISCORD_PRIVATE_KEY = testKeyPair.secretKey;
+export const DISCORD_BOT_TOKEN = "test-bot-token";
+export const DISCORD_APPLICATION_ID = "APP123456";
+const DISCORD_BOT_USER_ID = "BOT_USER_123";
+export const DISCORD_BOT_USERNAME = "testbot";
+
+/**
+ * Convert Uint8Array to hex string.
+ */
+function uint8ArrayToHex(bytes: Uint8Array): string {
+  return Array.from(bytes)
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+/**
+ * Create a valid Ed25519 signature for Discord webhook verification.
+ */
+function createDiscordSignature(body: string, timestamp: string): string {
+  const message = new TextEncoder().encode(timestamp + body);
+  const signature = nacl.sign.detached(message, DISCORD_PRIVATE_KEY);
+  return uint8ArrayToHex(signature);
+}
+
+/**
+ * Options for creating a Discord interaction
+ */
+export interface DiscordInteractionOptions {
+  type: InteractionType;
+  id?: string;
+  token?: string;
+  guildId?: string;
+  channelId?: string;
+  userId?: string;
+  userName?: string;
+  globalName?: string;
+  customId?: string;
+  messageId?: string;
+  messageContent?: string;
+  commandName?: string;
+}
+
+/**
+ * Create a Discord interaction payload
+ */
+export function createDiscordInteraction(options: DiscordInteractionOptions) {
+  const {
+    type,
+    id = `interaction_${Date.now()}`,
+    token = "interaction_token_123",
+    guildId = "GUILD123",
+    channelId = "CHANNEL456",
+    userId = "USER789",
+    userName = "testuser",
+    globalName = "Test User",
+    customId,
+    messageId,
+    messageContent,
+    commandName,
+  } = options;
+
+  const interaction: Record<string, unknown> = {
+    id,
+    type,
+    application_id: DISCORD_APPLICATION_ID,
+    token,
+    version: 1,
+  };
+
+  // Add guild and channel for non-DM interactions
+  if (guildId !== "@me") {
+    interaction.guild_id = guildId;
+  }
+  interaction.channel_id = channelId;
+
+  // Add user info (member for guild, user for DM)
+  if (guildId !== "@me") {
+    interaction.member = {
+      user: {
+        id: userId,
+        username: userName,
+        discriminator: "0",
+        global_name: globalName,
+      },
+      nick: null,
+      roles: [],
+      joined_at: new Date().toISOString(),
+    };
+  } else {
+    interaction.user = {
+      id: userId,
+      username: userName,
+      discriminator: "0",
+      global_name: globalName,
+    };
+  }
+
+  // Add data for MESSAGE_COMPONENT interactions
+  if (type === InteractionType.MessageComponent && customId) {
+    interaction.data = {
+      custom_id: customId,
+      component_type: 2, // Button
+    };
+    if (messageId) {
+      interaction.message = {
+        id: messageId,
+        content: messageContent || "",
+        channel_id: channelId,
+        author: {
+          id: DISCORD_BOT_USER_ID,
+          username: DISCORD_BOT_USERNAME,
+          discriminator: "0",
+        },
+        timestamp: new Date().toISOString(),
+      };
+    }
+  }
+
+  // Add data for APPLICATION_COMMAND interactions
+  if (type === InteractionType.ApplicationCommand && commandName) {
+    interaction.data = {
+      name: commandName,
+      type: 1, // Slash command
+    };
+  }
+
+  return interaction;
+}
+
+/**
+ * Create a Discord webhook request with valid Ed25519 signature
+ */
+export function createDiscordWebhookRequest(
+  payload: Record<string, unknown>,
+): Request {
+  const body = JSON.stringify(payload);
+  const timestamp = Math.floor(Date.now() / 1000).toString();
+  const signature = createDiscordSignature(body, timestamp);
+
+  return new Request("https://example.com/webhook/discord", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-signature-ed25519": signature,
+      "x-signature-timestamp": timestamp,
+    },
+    body,
+  });
+}
+
+/**
+ * Create a PING interaction request (for Discord URL verification)
+ */
+export function createDiscordPingRequest(): Request {
+  const payload = {
+    id: "ping_123",
+    type: InteractionType.Ping,
+    application_id: DISCORD_APPLICATION_ID,
+    version: 1,
+  };
+  return createDiscordWebhookRequest(payload);
+}
+
+/**
+ * Create a MESSAGE_COMPONENT (button click) interaction request
+ */
+export function createDiscordButtonRequest(options: {
+  customId: string;
+  userId?: string;
+  userName?: string;
+  guildId?: string;
+  channelId?: string;
+  messageId?: string;
+}): Request {
+  const payload = createDiscordInteraction({
+    type: InteractionType.MessageComponent,
+    customId: options.customId,
+    userId: options.userId,
+    userName: options.userName,
+    guildId: options.guildId,
+    channelId: options.channelId,
+    messageId: options.messageId || "msg_123",
+  });
+  return createDiscordWebhookRequest(payload);
+}
+
+/**
+ * Mock Discord API responses
+ */
+export interface MockDiscordApi {
+  messages: {
+    create: ReturnType<typeof vi.fn>;
+    update: ReturnType<typeof vi.fn>;
+    delete: ReturnType<typeof vi.fn>;
+    list: ReturnType<typeof vi.fn>;
+  };
+  reactions: {
+    add: ReturnType<typeof vi.fn>;
+    remove: ReturnType<typeof vi.fn>;
+  };
+  channels: {
+    get: ReturnType<typeof vi.fn>;
+    typing: ReturnType<typeof vi.fn>;
+  };
+  users: {
+    createDM: ReturnType<typeof vi.fn>;
+  };
+  clearMocks: () => void;
+}
+
+/**
+ * Create mock Discord API
+ */
+export function createMockDiscordApi(): MockDiscordApi {
+  const api: MockDiscordApi = {
+    messages: {
+      create: vi.fn().mockResolvedValue({
+        id: `msg_${Date.now()}`,
+        channel_id: "CHANNEL456",
+        content: "test message",
+        author: {
+          id: DISCORD_BOT_USER_ID,
+          username: DISCORD_BOT_USERNAME,
+          discriminator: "0",
+        },
+        timestamp: new Date().toISOString(),
+        edited_timestamp: null,
+        attachments: [],
+        embeds: [],
+      }),
+      update: vi.fn().mockResolvedValue({
+        id: "msg_123",
+        channel_id: "CHANNEL456",
+        content: "updated message",
+        author: {
+          id: DISCORD_BOT_USER_ID,
+          username: DISCORD_BOT_USERNAME,
+          discriminator: "0",
+        },
+        timestamp: new Date().toISOString(),
+        edited_timestamp: new Date().toISOString(),
+        attachments: [],
+        embeds: [],
+      }),
+      delete: vi.fn().mockResolvedValue(undefined),
+      list: vi.fn().mockResolvedValue([]),
+    },
+    reactions: {
+      add: vi.fn().mockResolvedValue(undefined),
+      remove: vi.fn().mockResolvedValue(undefined),
+    },
+    channels: {
+      get: vi.fn().mockResolvedValue({
+        id: "CHANNEL456",
+        type: 0, // GUILD_TEXT
+        name: "general",
+      }),
+      typing: vi.fn().mockResolvedValue(undefined),
+    },
+    users: {
+      createDM: vi.fn().mockResolvedValue({
+        id: "DM_CHANNEL_123",
+        type: 1, // DM
+      }),
+    },
+    clearMocks: () => {
+      api.messages.create.mockClear();
+      api.messages.update.mockClear();
+      api.messages.delete.mockClear();
+      api.messages.list.mockClear();
+      api.reactions.add.mockClear();
+      api.reactions.remove.mockClear();
+      api.channels.get.mockClear();
+      api.channels.typing.mockClear();
+      api.users.createDM.mockClear();
+    },
+  };
+  return api;
+}
+
+/**
+ * Setup fetch mock for Discord API calls
+ */
+export function setupDiscordFetchMock(api: MockDiscordApi): void {
+  const originalFetch = globalThis.fetch;
+
+  // biome-ignore lint/suspicious/noExplicitAny: mocking fetch
+  (globalThis as any).fetch = vi.fn(
+    async (url: string, options?: RequestInit) => {
+      const urlStr = String(url);
+
+      // Only intercept Discord API calls
+      if (!urlStr.startsWith("https://discord.com/api/")) {
+        return originalFetch(url, options);
+      }
+
+      const method = options?.method || "GET";
+      const body = options?.body
+        ? JSON.parse(options.body as string)
+        : undefined;
+
+      // Route to appropriate mock
+      // POST /channels/{id}/messages
+      if (urlStr.match(/\/channels\/\w+\/messages$/) && method === "POST") {
+        const result = await api.messages.create(body);
+        return new Response(JSON.stringify(result), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      // PATCH /channels/{id}/messages/{id}
+      if (
+        urlStr.match(/\/channels\/\w+\/messages\/\w+$/) &&
+        method === "PATCH"
+      ) {
+        const result = await api.messages.update(body);
+        return new Response(JSON.stringify(result), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      // DELETE /channels/{id}/messages/{id}
+      if (
+        urlStr.match(/\/channels\/\w+\/messages\/\w+$/) &&
+        method === "DELETE"
+      ) {
+        await api.messages.delete();
+        return new Response(null, { status: 204 });
+      }
+
+      // GET /channels/{id}/messages
+      if (urlStr.match(/\/channels\/\w+\/messages(\?|$)/) && method === "GET") {
+        const result = await api.messages.list();
+        return new Response(JSON.stringify(result), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      // PUT /channels/{id}/messages/{id}/reactions/{emoji}/@me
+      if (urlStr.match(/\/reactions\/[^/]+\/@me$/) && method === "PUT") {
+        await api.reactions.add();
+        return new Response(null, { status: 204 });
+      }
+
+      // DELETE /channels/{id}/messages/{id}/reactions/{emoji}/@me
+      if (urlStr.match(/\/reactions\/[^/]+\/@me$/) && method === "DELETE") {
+        await api.reactions.remove();
+        return new Response(null, { status: 204 });
+      }
+
+      // GET /channels/{id}
+      if (urlStr.match(/\/channels\/\w+$/) && method === "GET") {
+        const result = await api.channels.get();
+        return new Response(JSON.stringify(result), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      // POST /channels/{id}/typing
+      if (urlStr.match(/\/channels\/\w+\/typing$/) && method === "POST") {
+        await api.channels.typing();
+        return new Response(null, { status: 204 });
+      }
+
+      // POST /users/@me/channels
+      if (urlStr.includes("/users/@me/channels") && method === "POST") {
+        const result = await api.users.createDM(body);
+        return new Response(JSON.stringify(result), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      // Default: return 404 for unhandled routes
+      return new Response(JSON.stringify({ error: "Not Found" }), {
+        status: 404,
+        headers: { "Content-Type": "application/json" },
+      });
+    },
+  );
+}
+
+/**
+ * Restore original fetch
+ */
+export function restoreDiscordFetchMock(): void {
+  if (vi.isMockFunction(globalThis.fetch)) {
+    vi.mocked(globalThis.fetch).mockRestore();
+  }
+}
+
+/**
+ * Get expected Discord thread ID format
+ */
+export function getDiscordThreadId(
+  guildId: string,
+  channelId: string,
+  threadId?: string,
+): string {
+  const threadPart = threadId ? `:${threadId}` : "";
+  return `discord:${guildId}:${channelId}${threadPart}`;
+}
