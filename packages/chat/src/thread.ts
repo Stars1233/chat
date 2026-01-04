@@ -194,7 +194,8 @@ export class ThreadImpl<TState = Record<string, unknown>>
     const rawMessage = await this.adapter.postMessage(this.id, postable);
 
     // Create a SentMessage with edit/delete capabilities
-    return this.createSentMessage(rawMessage.id, postable);
+    // Pass the threadId from postMessage - may differ if adapter created a thread
+    return this.createSentMessage(rawMessage.id, postable, rawMessage.threadId);
   }
 
   /**
@@ -236,7 +237,7 @@ export class ThreadImpl<TState = Record<string, unknown>>
       };
 
       const raw = await this.adapter.stream(this.id, wrappedStream, options);
-      return this.createSentMessage(raw.id, accumulated);
+      return this.createSentMessage(raw.id, accumulated, raw.threadId);
     }
 
     // Fallback: post + edit with throttling
@@ -261,6 +262,9 @@ export class ThreadImpl<TState = Record<string, unknown>>
       options?.updateIntervalMs ?? this._streamingUpdateIntervalMs;
     const msg = await this.adapter.postMessage(this.id, "...");
 
+    // Use the threadId from postMessage - may differ if adapter created a thread
+    const threadIdForEdits = msg.threadId || this.id;
+
     let accumulated = "";
     let lastEditContent = "..."; // Track that we posted "..." initially
     let stopped = false;
@@ -273,7 +277,7 @@ export class ThreadImpl<TState = Record<string, unknown>>
       if (accumulated !== lastEditContent) {
         const content = accumulated;
         try {
-          await this.adapter.editMessage(this.id, msg.id, content);
+          await this.adapter.editMessage(threadIdForEdits, msg.id, content);
           lastEditContent = content;
         } catch {
           // Ignore errors, continue
@@ -312,10 +316,10 @@ export class ThreadImpl<TState = Record<string, unknown>>
 
     // Final edit to ensure all content is shown (including empty stream replacing "...")
     if (accumulated !== lastEditContent) {
-      await this.adapter.editMessage(this.id, msg.id, accumulated);
+      await this.adapter.editMessage(threadIdForEdits, msg.id, accumulated);
     }
 
-    return this.createSentMessage(msg.id, accumulated);
+    return this.createSentMessage(msg.id, accumulated, threadIdForEdits);
   }
 
   async refresh(): Promise<void> {
@@ -330,9 +334,11 @@ export class ThreadImpl<TState = Record<string, unknown>>
   private createSentMessage(
     messageId: string,
     postable: AdapterPostableMessage,
+    threadIdOverride?: string,
   ): SentMessage {
     const adapter = this.adapter;
-    const threadId = this.id;
+    // Use the threadId returned by postMessage if available (may differ after thread creation)
+    const threadId = threadIdOverride || this.id;
     const self = this;
 
     // Extract text and AST from the PostableMessage

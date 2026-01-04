@@ -38,10 +38,10 @@ function createMockAdapter(name = "slack"): Adapter {
     handleWebhook: vi.fn().mockResolvedValue(new Response("ok")),
     postMessage: vi
       .fn()
-      .mockResolvedValue({ id: "msg-1", threadId: "t1", raw: {} }),
+      .mockResolvedValue({ id: "msg-1", threadId: undefined, raw: {} }),
     editMessage: vi
       .fn()
-      .mockResolvedValue({ id: "msg-1", threadId: "t1", raw: {} }),
+      .mockResolvedValue({ id: "msg-1", threadId: undefined, raw: {} }),
     deleteMessage: vi.fn().mockResolvedValue(undefined),
     addReaction: vi.fn().mockResolvedValue(undefined),
     removeReaction: vi.fn().mockResolvedValue(undefined),
