@@ -141,15 +141,16 @@ export class DiscordAdapter implements Adapter<DiscordThreadId, unknown> {
 
     // Handle PING (Discord verification)
     if (interaction.type === InteractionType.Ping) {
-      this.logger.info("Discord PING received, responding with PONG");
-      const response = this.respondToInteraction({
+      const responseBody = JSON.stringify({
         type: InteractionResponseType.Pong,
       });
-      this.logger.info("Discord PONG response", {
-        status: response.status,
-        headers: Object.fromEntries(response.headers.entries()),
+      this.logger.info("Discord PING received, responding with PONG", {
+        responseBody,
       });
-      return response;
+      return new Response(responseBody, {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
     }
 
     // Handle MESSAGE_COMPONENT (button clicks)
