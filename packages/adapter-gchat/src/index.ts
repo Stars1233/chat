@@ -29,6 +29,13 @@ import { type chat_v1, google } from "googleapis";
 import { cardToGoogleCard } from "./cards";
 import { GoogleChatFormatConverter } from "./markdown";
 import {
+  decodeThreadId,
+  encodeThreadId,
+  type GoogleChatThreadId,
+  isDMThread,
+} from "./thread-utils";
+import { UserInfoCache } from "./user-info";
+import {
   createSpaceSubscription,
   decodePubSubMessage,
   listSpaceSubscriptions,
@@ -43,16 +50,6 @@ const SUBSCRIPTION_REFRESH_BUFFER_MS = 60 * 60 * 1000;
 const SUBSCRIPTION_CACHE_TTL_MS = 25 * 60 * 60 * 1000;
 /** Key prefix for space subscription cache */
 const SPACE_SUB_KEY_PREFIX = "gchat:space-sub:";
-/** Key prefix for user info cache */
-const USER_INFO_KEY_PREFIX = "gchat:user:";
-/** TTL for user info cache (7 days) */
-const USER_INFO_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
-
-/** Cached user info */
-interface CachedUserInfo {
-  displayName: string;
-  email?: string;
-}
 
 /** Service account credentials for JWT auth */
 export interface ServiceAccountCredentials {
@@ -126,13 +123,8 @@ export type GoogleChatAdapterConfig =
   | GoogleChatAdapterADCConfig
   | GoogleChatAdapterCustomAuthConfig;
 
-/** Google Chat-specific thread ID data */
-export interface GoogleChatThreadId {
-  spaceName: string;
-  threadName?: string;
-  /** Whether this is a DM space */
-  isDM?: boolean;
-}
+// Re-export GoogleChatThreadId from thread-utils
+export type { GoogleChatThreadId } from "./thread-utils";
 
 /** Google Chat message structure */
 export interface GoogleChatMessage {
@@ -262,12 +254,14 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
   private impersonatedChatApi?: chat_v1.Chat;
   /** HTTP endpoint URL for button click actions */
   private endpointUrl?: string;
-  /** In-memory user info cache for fast lookups */
-  private userInfoCache = new Map<string, CachedUserInfo>();
+  /** User info cache for display name lookups - initialized later in initialize() */
+  private userInfoCache: UserInfoCache;
 
   constructor(config: GoogleChatAdapterConfig) {
     this.logger = config.logger;
     this.userName = config.userName || "bot";
+    // Initialize with null state - will be updated in initialize()
+    this.userInfoCache = new UserInfoCache(null, this.logger);
     this.pubsubTopic = config.pubsubTopic;
     this.impersonateUser = config.impersonateUser;
     this.endpointUrl = config.endpointUrl;
@@ -357,6 +351,8 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
   async initialize(chat: ChatInstance): Promise<void> {
     this.chat = chat;
     this.state = chat.getState();
+    // Update userInfoCache to use the state adapter for persistence
+    this.userInfoCache = new UserInfoCache(this.state, this.logger);
 
     // Restore persisted bot user ID from state (for serverless environments)
     if (!this.botUserId) {
@@ -906,9 +902,11 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
 
     // Pub/Sub messages don't include displayName - resolve from cache
     const userId = message.sender?.name || "unknown";
-    const displayName = await this.resolveUserDisplayName(
+    const displayName = await this.userInfoCache.resolveDisplayName(
       userId,
       message.sender?.displayName,
+      this.botUserId,
+      this.userName,
     );
 
     const parsedMessage: Message<unknown> = {
@@ -1096,11 +1094,11 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
     const userId = message.sender?.name || "unknown";
     const displayName = message.sender?.displayName || "unknown";
     if (userId !== "unknown" && displayName !== "unknown") {
-      this.cacheUserInfo(userId, displayName, message.sender?.email).catch(
-        (error) => {
+      this.userInfoCache
+        .set(userId, displayName, message.sender?.email)
+        .catch((error) => {
           this.logger.error("Failed to cache user info", { userId, error });
-        },
-      );
+        });
     }
 
     return {
@@ -1768,9 +1766,11 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
 
     // Resolve display name - the list API may not include it
     const userId = msg.sender?.name || "unknown";
-    const displayName = await this.resolveUserDisplayName(
+    const displayName = await this.userInfoCache.resolveDisplayName(
       userId,
       msg.sender?.displayName ?? undefined,
+      this.botUserId,
+      this.userName,
     );
 
     // Use isMessageFromSelf for proper isMe determination
@@ -1823,43 +1823,18 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
   }
 
   encodeThreadId(platformData: GoogleChatThreadId): string {
-    const threadPart = platformData.threadName
-      ? `:${Buffer.from(platformData.threadName).toString("base64url")}`
-      : "";
-    // Add :dm suffix for DM threads to enable isDM() detection
-    const dmPart = platformData.isDM ? ":dm" : "";
-    return `gchat:${platformData.spaceName}${threadPart}${dmPart}`;
+    return encodeThreadId(platformData);
   }
 
   /**
    * Check if a thread is a direct message conversation.
-   * Checks for the :dm marker in the thread ID which is set when
-   * processing DM messages or opening DMs.
    */
   isDM(threadId: string): boolean {
-    // Check for explicit :dm marker in thread ID
-    return threadId.endsWith(":dm");
+    return isDMThread(threadId);
   }
 
   decodeThreadId(threadId: string): GoogleChatThreadId {
-    // Remove :dm suffix if present
-    const isDM = threadId.endsWith(":dm");
-    const cleanId = isDM ? threadId.slice(0, -3) : threadId;
-
-    const parts = cleanId.split(":");
-    if (parts.length < 2 || parts[0] !== "gchat") {
-      throw new ValidationError(
-        "gchat",
-        `Invalid Google Chat thread ID: ${threadId}`,
-      );
-    }
-
-    const spaceName = parts[1] as string;
-    const threadName = parts[2]
-      ? Buffer.from(parts[2], "base64url").toString("utf-8")
-      : undefined;
-
-    return { spaceName, threadName, isDM };
+    return decodeThreadId(threadId);
   }
 
   parseMessage(raw: unknown): Message<unknown> {
@@ -1973,89 +1948,6 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
     }
 
     return false;
-  }
-
-  /**
-   * Cache user info for later lookup (e.g., when processing Pub/Sub messages).
-   */
-  private async cacheUserInfo(
-    userId: string,
-    displayName: string,
-    email?: string,
-  ): Promise<void> {
-    if (!displayName || displayName === "unknown") return;
-
-    const userInfo: CachedUserInfo = { displayName, email };
-
-    // Always update in-memory cache
-    this.userInfoCache.set(userId, userInfo);
-
-    // Also persist to state adapter if available
-    if (this.state) {
-      const cacheKey = `${USER_INFO_KEY_PREFIX}${userId}`;
-      await this.state.set<CachedUserInfo>(
-        cacheKey,
-        userInfo,
-        USER_INFO_CACHE_TTL_MS,
-      );
-    }
-  }
-
-  /**
-   * Get cached user info. Checks in-memory cache first, then falls back to state adapter.
-   */
-  private async getCachedUserInfo(
-    userId: string,
-  ): Promise<CachedUserInfo | null> {
-    // Check in-memory cache first (fast path)
-    const inMemory = this.userInfoCache.get(userId);
-    if (inMemory) {
-      return inMemory;
-    }
-
-    // Fall back to state adapter
-    if (!this.state) return null;
-
-    const cacheKey = `${USER_INFO_KEY_PREFIX}${userId}`;
-    const fromState = await this.state.get<CachedUserInfo>(cacheKey);
-
-    // Populate in-memory cache if found in state
-    if (fromState) {
-      this.userInfoCache.set(userId, fromState);
-    }
-
-    return fromState;
-  }
-
-  /**
-   * Resolve user display name, using cache if available.
-   */
-  private async resolveUserDisplayName(
-    userId: string,
-    providedDisplayName?: string,
-  ): Promise<string> {
-    // If display name is provided and not "unknown", use it
-    if (providedDisplayName && providedDisplayName !== "unknown") {
-      // Also cache it for future use
-      this.cacheUserInfo(userId, providedDisplayName).catch((err) => {
-        this.logger.error("Failed to cache user info", { userId, error: err });
-      });
-      return providedDisplayName;
-    }
-
-    // If this is our bot's user ID, use the configured bot name
-    if (this.botUserId && userId === this.botUserId) {
-      return this.userName;
-    }
-
-    // Try to get from cache
-    const cached = await this.getCachedUserInfo(userId);
-    if (cached?.displayName) {
-      return cached.displayName;
-    }
-
-    // Fall back to extracting name from userId (e.g., "users/123" -> "User 123")
-    return userId.replace("users/", "User ");
   }
 
   private handleGoogleChatError(error: unknown, context?: string): never {

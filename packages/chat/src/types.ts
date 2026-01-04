@@ -5,68 +5,20 @@
 import type { Root } from "mdast";
 import type { CardElement } from "./cards";
 import type { CardJSXElement } from "./jsx-runtime";
+import type { Logger, LogLevel } from "./logger";
 
 // =============================================================================
-// Logging
+// Re-exports from extracted modules
 // =============================================================================
 
-export type LogLevel = "debug" | "info" | "warn" | "error" | "silent";
-
-export interface Logger {
-  debug(message: string, ...args: unknown[]): void;
-  info(message: string, ...args: unknown[]): void;
-  warn(message: string, ...args: unknown[]): void;
-  error(message: string, ...args: unknown[]): void;
-  /** Create a sub-logger with a prefix */
-  child(prefix: string): Logger;
-}
-
-/**
- * Default console logger implementation.
- */
-export class ConsoleLogger implements Logger {
-  private prefix: string;
-
-  constructor(
-    private level: LogLevel = "info",
-    prefix = "chat-sdk",
-  ) {
-    this.prefix = prefix;
-  }
-
-  private shouldLog(level: LogLevel): boolean {
-    const levels: LogLevel[] = ["debug", "info", "warn", "error", "silent"];
-    return levels.indexOf(level) >= levels.indexOf(this.level);
-  }
-
-  child(prefix: string): Logger {
-    return new ConsoleLogger(this.level, `${this.prefix}:${prefix}`);
-  }
-
-  // eslint-disable-next-line no-console
-  debug(message: string, ...args: unknown[]): void {
-    if (this.shouldLog("debug"))
-      console.debug(`[${this.prefix}] ${message}`, ...args);
-  }
-
-  // eslint-disable-next-line no-console
-  info(message: string, ...args: unknown[]): void {
-    if (this.shouldLog("info"))
-      console.info(`[${this.prefix}] ${message}`, ...args);
-  }
-
-  // eslint-disable-next-line no-console
-  warn(message: string, ...args: unknown[]): void {
-    if (this.shouldLog("warn"))
-      console.warn(`[${this.prefix}] ${message}`, ...args);
-  }
-
-  // eslint-disable-next-line no-console
-  error(message: string, ...args: unknown[]): void {
-    if (this.shouldLog("error"))
-      console.error(`[${this.prefix}] ${message}`, ...args);
-  }
-}
+export {
+  ChatError,
+  LockError,
+  NotImplementedError,
+  RateLimitError,
+} from "./errors";
+export type { Logger, LogLevel } from "./logger";
+export { ConsoleLogger } from "./logger";
 
 // =============================================================================
 // Configuration
@@ -1211,47 +1163,3 @@ export interface ActionEvent<TRawMessage = unknown> {
  * ```
  */
 export type ActionHandler = (event: ActionEvent) => Promise<void>;
-
-// =============================================================================
-// Errors
-// =============================================================================
-
-export class ChatError extends Error {
-  constructor(
-    message: string,
-    public readonly code: string,
-    public readonly cause?: unknown,
-  ) {
-    super(message);
-    this.name = "ChatError";
-  }
-}
-
-export class RateLimitError extends ChatError {
-  constructor(
-    message: string,
-    public readonly retryAfterMs?: number,
-    cause?: unknown,
-  ) {
-    super(message, "RATE_LIMITED", cause);
-    this.name = "RateLimitError";
-  }
-}
-
-export class LockError extends ChatError {
-  constructor(message: string, cause?: unknown) {
-    super(message, "LOCK_FAILED", cause);
-    this.name = "LockError";
-  }
-}
-
-export class NotImplementedError extends ChatError {
-  constructor(
-    message: string,
-    public readonly feature?: string,
-    cause?: unknown,
-  ) {
-    super(message, "NOT_IMPLEMENTED", cause);
-    this.name = "NotImplementedError";
-  }
-}
