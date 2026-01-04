@@ -4,6 +4,7 @@ import {
   extractCard,
   extractFiles,
   NetworkError,
+  toBuffer,
   ValidationError,
 } from "@chat-adapter/shared";
 import { WebClient } from "@slack/web-api";
@@ -750,18 +751,10 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
 
     for (const file of files) {
       try {
-        // Convert data to Buffer if needed
-        let fileBuffer: Buffer;
-        if (Buffer.isBuffer(file.data)) {
-          fileBuffer = file.data;
-        } else if (file.data instanceof ArrayBuffer) {
-          fileBuffer = Buffer.from(file.data);
-        } else if (file.data instanceof Blob) {
-          // Convert Blob to Buffer
-          const arrayBuffer = await file.data.arrayBuffer();
-          fileBuffer = Buffer.from(arrayBuffer);
-        } else {
-          throw new ValidationError("slack", "Unsupported file data type");
+        // Convert data to Buffer using shared utility
+        const fileBuffer = await toBuffer(file.data, { platform: "slack" });
+        if (!fileBuffer) {
+          continue;
         }
 
         this.logger?.debug("Slack API: files.uploadV2", {

@@ -13,17 +13,22 @@
 import {
   type AdapterPostableMessage,
   BaseFormatConverter,
-  type Code,
   type Content,
-  type Delete,
-  type Emphasis,
-  type InlineCode,
-  type Link,
-  type Paragraph,
+  getNodeChildren,
+  getNodeValue,
+  isBlockquoteNode,
+  isCodeNode,
+  isDeleteNode,
+  isEmphasisNode,
+  isInlineCodeNode,
+  isLinkNode,
+  isListItemNode,
+  isListNode,
+  isParagraphNode,
+  isStrongNode,
+  isTextNode,
   parseMarkdown,
   type Root,
-  type Strong,
-  type Text,
 } from "chat";
 
 export class SlackFormatConverter extends BaseFormatConverter {
@@ -95,92 +100,96 @@ export class SlackFormatConverter extends BaseFormatConverter {
   }
 
   private nodeToMrkdwn(node: Content): string {
-    switch (node.type) {
-      case "paragraph":
-        return (node as Paragraph).children
-          .map((child) => this.nodeToMrkdwn(child as Content))
-          .join("");
-
-      case "text": {
-        // Convert @mentions to Slack format <@mention>
-        const textValue = (node as Text).value;
-        return textValue.replace(/@(\w+)/g, "<@$1>");
-      }
-
-      case "strong":
-        // Markdown **text** -> Slack *text*
-        return `*${(node as Strong).children
-          .map((child) => this.nodeToMrkdwn(child as Content))
-          .join("")}*`;
-
-      case "emphasis":
-        // Both use _text_
-        return `_${(node as Emphasis).children
-          .map((child) => this.nodeToMrkdwn(child as Content))
-          .join("")}_`;
-
-      case "delete":
-        // Markdown ~~text~~ -> Slack ~text~
-        return `~${(node as Delete).children
-          .map((child) => this.nodeToMrkdwn(child as Content))
-          .join("")}~`;
-
-      case "inlineCode":
-        return `\`${(node as InlineCode).value}\``;
-
-      case "code": {
-        const codeNode = node as Code;
-        return `\`\`\`${codeNode.lang || ""}\n${codeNode.value}\n\`\`\``;
-      }
-
-      case "link": {
-        const linkNode = node as Link;
-        const linkText = linkNode.children
-          .map((child) => this.nodeToMrkdwn(child as Content))
-          .join("");
-        // Markdown [text](url) -> Slack <url|text>
-        return `<${linkNode.url}|${linkText}>`;
-      }
-
-      case "blockquote":
-        return node.children
-          .map((child) => `> ${this.nodeToMrkdwn(child as Content)}`)
-          .join("\n");
-
-      case "list":
-        return node.children
-          .map((item, i) => {
-            const prefix = node.ordered ? `${i + 1}.` : "•";
-            const content = item.children
-              .map((child) => this.nodeToMrkdwn(child as Content))
-              .join("");
-            return `${prefix} ${content}`;
-          })
-          .join("\n");
-
-      case "listItem":
-        return node.children
-          .map((child) => this.nodeToMrkdwn(child as Content))
-          .join("");
-
-      case "break":
-        return "\n";
-
-      case "thematicBreak":
-        return "---";
-
-      default:
-        // For unsupported nodes, try to extract text
-        if ("children" in node && Array.isArray(node.children)) {
-          return node.children
-            .map((child) => this.nodeToMrkdwn(child as Content))
-            .join("");
-        }
-        if ("value" in node) {
-          return String(node.value);
-        }
-        return "";
+    // Use type guards for type-safe node handling
+    if (isParagraphNode(node)) {
+      return getNodeChildren(node)
+        .map((child) => this.nodeToMrkdwn(child))
+        .join("");
     }
+
+    if (isTextNode(node)) {
+      // Convert @mentions to Slack format <@mention>
+      return node.value.replace(/@(\w+)/g, "<@$1>");
+    }
+
+    if (isStrongNode(node)) {
+      // Markdown **text** -> Slack *text*
+      const content = getNodeChildren(node)
+        .map((child) => this.nodeToMrkdwn(child))
+        .join("");
+      return `*${content}*`;
+    }
+
+    if (isEmphasisNode(node)) {
+      // Both use _text_
+      const content = getNodeChildren(node)
+        .map((child) => this.nodeToMrkdwn(child))
+        .join("");
+      return `_${content}_`;
+    }
+
+    if (isDeleteNode(node)) {
+      // Markdown ~~text~~ -> Slack ~text~
+      const content = getNodeChildren(node)
+        .map((child) => this.nodeToMrkdwn(child))
+        .join("");
+      return `~${content}~`;
+    }
+
+    if (isInlineCodeNode(node)) {
+      return `\`${node.value}\``;
+    }
+
+    if (isCodeNode(node)) {
+      return `\`\`\`${node.lang || ""}\n${node.value}\n\`\`\``;
+    }
+
+    if (isLinkNode(node)) {
+      const linkText = getNodeChildren(node)
+        .map((child) => this.nodeToMrkdwn(child))
+        .join("");
+      // Markdown [text](url) -> Slack <url|text>
+      return `<${node.url}|${linkText}>`;
+    }
+
+    if (isBlockquoteNode(node)) {
+      return getNodeChildren(node)
+        .map((child) => `> ${this.nodeToMrkdwn(child)}`)
+        .join("\n");
+    }
+
+    if (isListNode(node)) {
+      return getNodeChildren(node)
+        .map((item, i) => {
+          const prefix = node.ordered ? `${i + 1}.` : "•";
+          const content = getNodeChildren(item)
+            .map((child) => this.nodeToMrkdwn(child))
+            .join("");
+          return `${prefix} ${content}`;
+        })
+        .join("\n");
+    }
+
+    if (isListItemNode(node)) {
+      return getNodeChildren(node)
+        .map((child) => this.nodeToMrkdwn(child))
+        .join("");
+    }
+
+    if (node.type === "break") {
+      return "\n";
+    }
+
+    if (node.type === "thematicBreak") {
+      return "---";
+    }
+
+    // For unsupported nodes, try to extract text
+    const children = getNodeChildren(node);
+    if (children.length > 0) {
+      return children.map((child) => this.nodeToMrkdwn(child)).join("");
+    }
+    return getNodeValue(node);
   }
 }
 

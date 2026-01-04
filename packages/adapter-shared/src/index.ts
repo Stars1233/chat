@@ -8,6 +8,15 @@
 // Adapter utilities
 export { extractCard, extractFiles } from "./adapter-utils";
 
+// Buffer conversion utilities
+export {
+  bufferToDataUri,
+  type FileDataInput,
+  type ToBufferOptions,
+  toBuffer,
+  toBufferSync,
+} from "./buffer-utils";
+
 // Card conversion utilities
 export {
   BUTTON_STYLE_MAPPINGS,

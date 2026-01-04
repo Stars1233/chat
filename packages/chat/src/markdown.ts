@@ -46,6 +46,114 @@ export type {
   Paragraph,
 };
 
+// ============================================================================
+// Type Guards for mdast nodes
+// ============================================================================
+
+/**
+ * Type guard for text nodes.
+ */
+export function isTextNode(node: Content): node is Text {
+  return node.type === "text";
+}
+
+/**
+ * Type guard for paragraph nodes.
+ */
+export function isParagraphNode(node: Content): node is Paragraph {
+  return node.type === "paragraph";
+}
+
+/**
+ * Type guard for strong (bold) nodes.
+ */
+export function isStrongNode(node: Content): node is Strong {
+  return node.type === "strong";
+}
+
+/**
+ * Type guard for emphasis (italic) nodes.
+ */
+export function isEmphasisNode(node: Content): node is Emphasis {
+  return node.type === "emphasis";
+}
+
+/**
+ * Type guard for delete (strikethrough) nodes.
+ */
+export function isDeleteNode(node: Content): node is Delete {
+  return node.type === "delete";
+}
+
+/**
+ * Type guard for inline code nodes.
+ */
+export function isInlineCodeNode(node: Content): node is InlineCode {
+  return node.type === "inlineCode";
+}
+
+/**
+ * Type guard for code block nodes.
+ */
+export function isCodeNode(node: Content): node is Code {
+  return node.type === "code";
+}
+
+/**
+ * Type guard for link nodes.
+ */
+export function isLinkNode(node: Content): node is Link {
+  return node.type === "link";
+}
+
+/**
+ * Type guard for blockquote nodes.
+ */
+export function isBlockquoteNode(node: Content): node is Blockquote {
+  return node.type === "blockquote";
+}
+
+/**
+ * Type guard for list nodes.
+ */
+export function isListNode(node: Content): node is List {
+  return node.type === "list";
+}
+
+/**
+ * Type guard for list item nodes.
+ */
+export function isListItemNode(node: Content): node is ListItem {
+  return node.type === "listItem";
+}
+
+// ============================================================================
+// Helper functions for accessing node properties type-safely
+// ============================================================================
+
+/**
+ * Get children from a content node that has children.
+ * Returns empty array for nodes without children.
+ * This eliminates the need for `as Content` casts in adapter converters.
+ */
+export function getNodeChildren(node: Content): Content[] {
+  if ("children" in node && Array.isArray(node.children)) {
+    return node.children as Content[];
+  }
+  return [];
+}
+
+/**
+ * Get value from a content node that has a value property.
+ * Returns empty string for nodes without value.
+ */
+export function getNodeValue(node: Content): string {
+  if ("value" in node && typeof node.value === "string") {
+    return node.value;
+  }
+  return "";
+}
+
 /**
  * Parse markdown string into an AST.
  * Supports GFM (GitHub Flavored Markdown) for strikethrough, tables, etc.

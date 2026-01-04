@@ -26,9 +26,11 @@ class ServerlessCloudAdapter extends CloudAdapter {
 
 import {
   AuthenticationError,
+  bufferToDataUri,
   extractCard,
   extractFiles,
   NetworkError,
+  toBuffer,
   ValidationError,
 } from "@chat-adapter/shared";
 import type {
@@ -839,23 +841,18 @@ export class TeamsAdapter implements Adapter<TeamsThreadId, unknown> {
     }> = [];
 
     for (const file of files) {
-      // Convert data to Buffer
-      let buffer: Buffer;
-      if (Buffer.isBuffer(file.data)) {
-        buffer = file.data;
-      } else if (file.data instanceof ArrayBuffer) {
-        buffer = Buffer.from(file.data);
-      } else if (file.data instanceof Blob) {
-        const arrayBuffer = await file.data.arrayBuffer();
-        buffer = Buffer.from(arrayBuffer);
-      } else {
+      // Convert data to Buffer using shared utility
+      const buffer = await toBuffer(file.data, {
+        platform: "teams",
+        throwOnUnsupported: false,
+      });
+      if (!buffer) {
         continue;
       }
 
-      // Create data URI
+      // Create data URI using shared utility
       const mimeType = file.mimeType || "application/octet-stream";
-      const base64 = buffer.toString("base64");
-      const dataUri = `data:${mimeType};base64,${base64}`;
+      const dataUri = bufferToDataUri(buffer, mimeType);
 
       attachments.push({
         contentType: mimeType,
