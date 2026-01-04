@@ -70,6 +70,10 @@ export class DiscordAdapter implements Adapter<DiscordThreadId, unknown> {
   private logger: Logger;
   private formatConverter = new DiscordFormatConverter();
 
+  // Track pending reply context per thread (keyed by threadId)
+  // This enables reply threading when responding to Gateway messages
+  private pendingReplies = new Map<string, string>();
+
   constructor(
     config: DiscordAdapterConfig & { logger: Logger; userName?: string },
   ) {
@@ -355,6 +359,14 @@ export class DiscordAdapter implements Adapter<DiscordThreadId, unknown> {
     }
     if (components.length > 0) {
       payload.components = components;
+    }
+
+    // Check for pending reply context (set when handling Gateway messages)
+    const replyToMessageId = this.pendingReplies.get(threadId);
+    if (replyToMessageId) {
+      payload.message_reference = {
+        message_id: replyToMessageId,
+      };
     }
 
     // Handle file uploads
@@ -1103,12 +1115,17 @@ export class DiscordAdapter implements Adapter<DiscordThreadId, unknown> {
     };
 
     try {
+      // Set pending reply context so responses are threaded
+      this.pendingReplies.set(threadId, message.id);
       await this.chat.handleIncomingMessage(this, threadId, chatMessage);
     } catch (error) {
       this.logger.error("Error handling Gateway message", {
         error: String(error),
         messageId: message.id,
       });
+    } finally {
+      // Clear pending reply context
+      this.pendingReplies.delete(threadId);
     }
   }
 }

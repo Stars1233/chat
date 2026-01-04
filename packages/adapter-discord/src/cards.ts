@@ -15,9 +15,17 @@ import type {
   SectionElement,
   TextElement,
 } from "chat";
+import { convertEmojiPlaceholders } from "chat";
 import type { APIEmbed, APIEmbedField } from "discord-api-types/v10";
 import { ButtonStyle } from "discord-api-types/v10";
 import type { DiscordActionRow, DiscordButton } from "./types";
+
+/**
+ * Convert emoji placeholders to Discord format.
+ */
+function convertEmoji(text: string): string {
+  return convertEmojiPlaceholders(text, "discord");
+}
 
 /**
  * Convert a CardElement to Discord message payload (embeds + components).
@@ -30,13 +38,13 @@ export function cardToDiscordPayload(card: CardElement): {
   const fields: APIEmbedField[] = [];
   const components: DiscordActionRow[] = [];
 
-  // Set title and description
+  // Set title and description (with emoji conversion)
   if (card.title) {
-    embed.title = card.title;
+    embed.title = convertEmoji(card.title);
   }
 
   if (card.subtitle) {
-    embed.description = card.subtitle;
+    embed.description = convertEmoji(card.subtitle);
   }
 
   // Set header image
@@ -113,7 +121,7 @@ function processChild(
  * Convert a text element to Discord markdown.
  */
 function convertTextElement(element: TextElement): string {
-  let text = element.content;
+  let text = convertEmoji(element.content);
 
   // Apply style
   if (element.style === "bold") {
@@ -191,8 +199,8 @@ function convertFieldsElement(
 ): void {
   for (const field of element.children) {
     fields.push({
-      name: field.label,
-      value: field.value,
+      name: convertEmoji(field.label),
+      value: convertEmoji(field.value),
       inline: true, // Discord fields can be inline
     });
   }
@@ -206,11 +214,11 @@ export function cardToFallbackText(card: CardElement): string {
   const parts: string[] = [];
 
   if (card.title) {
-    parts.push(`**${card.title}**`);
+    parts.push(`**${convertEmoji(card.title)}**`);
   }
 
   if (card.subtitle) {
-    parts.push(card.subtitle);
+    parts.push(convertEmoji(card.subtitle));
   }
 
   for (const child of card.children) {
@@ -229,11 +237,13 @@ export function cardToFallbackText(card: CardElement): string {
 function childToFallbackText(child: CardChild): string | null {
   switch (child.type) {
     case "text":
-      return child.content;
+      return convertEmoji(child.content);
     case "fields":
-      return child.children.map((f) => `**${f.label}**: ${f.value}`).join("\n");
+      return child.children
+        .map((f) => `**${convertEmoji(f.label)}**: ${convertEmoji(f.value)}`)
+        .join("\n");
     case "actions":
-      return `[${child.children.map((b) => b.label).join("] [")}]`;
+      return `[${child.children.map((b) => convertEmoji(b.label)).join("] [")}]`;
     case "section":
       return child.children
         .map((c) => childToFallbackText(c))
