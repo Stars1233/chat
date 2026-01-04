@@ -87,6 +87,12 @@ export class DiscordAdapter implements Adapter<DiscordThreadId, unknown> {
   ): Promise<Response> {
     const body = await request.text();
 
+    this.logger.info("Discord webhook received", {
+      bodyLength: body.length,
+      hasSignature: !!request.headers.get("x-signature-ed25519"),
+      hasTimestamp: !!request.headers.get("x-signature-timestamp"),
+    });
+
     // Verify Ed25519 signature
     const signature = request.headers.get("x-signature-ed25519");
     const timestamp = request.headers.get("x-signature-timestamp");
@@ -141,6 +147,10 @@ export class DiscordAdapter implements Adapter<DiscordThreadId, unknown> {
     timestamp: string | null,
   ): boolean {
     if (!signature || !timestamp) {
+      this.logger.warn("Discord signature verification failed: missing headers", {
+        hasSignature: !!signature,
+        hasTimestamp: !!timestamp,
+      });
       return false;
     }
 
@@ -149,13 +159,22 @@ export class DiscordAdapter implements Adapter<DiscordThreadId, unknown> {
       const publicKeyHex = this.publicKey;
       const signatureHex = signature;
 
-      return nacl.sign.detached.verify(
+      const isValid = nacl.sign.detached.verify(
         new TextEncoder().encode(message),
         hexToUint8Array(signatureHex),
         hexToUint8Array(publicKeyHex),
       );
+
+      if (!isValid) {
+        this.logger.warn("Discord signature verification failed: invalid signature", {
+          publicKeyLength: publicKeyHex.length,
+          signatureLength: signatureHex.length,
+        });
+      }
+
+      return isValid;
     } catch (error) {
-      this.logger.warn("Signature verification failed", { error });
+      this.logger.warn("Discord signature verification failed: exception", { error });
       return false;
     }
   }
