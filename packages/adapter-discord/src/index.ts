@@ -71,10 +71,6 @@ export class DiscordAdapter implements Adapter<DiscordThreadId, unknown> {
   private logger: Logger;
   private formatConverter = new DiscordFormatConverter();
 
-  // Track pending thread creation context (keyed by channelId:messageId)
-  // When bot responds to a message, we create a Discord thread from that message
-  private pendingThreads = new Map<string, string>();
-
   constructor(
     config: DiscordAdapterConfig & { logger: Logger; userName?: string },
   ) {
@@ -327,39 +323,17 @@ export class DiscordAdapter implements Adapter<DiscordThreadId, unknown> {
 
   /**
    * Post a message to a Discord channel or thread.
-   * If responding to a message in a channel (not a thread), creates a Discord thread first.
    */
   async postMessage(
     threadId: string,
     message: AdapterPostableMessage,
   ): Promise<RawMessage<unknown>> {
-    let {
-      channelId,
-      guildId,
-      threadId: discordThreadId,
-    } = this.decodeThreadId(threadId);
-    let actualThreadId = threadId;
+    let { channelId, threadId: discordThreadId } =
+      this.decodeThreadId(threadId);
+    const actualThreadId = threadId;
 
-    // Check if we need to create a thread (responding to a channel message, not in a thread yet)
-    const pendingKey = this.pendingThreads.get(threadId);
-    if (pendingKey && !discordThreadId) {
-      // Create a Discord thread from the original message
-      const newThread = await this.createDiscordThread(channelId, pendingKey);
-      discordThreadId = newThread.id;
-      channelId = newThread.id; // Thread channel ID becomes the channel to post to
-      actualThreadId = this.encodeThreadId({
-        guildId,
-        channelId: this.decodeThreadId(threadId).channelId,
-        threadId: newThread.id,
-      });
-
-      this.logger.debug("Created Discord thread for response", {
-        originalChannel: this.decodeThreadId(threadId).channelId,
-        threadId: newThread.id,
-        threadName: newThread.name,
-      });
-    } else if (discordThreadId) {
-      // Already in a thread, post to the thread channel
+    // If in a thread, post to the thread channel
+    if (discordThreadId) {
       channelId = discordThreadId;
     }
 
@@ -1179,6 +1153,26 @@ export class DiscordAdapter implements Adapter<DiscordThreadId, unknown> {
       parentChannelId = message.channel.parentId;
     }
 
+    // If not in a thread and bot is mentioned, create a thread immediately
+    // This ensures the Thread object has the correct ID from the start
+    if (!discordThreadId && isMentioned) {
+      try {
+        const newThread = await this.createDiscordThread(channelId, message.id);
+        discordThreadId = newThread.id;
+        this.logger.debug("Created Discord thread for incoming mention", {
+          channelId,
+          messageId: message.id,
+          threadId: newThread.id,
+        });
+      } catch (error) {
+        this.logger.error("Failed to create Discord thread for mention", {
+          error: String(error),
+          messageId: message.id,
+        });
+        // Continue without thread - will use channel
+      }
+    }
+
     const threadId = this.encodeThreadId({
       guildId,
       channelId: parentChannelId,
@@ -1226,20 +1220,12 @@ export class DiscordAdapter implements Adapter<DiscordThreadId, unknown> {
     };
 
     try {
-      // If not already in a thread, set pending context so postMessage creates one
-      if (!discordThreadId) {
-        this.pendingThreads.set(threadId, message.id);
-      }
-
       await this.chat.handleIncomingMessage(this, threadId, chatMessage);
     } catch (error) {
       this.logger.error("Error handling Gateway message", {
         error: String(error),
         messageId: message.id,
       });
-    } finally {
-      // Clear pending thread context
-      this.pendingThreads.delete(threadId);
     }
   }
 }
