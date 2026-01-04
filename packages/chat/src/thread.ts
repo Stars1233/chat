@@ -52,7 +52,7 @@ function isAsyncIterable(value: unknown): value is AsyncIterable<string> {
 export class ThreadImpl<TState = Record<string, unknown>>
   implements Thread<TState>
 {
-  readonly id: string;
+  private _id: string;
   readonly adapter: Adapter;
   readonly channelId: string;
   readonly isDM: boolean;
@@ -66,7 +66,7 @@ export class ThreadImpl<TState = Record<string, unknown>>
   private _streamingUpdateIntervalMs: number;
 
   constructor(config: ThreadImplConfig) {
-    this.id = config.id;
+    this._id = config.id;
     this.adapter = config.adapter;
     this.channelId = config.channelId;
     this.isDM = config.isDM ?? false;
@@ -78,6 +78,11 @@ export class ThreadImpl<TState = Record<string, unknown>>
     if (config.initialMessage) {
       this._recentMessages = [config.initialMessage];
     }
+  }
+
+  /** Thread ID - may be updated after postMessage creates a platform thread */
+  get id(): string {
+    return this._id;
   }
 
   get recentMessages(): Message[] {
@@ -193,9 +198,31 @@ export class ThreadImpl<TState = Record<string, unknown>>
 
     const rawMessage = await this.adapter.postMessage(this.id, postable);
 
+    // If the adapter returned a different threadId (e.g., Discord created a thread),
+    // migrate the subscription from the old ID to the new ID
+    if (rawMessage.threadId && rawMessage.threadId !== this._id) {
+      await this.migrateSubscription(this._id, rawMessage.threadId);
+      this._id = rawMessage.threadId;
+    }
+
     // Create a SentMessage with edit/delete capabilities
     // Pass the threadId from postMessage - may differ if adapter created a thread
     return this.createSentMessage(rawMessage.id, postable, rawMessage.threadId);
+  }
+
+  /**
+   * Migrate subscription from old thread ID to new thread ID.
+   * This is called when an adapter creates a platform thread (e.g., Discord).
+   */
+  private async migrateSubscription(
+    oldId: string,
+    newId: string,
+  ): Promise<void> {
+    const wasSubscribed = await this._stateAdapter.isSubscribed(oldId);
+    if (wasSubscribed) {
+      await this._stateAdapter.unsubscribe(oldId);
+      await this._stateAdapter.subscribe(newId);
+    }
   }
 
   /**
@@ -237,6 +264,14 @@ export class ThreadImpl<TState = Record<string, unknown>>
       };
 
       const raw = await this.adapter.stream(this.id, wrappedStream, options);
+
+      // If the adapter returned a different threadId (e.g., Discord created a thread),
+      // migrate the subscription from the old ID to the new ID
+      if (raw.threadId && raw.threadId !== this._id) {
+        await this.migrateSubscription(this._id, raw.threadId);
+        this._id = raw.threadId;
+      }
+
       return this.createSentMessage(raw.id, accumulated, raw.threadId);
     }
 
@@ -264,6 +299,13 @@ export class ThreadImpl<TState = Record<string, unknown>>
 
     // Use the threadId from postMessage - may differ if adapter created a thread
     const threadIdForEdits = msg.threadId || this.id;
+
+    // If the adapter returned a different threadId (e.g., Discord created a thread),
+    // migrate the subscription from the old ID to the new ID
+    if (msg.threadId && msg.threadId !== this._id) {
+      await this.migrateSubscription(this._id, msg.threadId);
+      this._id = msg.threadId;
+    }
 
     let accumulated = "";
     let lastEditContent = "..."; // Track that we posted "..." initially
