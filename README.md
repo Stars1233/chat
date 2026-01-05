@@ -8,6 +8,7 @@ A unified SDK for building chat bots across Slack, Microsoft Teams, Google Chat,
 - Mention-based thread subscriptions
 - Reaction handling with type-safe emoji
 - Cross-platform emoji helper for consistent rendering
+- **AI SDK integration** - Stream LLM responses directly to chat
 - **Rich cards with buttons** - TSX or object-based cards
 - **Action callbacks** - Handle button clicks across platforms
 - **File uploads** - Send files with messages
@@ -267,6 +268,56 @@ bot.onAction(async (event: ActionEvent) => {
 ```
 
 The `ActionEvent` includes `actionId`, `value`, `user`, `thread`, `messageId`, `threadId`, `adapter`, and `raw` properties.
+
+## AI Integration & Streaming
+
+Stream LLM responses directly to chat platforms. The SDK accepts any `AsyncIterable<string>` (like AI SDK's `textStream`), automatically using native streaming APIs where available (Slack) or falling back to post+edit for other platforms.
+
+```typescript
+import { Chat, emoji } from "chat";
+
+declare const bot: Chat;
+
+// Any AI SDK that returns AsyncIterable<string> works
+declare const agent: {
+  stream(opts: { prompt: unknown }): Promise<{ textStream: AsyncIterable<string> }>;
+};
+
+// Stream AI response directly to chat
+bot.onSubscribedMessage(async (thread, message) => {
+  const threadState = await thread.state;
+
+  if (threadState?.aiMode) {
+    // Fetch conversation history for context
+    const { messages } = await thread.adapter.fetchMessages(thread.id, {
+      limit: 20,
+    });
+
+    // Convert to AI SDK format
+    const history = messages.reverse().map((msg) => ({
+      role: msg.author.isMe ? ("assistant" as const) : ("user" as const),
+      content: msg.text,
+    }));
+
+    // Stream response - SDK handles platform differences
+    const result = await agent.stream({ prompt: history });
+    await thread.post(result.textStream);
+  }
+});
+```
+
+### Platform Behavior
+
+| Platform | Streaming Method |
+|----------|------------------|
+| Slack | Native streaming API (`chatStream`) |
+| Teams | Post + edit with throttling |
+| Google Chat | Post + edit with throttling |
+| Discord | Post + edit with throttling |
+
+The fallback method posts an initial message, then edits it as chunks arrive (throttled to avoid rate limits).
+
+The SDK also supports **per-thread state** via `thread.setState()` and `thread.state` for tracking conversation modes, user preferences, or any thread-specific context.
 
 ## File Uploads
 
