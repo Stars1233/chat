@@ -5,21 +5,42 @@ import { bot } from "@/lib/bot";
 export const maxDuration = 800;
 
 const GATEWAY_CHANNEL = "discord:gateway:control";
+// Default listener duration: 10 minutes
+const DEFAULT_DURATION_MS = 600 * 1000;
 
 /**
  * Start the Discord Gateway WebSocket listener.
- * This keeps a WebSocket connection open for up to 180 seconds to receive messages.
+ * This keeps a WebSocket connection open for up to 10 minutes to receive messages.
  *
  * Uses Redis pub/sub to coordinate multiple listeners:
  * - When a new listener starts, it publishes a message to shut down existing listeners
  * - Existing listeners subscribe and gracefully shut down when they receive the message
  *
- * Usage: POST /api/discord/gateway
- * Optional query param: ?duration=180000 (milliseconds)
+ * This endpoint is invoked by a Vercel cron job every 9 minutes to maintain
+ * continuous Gateway connectivity with overlapping listeners.
+ *
+ * Security: Requires CRON_SECRET validation when configured.
+ *
+ * Usage: GET /api/discord/gateway
+ * Optional query param: ?duration=600000 (milliseconds, max 600000)
  */
-export async function POST(request: Request): Promise<Response> {
+export async function GET(request: Request): Promise<Response> {
+  // Validate CRON_SECRET if configured (required in production)
+  const cronSecret = process.env.CRON_SECRET;
+  if (!cronSecret) {
+    console.error("[discord-gateway] CRON_SECRET not configured");
+    return new Response("CRON_SECRET not configured", { status: 500 });
+  }
+  const authHeader = request.headers.get("authorization");
+  if (authHeader !== `Bearer ${cronSecret}`) {
+    console.log("[discord-gateway] Unauthorized: invalid CRON_SECRET");
+    return new Response("Unauthorized", { status: 401 });
+  }
+
   // Generate unique listener ID per request
-  const listenerId = `listener-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const listenerId = `listener-${Date.now()}-${Math.random()
+    .toString(36)
+    .slice(2, 8)}`;
 
   console.log(`[discord-gateway] Starting gateway listener: ${listenerId}`);
 
@@ -33,14 +54,15 @@ export async function POST(request: Request): Promise<Response> {
     return new Response("Discord adapter not configured", { status: 404 });
   }
 
-  // Get duration from query params (default: 180 seconds)
+  // Get duration from query params (default: 10 minutes)
   const url = new URL(request.url);
   const durationParam = url.searchParams.get("duration");
-  const durationMs = durationParam ? parseInt(durationParam, 10) : 180000;
+  const durationMs = durationParam
+    ? parseInt(durationParam, 10)
+    : DEFAULT_DURATION_MS;
 
   // Cap at 10 minutes to avoid runaway costs
-  const maxDurationMs = 600 * 1000;
-  const actualDuration = Math.min(durationMs, maxDurationMs);
+  const actualDuration = Math.min(durationMs, DEFAULT_DURATION_MS);
 
   // Set up Redis pub/sub for listener coordination
   let abortController: AbortController | undefined;
@@ -143,27 +165,4 @@ export async function POST(request: Request): Promise<Response> {
       },
     );
   }
-}
-
-/**
- * Health check for Gateway endpoint
- */
-export async function GET(): Promise<Response> {
-  const discord = bot.getAdapter("discord");
-
-  if (!discord) {
-    return new Response("Discord adapter not configured", { status: 404 });
-  }
-
-  return new Response(
-    JSON.stringify({
-      status: "ready",
-      message:
-        "POST to this endpoint to start Gateway listener. Use ?duration=<ms> to set duration (max 600000ms).",
-    }),
-    {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
-    },
-  );
 }
