@@ -470,7 +470,7 @@ export class DiscordAdapter implements Adapter<DiscordThreadId, unknown> {
         userName: data.author.username,
         fullName: data.author.global_name || data.author.username,
         isBot: data.author.bot,
-        isMe: false,
+        isMe: data.author.id === this.applicationId,
       },
       metadata: {
         dateSent: new Date(data.timestamp),
@@ -531,7 +531,7 @@ export class DiscordAdapter implements Adapter<DiscordThreadId, unknown> {
         userName: data.user.username,
         fullName: data.user.username,
         isBot: data.user.bot,
-        isMe: false,
+        isMe: data.user.id === this.applicationId,
       },
       raw: data,
     };
