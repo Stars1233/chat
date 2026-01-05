@@ -443,6 +443,7 @@ export function createGatewayMessageEvent(options: {
   authorBot?: boolean;
   channelType?: number;
   mentions?: Array<{ id: string; username: string }>;
+  mentionRoles?: string[];
 }): Record<string, unknown> {
   return {
     type: "GATEWAY_MESSAGE_CREATE",
@@ -461,6 +462,7 @@ export function createGatewayMessageEvent(options: {
       },
       timestamp: new Date().toISOString(),
       mentions: options.mentions || [],
+      mention_roles: options.mentionRoles || [],
       attachments: [],
     },
   };

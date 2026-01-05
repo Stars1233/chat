@@ -7,7 +7,8 @@
     "threadId": "1457536551830421524",
     "aiThreadId": "1457536647464747051",
     "userId": "1033044521375764530",
-    "userName": "malte2384"
+    "userName": "malte2384",
+    "roleId": "1457473602180878604"
   },
   "buttonClickHello": {
     "app_permissions": "2248473465835073",
@@ -509,6 +510,56 @@
       "embeds": [],
       "edited_timestamp": null,
       "content": "<@1457469483726668048> AI What is love",
+      "components": [],
+      "channel_type": 0,
+      "channel_id": "1457510428359004343",
+      "author": {
+        "username": "malte2384",
+        "public_flags": 0,
+        "primary_guild": null,
+        "id": "1033044521375764530",
+        "global_name": "Malte",
+        "display_name_styles": null,
+        "discriminator": "0",
+        "collectibles": null,
+        "clan": null,
+        "avatar_decoration_data": null,
+        "avatar": "046f57d76d14a232a4ddc7200080de76"
+      },
+      "attachments": [],
+      "guild_id": "1457468924290662599"
+    }
+  },
+  "gatewayRoleMention": {
+    "type": "GATEWAY_MESSAGE_CREATE",
+    "timestamp": 1767574200000,
+    "data": {
+      "type": 0,
+      "tts": false,
+      "timestamp": "2026-01-05T00:50:00.000000+00:00",
+      "pinned": false,
+      "nonce": "1457536600000000000",
+      "mentions": [],
+      "mention_roles": ["1457473602180878604"],
+      "mention_everyone": false,
+      "member": {
+        "roles": [],
+        "premium_since": null,
+        "pending": false,
+        "nick": null,
+        "mute": false,
+        "joined_at": "2026-01-04T20:21:10.139000+00:00",
+        "flags": 0,
+        "deaf": false,
+        "communication_disabled_until": null,
+        "banner": null,
+        "avatar": null
+      },
+      "id": "1457536600000000001",
+      "flags": 0,
+      "embeds": [],
+      "edited_timestamp": null,
+      "content": "<@&1457473602180878604> AI Still there?",
       "components": [],
       "channel_type": 0,
       "channel_id": "1457510428359004343",

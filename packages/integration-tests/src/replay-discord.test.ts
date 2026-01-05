@@ -40,6 +40,7 @@ const REAL_GUILD_ID = discordFixtures.metadata.guildId;
 const REAL_THREAD_ID = discordFixtures.metadata.threadId;
 const REAL_USER_ID = discordFixtures.metadata.userId;
 const REAL_USER_NAME = discordFixtures.metadata.userName;
+const REAL_ROLE_ID = discordFixtures.metadata.roleId;
 
 describe("Discord Replay Tests", () => {
   let ctx: DiscordTestContext;
@@ -1164,6 +1165,166 @@ describe("Discord Gateway Forwarded Events", () => {
       // Now send a real user message - this SHOULD trigger the handler
       await ctx.sendGatewayEvent(discordFixtures.gatewayThreadUserHey);
       expect(handlerCallCount).toBe(1);
+    });
+  });
+
+  describe("Role Mention Support", () => {
+    it("should trigger onNewMention when a configured role is mentioned", async () => {
+      let capturedMessage: Message | null = null;
+      let capturedThread: Thread | null = null;
+
+      ctx = await createDiscordTestContext(
+        {
+          botName: "Chat SDK Demo",
+          applicationId: REAL_BOT_ID,
+          mentionRoleIds: [REAL_ROLE_ID],
+        },
+        {
+          onMention: async (thread, message) => {
+            capturedMessage = message;
+            capturedThread = thread;
+          },
+        },
+      );
+
+      // Send the role mention fixture
+      await ctx.sendGatewayEvent(discordFixtures.gatewayRoleMention);
+
+      const msg = defined<Message>(capturedMessage);
+      const thread = defined<Thread>(capturedThread);
+
+      expect(msg.isMention).toBe(true);
+      expect(msg.text).toBe("<@&1457473602180878604> AI Still there?");
+      expect(msg.author.userId).toBe(REAL_USER_ID);
+      expect(msg.author.userName).toBe(REAL_USER_NAME);
+      expect(msg.author.isMe).toBe(false);
+      expect(msg.author.isBot).toBe(false);
+      expect(thread.adapter.name).toBe("discord");
+    });
+
+    it("should NOT trigger onNewMention when role is not in configured list", async () => {
+      let capturedMessage: Message | null = null;
+
+      ctx = await createDiscordTestContext(
+        {
+          botName: "Chat SDK Demo",
+          applicationId: REAL_BOT_ID,
+          mentionRoleIds: ["DIFFERENT_ROLE_ID"],
+        },
+        {
+          onMention: async (_thread, message) => {
+            capturedMessage = message;
+          },
+        },
+      );
+
+      // Send the role mention fixture - should NOT trigger because role ID doesn't match
+      await ctx.sendGatewayEvent(discordFixtures.gatewayRoleMention);
+
+      // Should NOT have triggered the mention handler
+      expect(capturedMessage).toBeNull();
+    });
+
+    it("should NOT trigger onNewMention for role mentions when no role IDs configured", async () => {
+      let capturedMessage: Message | null = null;
+
+      ctx = await createDiscordTestContext(
+        {
+          botName: "Chat SDK Demo",
+          applicationId: REAL_BOT_ID,
+          // No mentionRoleIds configured
+        },
+        {
+          onMention: async (_thread, message) => {
+            capturedMessage = message;
+          },
+        },
+      );
+
+      // Send the role mention fixture - should NOT trigger because no roles configured
+      await ctx.sendGatewayEvent(discordFixtures.gatewayRoleMention);
+
+      // Should NOT have triggered the mention handler
+      expect(capturedMessage).toBeNull();
+    });
+
+    it("should trigger on role mention even without direct user mention", async () => {
+      let capturedMessage: Message | null = null;
+
+      ctx = await createDiscordTestContext(
+        {
+          botName: "Chat SDK Demo",
+          applicationId: REAL_BOT_ID,
+          mentionRoleIds: [REAL_ROLE_ID],
+        },
+        {
+          onMention: async (_thread, message) => {
+            capturedMessage = message;
+          },
+        },
+      );
+
+      // The gatewayRoleMention has mention_roles but NO mentions (no direct @user)
+      // It should still trigger because the role is mentioned
+      await ctx.sendGatewayEvent(discordFixtures.gatewayRoleMention);
+
+      const msg = defined<Message>(capturedMessage);
+      expect(msg.isMention).toBe(true);
+      // Verify there's no direct user mention in the mentions array
+      expect((msg.raw as Record<string, unknown>).mentions).toEqual([]);
+    });
+
+    it("should support multiple role IDs in configuration", async () => {
+      let capturedMessage: Message | null = null;
+
+      ctx = await createDiscordTestContext(
+        {
+          botName: "Chat SDK Demo",
+          applicationId: REAL_BOT_ID,
+          mentionRoleIds: ["OTHER_ROLE_1", REAL_ROLE_ID, "OTHER_ROLE_2"],
+        },
+        {
+          onMention: async (_thread, message) => {
+            capturedMessage = message;
+          },
+        },
+      );
+
+      await ctx.sendGatewayEvent(discordFixtures.gatewayRoleMention);
+
+      const msg = defined<Message>(capturedMessage);
+      expect(msg.isMention).toBe(true);
+    });
+
+    it("should work with synthetic role mention events", async () => {
+      let capturedMessage: Message | null = null;
+
+      ctx = await createDiscordTestContext(
+        {
+          botName: "TestBot",
+          applicationId: DISCORD_APPLICATION_ID,
+          mentionRoleIds: ["ROLE_123"],
+        },
+        {
+          onMention: async (_thread, message) => {
+            capturedMessage = message;
+          },
+        },
+      );
+
+      // Create a synthetic Gateway event with role mention
+      const gatewayEvent = createGatewayMessageEvent({
+        content: "<@&ROLE_123> Hello team!",
+        authorId: "USER123",
+        authorUsername: "testuser",
+        mentionRoles: ["ROLE_123"],
+      });
+
+      await ctx.sendGatewayEvent(gatewayEvent);
+
+      const msg = defined<Message>(capturedMessage);
+      expect(msg.isMention).toBe(true);
+      expect(msg.text).toBe("<@&ROLE_123> Hello team!");
     });
   });
 });

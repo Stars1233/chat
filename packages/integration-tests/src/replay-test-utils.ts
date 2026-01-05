@@ -690,7 +690,11 @@ export interface DiscordTestContext {
  * Create a Discord test context with standard setup.
  */
 export async function createDiscordTestContext(
-  fixtures: { botName?: string; applicationId?: string },
+  fixtures: {
+    botName?: string;
+    applicationId?: string;
+    mentionRoleIds?: string[];
+  },
   handlers: {
     onMention?: (thread: Thread, message: Message) => Promise<void>;
     onSubscribed?: (thread: Thread, message: Message) => Promise<void>;
@@ -705,6 +709,7 @@ export async function createDiscordTestContext(
     botToken: DISCORD_BOT_TOKEN,
     publicKey: DISCORD_PUBLIC_KEY,
     applicationId,
+    mentionRoleIds: fixtures.mentionRoleIds,
     userName: botName,
     logger: mockLogger,
   });

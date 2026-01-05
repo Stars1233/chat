@@ -1,6 +1,6 @@
 # Chat SDK
 
-A unified SDK for building chat bots across Slack, Microsoft Teams, and Google Chat.
+A unified SDK for building chat bots across Slack, Microsoft Teams, Google Chat, and Discord.
 
 ## Features
 
@@ -24,6 +24,7 @@ import { Chat, ConsoleLogger, emoji } from "chat";
 import { createSlackAdapter } from "@chat-adapter/slack";
 import { createTeamsAdapter } from "@chat-adapter/teams";
 import { createGoogleChatAdapter } from "@chat-adapter/gchat";
+import { createDiscordAdapter } from "@chat-adapter/discord";
 import { createRedisState } from "@chat-adapter/state-redis";
 
 const logger = new ConsoleLogger("info");
@@ -45,6 +46,12 @@ export const bot = new Chat({
     gchat: createGoogleChatAdapter({
       credentials: JSON.parse(process.env.GOOGLE_CHAT_CREDENTIALS!),
       logger: logger.child("gchat"),
+    }),
+    discord: createDiscordAdapter({
+      botToken: process.env.DISCORD_BOT_TOKEN!,
+      publicKey: process.env.DISCORD_PUBLIC_KEY!,
+      applicationId: process.env.DISCORD_APPLICATION_ID!,
+      logger: logger.child("discord"),
     }),
   },
   state: createRedisState({ url: process.env.REDIS_URL!, logger }),
@@ -99,8 +106,11 @@ This creates endpoints for each platform:
 - `POST /api/webhooks/slack`
 - `POST /api/webhooks/teams`
 - `POST /api/webhooks/gchat`
+- `POST /api/webhooks/discord`
 
 The `waitUntil` option ensures message processing completes after the response is sent (required for serverless).
+
+**Note for Discord:** Discord uses HTTP Interactions for slash commands and button clicks, but requires a Gateway WebSocket connection for receiving messages. See [SETUP.md](./SETUP.md) for Discord Gateway configuration.
 
 ## Setup
 
@@ -109,6 +119,7 @@ See [SETUP.md](./SETUP.md) for platform configuration instructions including:
 - Slack app creation and OAuth scopes
 - Microsoft Teams Azure Bot setup
 - Google Chat service account and Pub/Sub configuration
+- Discord application and Gateway setup
 - Environment variables reference
 
 ## Emoji Helper
