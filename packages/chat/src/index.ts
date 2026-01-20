@@ -19,6 +19,7 @@ import {
 import {
   isJSX as _isJSX,
   toCardElement as _toCardElement,
+  toModalElement as _toModalElement,
   type ButtonProps,
   type CardJSXElement,
   type CardJSXProps,
@@ -42,6 +43,7 @@ export const isCardElement = _isCardElement;
 export const isJSX = _isJSX;
 export const Section = _Section;
 export const toCardElement = _toCardElement;
+export const toModalElement = _toModalElement;
 
 // Modal builders
 import {

@@ -48,6 +48,7 @@ import {
 } from "./cards";
 
 import {
+  isModalElement,
   Modal,
   type ModalChild,
   type ModalElement,
@@ -550,6 +551,24 @@ export function toCardElement(jsxElement: unknown): CardElement | null {
     return jsxElement as CardElement;
   }
 
+  return null;
+}
+
+export function toModalElement(jsxElement: unknown): ModalElement | null {
+  if (isJSXElement(jsxElement)) {
+    const resolved = resolveJSXElement(jsxElement);
+    if (
+      resolved &&
+      typeof resolved === "object" &&
+      "type" in resolved &&
+      resolved.type === "modal"
+    ) {
+      return resolved as ModalElement;
+    }
+  }
+  if (isModalElement(jsxElement)) {
+    return jsxElement;
+  }
   return null;
 }
 

@@ -1165,10 +1165,12 @@ export interface ActionEvent<TRawMessage = unknown> {
   /**
    * Open a modal/dialog form in response to this action.
    *
-   * @param modal - The modal element to display
+   * @param modal - The modal element to display (JSX or ModalElement)
    * @returns The view/dialog ID, or undefined if modals are not supported
    */
-  openModal(modal: ModalElement): Promise<{ viewId: string } | undefined>;
+  openModal(
+    modal: ModalElement | CardJSXElement,
+  ): Promise<{ viewId: string } | undefined>;
 }
 
 /**

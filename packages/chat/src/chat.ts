@@ -1,3 +1,4 @@
+import { isJSX, toModalElement } from "./jsx-runtime";
 import type { ModalElement } from "./modals";
 import { ThreadImpl } from "./thread";
 import type {
@@ -627,7 +628,7 @@ export class Chat<
     const fullEvent: ActionEvent = {
       ...event,
       thread,
-      openModal: async (modal: ModalElement) => {
+      openModal: async (modal) => {
         if (!event.triggerId) {
           this.logger.warn("Cannot open modal: no triggerId available");
           return undefined;
@@ -638,7 +639,18 @@ export class Chat<
           );
           return undefined;
         }
-        return event.adapter.openModal(event.triggerId, modal);
+
+        // Convert JSX to ModalElement if needed (same pattern as thread.post)
+        let modalElement: ModalElement = modal as ModalElement;
+        if (isJSX(modal)) {
+          const converted = toModalElement(modal);
+          if (!converted) {
+            throw new Error("Invalid JSX element: must be a Modal element");
+          }
+          modalElement = converted;
+        }
+
+        return event.adapter.openModal(event.triggerId, modalElement);
       },
     };
 

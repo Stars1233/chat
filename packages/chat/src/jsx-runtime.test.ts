@@ -14,7 +14,15 @@ import {
   Section,
   Text,
 } from "./cards";
-import { Fragment, isJSX, jsx, jsxs, toCardElement } from "./jsx-runtime";
+import {
+  Fragment,
+  isJSX,
+  jsx,
+  jsxs,
+  toCardElement,
+  toModalElement,
+} from "./jsx-runtime";
+import { Modal, Select, SelectOption, TextInput } from "./modals";
 
 // ============================================================================
 // jsx() and jsxs() Factory Tests
@@ -438,5 +446,98 @@ describe("edge cases", () => {
     expect(result?.children).toHaveLength(2);
     expect(result?.children[0].type).toBe("text");
     expect(result?.children[1].type).toBe("text");
+  });
+});
+
+// ============================================================================
+// toModalElement() Tests
+// ============================================================================
+
+describe("toModalElement", () => {
+  it("converts a Modal JSX element to ModalElement", () => {
+    const jsxElement = jsx(Modal, {
+      callbackId: "test_modal",
+      title: "Test Modal",
+    });
+    const modal = toModalElement(jsxElement);
+
+    expect(modal).not.toBeNull();
+    expect(modal?.type).toBe("modal");
+    expect(modal?.callbackId).toBe("test_modal");
+    expect(modal?.title).toBe("Test Modal");
+  });
+
+  it("converts a Modal with children to ModalElement", () => {
+    const textInput = jsx(TextInput, { id: "name", label: "Name" });
+    const jsxElement = jsxs(Modal, {
+      callbackId: "form_modal",
+      title: "Form",
+      children: [textInput],
+    });
+    const modal = toModalElement(jsxElement);
+
+    expect(modal).not.toBeNull();
+    expect(modal?.type).toBe("modal");
+    expect(modal?.children).toHaveLength(1);
+    expect(modal?.children[0].type).toBe("text_input");
+  });
+
+  it("converts a Modal with Select and options", () => {
+    const option1 = jsx(SelectOption, { label: "Option 1", value: "1" });
+    const option2 = jsx(SelectOption, { label: "Option 2", value: "2" });
+    const select = jsxs(Select, {
+      id: "choice",
+      label: "Choose",
+      children: [option1, option2],
+    });
+    const jsxElement = jsxs(Modal, {
+      callbackId: "select_modal",
+      title: "Select Form",
+      children: [select],
+    });
+    const modal = toModalElement(jsxElement);
+
+    expect(modal).not.toBeNull();
+    expect(modal?.children).toHaveLength(1);
+    expect(modal?.children[0].type).toBe("select");
+    const selectChild = modal?.children[0] as { options: unknown[] };
+    expect(selectChild.options).toHaveLength(2);
+  });
+
+  it("returns existing ModalElement unchanged", () => {
+    const modal = Modal({ callbackId: "existing", title: "Existing" });
+    const result = toModalElement(modal);
+
+    expect(result).toBe(modal);
+  });
+
+  it("returns null for non-Modal JSX elements", () => {
+    const cardElement = jsx(Card, { title: "Test Card" });
+    expect(toModalElement(cardElement)).toBeNull();
+  });
+
+  it("returns null for invalid inputs", () => {
+    expect(toModalElement(null)).toBeNull();
+    expect(toModalElement(undefined)).toBeNull();
+    expect(toModalElement("string")).toBeNull();
+    expect(toModalElement(123)).toBeNull();
+    expect(toModalElement({})).toBeNull();
+  });
+
+  it("preserves optional modal properties", () => {
+    const jsxElement = jsx(Modal, {
+      callbackId: "full_modal",
+      title: "Full Modal",
+      submitLabel: "Send",
+      closeLabel: "Cancel",
+      notifyOnClose: true,
+      privateMetadata: "some-data",
+    });
+    const modal = toModalElement(jsxElement);
+
+    expect(modal?.submitLabel).toBe("Send");
+    expect(modal?.closeLabel).toBe("Cancel");
+    expect(modal?.notifyOnClose).toBe(true);
+    expect(modal?.privateMetadata).toBe("some-data");
   });
 });
