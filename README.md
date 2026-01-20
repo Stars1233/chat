@@ -380,7 +380,9 @@ Return different responses from `onModalSubmit` to control modal behavior:
 Optionally handle when users close/cancel a modal (requires `notifyOnClose` on the Modal):
 
 ```typescript
-bot.onModalClose("feedback_form", async (event) => {
+import type { ModalCloseEvent } from "chat";
+
+bot.onModalClose("feedback_form", async (event: ModalCloseEvent) => {
   console.log(`${event.user.userName} cancelled the feedback form`);
 });
 ```
