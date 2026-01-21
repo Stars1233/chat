@@ -92,6 +92,9 @@ bot.onNewMention(async (thread, message) => {
         <Button id="hello" style="primary">
           Say Hello
         </Button>
+        <Button id="ephemeral">
+          Ephemeral response
+        </Button>
         <Button id="info">Show Info</Button>
         <Button id="feedback">Send Feedback</Button>
         <Button id="messages">Fetch Messages</Button>
@@ -101,6 +104,10 @@ bot.onNewMention(async (thread, message) => {
       </Actions>
     </Card>,
   );
+});
+
+bot.onAction("ephemeral", async (event) => {
+  await event.thread.postEphemeral(event.user, "This is an ephemeral response!", { fallbackToDM: true });
 });
 
 // Handle card button actions
@@ -192,9 +199,9 @@ bot.onModalSubmit("feedback_form", async (event) => {
     await adapter.postMessage(
       event.privateMetadata,
       `${emoji.check} **Feedback received!**\n\n` +
-        `**Category:** ${category}\n` +
-        `**Message:** ${message}` +
-        (email ? `\n**Email:** ${email}` : ""),
+      `**Category:** ${category}\n` +
+      `**Message:** ${message}` +
+      (email ? `\n**Email:** ${email}` : ""),
     );
   }
 });
@@ -249,14 +256,14 @@ bot.onAction("messages", async (event) => {
     const formatMessages = (msgs: typeof recentResult.messages) =>
       msgs.length > 0
         ? msgs
-            .map((m, i) => {
-              const displayText = getDisplayText(
-                m.text,
-                m.attachments && m.attachments.length > 0,
-              );
-              return `Msg ${i + 1}: ${m.author.userName} - ${displayText}`;
-            })
-            .join("\n\n")
+          .map((m, i) => {
+            const displayText = getDisplayText(
+              m.text,
+              m.attachments && m.attachments.length > 0,
+            );
+            return `Msg ${i + 1}: ${m.author.userName} - ${displayText}`;
+          })
+          .join("\n\n")
         : "(no messages)";
 
     await thread.post(
@@ -265,18 +272,16 @@ bot.onAction("messages", async (event) => {
           <Text>**fetchMessages (backward, limit: 5)**</Text>
           <Text>Gets most recent messages, cursor points to older</Text>
           <Text>{formatMessages(recentResult.messages)}</Text>
-          <Text>{`Next cursor: ${
-            recentResult.nextCursor ? "yes" : "none"
-          }`}</Text>
+          <Text>{`Next cursor: ${recentResult.nextCursor ? "yes" : "none"
+            }`}</Text>
         </Section>
         <Divider />
         <Section>
           <Text>**fetchMessages (forward, limit: 5)**</Text>
           <Text>Gets oldest messages first, cursor points to newer</Text>
           <Text>{formatMessages(oldestResult.messages)}</Text>
-          <Text>{`Next cursor: ${
-            oldestResult.nextCursor ? "yes" : "none"
-          }`}</Text>
+          <Text>{`Next cursor: ${oldestResult.nextCursor ? "yes" : "none"
+            }`}</Text>
         </Section>
         <Divider />
         <Section>
@@ -292,8 +297,7 @@ bot.onAction("messages", async (event) => {
     );
   } catch (err) {
     await thread.post(
-      `${emoji.warning} Error fetching messages: ${
-        err instanceof Error ? err.message : "Unknown error"
+      `${emoji.warning} Error fetching messages: ${err instanceof Error ? err.message : "Unknown error"
       }`,
     );
   }
@@ -379,8 +383,7 @@ bot.onSubscribedMessage(async (thread, message) => {
       await thread.post(`${emoji.check} I've sent you a DM!`);
     } catch (err) {
       await thread.post(
-        `${emoji.warning} Sorry, I couldn't send you a DM. Error: ${
-          err instanceof Error ? err.message : "Unknown error"
+        `${emoji.warning} Sorry, I couldn't send you a DM. Error: ${err instanceof Error ? err.message : "Unknown error"
         }`,
       );
     }

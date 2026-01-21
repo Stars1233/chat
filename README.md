@@ -533,7 +533,7 @@ The `fallbackToDM` option is required and controls behavior on platforms without
 
 **Key differences:**
 
-- **Slack**: True ephemeral - message appears in the channel context but disappears when the user refreshes. Other users never see it.
+- **Slack**: True ephemeral - message appears in the channel context but disappears when the user refreshes. Other users never see it. **Note:** Requires additional OAuth scopes beyond `chat:write` - add `channels:write` (public), `groups:write` (private), `im:write` (DMs), or `mpim:write` (group DMs) depending on your use case.
 - **Google Chat**: Private message viewer - message appears in the space but only the target user can see it. It persists and can be deleted by the bot.
 - **Discord/Teams**: No native ephemeral support. With `fallbackToDM: true`, sends a DM instead. With `fallbackToDM: false`, returns `null`.
 
