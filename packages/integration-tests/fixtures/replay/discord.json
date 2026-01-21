@@ -31,10 +31,7 @@
         "user_id": "1033044521375764530"
       },
       "member_count": 2,
-      "member_ids_preview": [
-        "1033044521375764530",
-        "1457469483726668048"
-      ],
+      "member_ids_preview": ["1033044521375764530", "1457469483726668048"],
       "message_count": 1,
       "name": "Thread 1/5/2026, 12:49:56 AM",
       "owner_id": "1457469483726668048",
@@ -211,10 +208,7 @@
         "user_id": "1033044521375764530"
       },
       "member_count": 2,
-      "member_ids_preview": [
-        "1457469483726668048",
-        "1033044521375764530"
-      ],
+      "member_ids_preview": ["1457469483726668048", "1033044521375764530"],
       "message_count": 19,
       "name": "Thread 1/5/2026, 12:49:56 AM",
       "owner_id": "1457469483726668048",
@@ -385,9 +379,7 @@
           "public_flags": 524288,
           "primary_guild": null,
           "member": {
-            "roles": [
-              "1457473602180878604"
-            ],
+            "roles": ["1457473602180878604"],
             "premium_since": null,
             "pending": false,
             "nick": null,
@@ -465,9 +457,7 @@
           "public_flags": 524288,
           "primary_guild": null,
           "member": {
-            "roles": [
-              "1457473602180878604"
-            ],
+            "roles": ["1457473602180878604"],
             "premium_since": null,
             "pending": false,
             "nick": null,
@@ -695,9 +685,7 @@
       "mention_roles": [],
       "mention_everyone": false,
       "member": {
-        "roles": [
-          "1457473602180878604"
-        ],
+        "roles": ["1457473602180878604"],
         "premium_since": null,
         "pending": false,
         "nick": null,
@@ -882,10 +870,7 @@
         "user_id": "1033044521375764530"
       },
       "member_count": 2,
-      "member_ids_preview": [
-        "1033044521375764530",
-        "1457469483726668048"
-      ],
+      "member_ids_preview": ["1033044521375764530", "1457469483726668048"],
       "message_count": 1,
       "name": "Thread 1/5/2026, 12:49:56 AM",
       "owner_id": "1457469483726668048",
@@ -1062,10 +1047,7 @@
         "user_id": "1033044521375764530"
       },
       "member_count": 2,
-      "member_ids_preview": [
-        "1033044521375764530",
-        "1457469483726668048"
-      ],
+      "member_ids_preview": ["1033044521375764530", "1457469483726668048"],
       "message_count": 1,
       "name": "Thread 1/5/2026, 12:49:56 AM",
       "owner_id": "1457469483726668048",
@@ -1302,10 +1284,7 @@
         "user_id": "1033044521375764530"
       },
       "member_count": 2,
-      "member_ids_preview": [
-        "1033044521375764530",
-        "1457469483726668048"
-      ],
+      "member_ids_preview": ["1033044521375764530", "1457469483726668048"],
       "message_count": 1,
       "name": "Thread 1/5/2026, 12:49:56 AM",
       "owner_id": "1457469483726668048",
@@ -1468,9 +1447,7 @@
       "mention_roles": [],
       "mention_everyone": false,
       "member": {
-        "roles": [
-          "1457473602180878604"
-        ],
+        "roles": ["1457473602180878604"],
         "premium_since": null,
         "pending": false,
         "nick": null,

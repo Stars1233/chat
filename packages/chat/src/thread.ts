@@ -70,7 +70,7 @@ interface ThreadImplConfigLazy {
 type ThreadImplConfig = ThreadImplConfigWithAdapter | ThreadImplConfigLazy;
 
 function isLazyConfig(
-  config: ThreadImplConfig
+  config: ThreadImplConfig,
 ): config is ThreadImplConfigLazy {
   return "adapterName" in config && !("adapter" in config);
 }
@@ -147,7 +147,7 @@ export class ThreadImpl<TState = Record<string, unknown>>
     const adapter = chat.getAdapter(this._adapterName);
     if (!adapter) {
       throw new Error(
-        `Adapter "${this._adapterName}" not found in Chat singleton`
+        `Adapter "${this._adapterName}" not found in Chat singleton`,
       );
     }
 
@@ -185,7 +185,7 @@ export class ThreadImpl<TState = Record<string, unknown>>
    */
   get state(): Promise<TState | null> {
     return this._stateAdapter.get<TState>(
-      `${THREAD_STATE_KEY_PREFIX}${this.id}`
+      `${THREAD_STATE_KEY_PREFIX}${this.id}`,
     );
   }
 
@@ -195,7 +195,7 @@ export class ThreadImpl<TState = Record<string, unknown>>
    */
   async setState(
     newState: Partial<TState>,
-    options?: { replace?: boolean }
+    options?: { replace?: boolean },
   ): Promise<void> {
     const key = `${THREAD_STATE_KEY_PREFIX}${this.id}`;
 
@@ -262,7 +262,7 @@ export class ThreadImpl<TState = Record<string, unknown>>
   }
 
   async post(
-    message: string | PostableMessage | CardJSXElement
+    message: string | PostableMessage | CardJSXElement,
   ): Promise<SentMessage> {
     // Handle AsyncIterable (streaming)
     if (isAsyncIterable(message)) {
@@ -291,7 +291,7 @@ export class ThreadImpl<TState = Record<string, unknown>>
   async postEphemeral(
     user: string | Author,
     message: AdapterPostableMessage | CardJSXElement,
-    options: PostEphemeralOptions
+    options: PostEphemeralOptions,
   ): Promise<EphemeralMessage | null> {
     const { fallbackToDM } = options;
     const userId = typeof user === "string" ? user : user.userId;
@@ -340,7 +340,7 @@ export class ThreadImpl<TState = Record<string, unknown>>
    * Uses adapter's native streaming if available, otherwise falls back to post+edit.
    */
   private async handleStream(
-    textStream: AsyncIterable<string>
+    textStream: AsyncIterable<string>,
   ): Promise<SentMessage> {
     // Build streaming options from current message context
     const options: StreamOptions = {};
@@ -393,7 +393,7 @@ export class ThreadImpl<TState = Record<string, unknown>>
    */
   private async fallbackStream(
     textStream: AsyncIterable<string>,
-    options?: StreamOptions
+    options?: StreamOptions,
   ): Promise<SentMessage> {
     const intervalMs =
       options?.updateIntervalMs ?? this._streamingUpdateIntervalMs;
@@ -506,7 +506,7 @@ export class ThreadImpl<TState = Record<string, unknown>>
    * ```
    */
   static fromJSON<TState = Record<string, unknown>>(
-    json: SerializedThread
+    json: SerializedThread,
   ): ThreadImpl<TState> {
     return new ThreadImpl<TState>({
       id: json.id,
@@ -536,7 +536,7 @@ export class ThreadImpl<TState = Record<string, unknown>>
   private createSentMessage(
     messageId: string,
     postable: AdapterPostableMessage,
-    threadIdOverride?: string
+    threadIdOverride?: string,
   ): SentMessage {
     const adapter = this.adapter;
     // Use the threadId returned by postMessage if available (may differ after thread creation)
@@ -571,7 +571,7 @@ export class ThreadImpl<TState = Record<string, unknown>>
       },
 
       async edit(
-        newContent: string | PostableMessage | CardJSXElement
+        newContent: string | PostableMessage | CardJSXElement,
       ): Promise<SentMessage> {
         // Auto-convert JSX elements to CardElement
         // edit doesn't support streaming, so use AdapterPostableMessage

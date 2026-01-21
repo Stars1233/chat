@@ -1248,11 +1248,14 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
 
         requestBody.cardsV2 = [googleCard];
 
-        this.logger.debug("GChat API: spaces.messages.create (ephemeral card)", {
-          spaceName,
-          threadName,
-          userId,
-        });
+        this.logger.debug(
+          "GChat API: spaces.messages.create (ephemeral card)",
+          {
+            spaceName,
+            threadName,
+            userId,
+          },
+        );
       } else {
         // Regular text message
         requestBody.text = convertEmojiPlaceholders(
@@ -1276,9 +1279,12 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
         requestBody,
       });
 
-      this.logger.debug("GChat API: spaces.messages.create ephemeral response", {
-        messageName: response.data.name,
-      });
+      this.logger.debug(
+        "GChat API: spaces.messages.create ephemeral response",
+        {
+          messageName: response.data.name,
+        },
+      );
 
       return {
         id: response.data.name || "",

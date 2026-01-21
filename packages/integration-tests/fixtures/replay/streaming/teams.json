@@ -54,7 +54,9 @@
       "teamsChannelId": "19:d441d38c655c47a085215b2726e76927@thread.tacv2",
       "teamsTeamId": "19:8j-Mnacwmq2QFDbzykeQH5v55m6cN1X3QJ5viHvGIIQ1@thread.tacv2",
       "channel": { "id": "19:d441d38c655c47a085215b2726e76927@thread.tacv2" },
-      "team": { "id": "19:8j-Mnacwmq2QFDbzykeQH5v55m6cN1X3QJ5viHvGIIQ1@thread.tacv2" },
+      "team": {
+        "id": "19:8j-Mnacwmq2QFDbzykeQH5v55m6cN1X3QJ5viHvGIIQ1@thread.tacv2"
+      },
       "tenant": { "id": "ed6e6740-934d-4088-a05e-caa14d8d89ee" }
     },
     "locale": "en-US",
@@ -103,7 +105,9 @@
       "teamsChannelId": "19:d441d38c655c47a085215b2726e76927@thread.tacv2",
       "teamsTeamId": "19:8j-Mnacwmq2QFDbzykeQH5v55m6cN1X3QJ5viHvGIIQ1@thread.tacv2",
       "channel": { "id": "19:d441d38c655c47a085215b2726e76927@thread.tacv2" },
-      "team": { "id": "19:8j-Mnacwmq2QFDbzykeQH5v55m6cN1X3QJ5viHvGIIQ1@thread.tacv2" },
+      "team": {
+        "id": "19:8j-Mnacwmq2QFDbzykeQH5v55m6cN1X3QJ5viHvGIIQ1@thread.tacv2"
+      },
       "tenant": { "id": "ed6e6740-934d-4088-a05e-caa14d8d89ee" }
     },
     "locale": "en-US",
