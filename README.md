@@ -218,9 +218,7 @@ await thread.post(
       <Button id="reject" style="danger">
         Reject
       </Button>
-      <LinkButton url="https://example.com/order/1234">
-        View Order
-      </LinkButton>
+      <LinkButton url="https://example.com/order/1234">View Order</LinkButton>
     </Actions>
   </Card>
 );
@@ -286,12 +284,7 @@ Open modal dialogs to collect structured user input. Modals support text inputs,
 Modals are opened in response to button clicks using `event.openModal()`:
 
 ```tsx
-import {
-  Modal,
-  TextInput,
-  Select,
-  SelectOption,
-} from "chat";
+import { Modal, TextInput, Select, SelectOption } from "chat";
 
 // Handle a button click that opens a modal
 bot.onAction("feedback", async (event) => {
@@ -328,12 +321,12 @@ bot.onAction("feedback", async (event) => {
 
 ### Modal Components
 
-| Component | Description |
-|-----------|-------------|
-| `Modal` | Container with `callbackId`, `title`, `submitLabel`, `closeLabel`, `notifyOnClose`, `privateMetadata` |
-| `TextInput` | Text field with `id`, `label`, `placeholder`, `initialValue`, `multiline`, `optional`, `maxLength` |
-| `Select` | Dropdown with `id`, `label`, `placeholder`, `initialOption`, `optional` |
-| `SelectOption` | Option for Select with `label` and `value` |
+| Component      | Description                                                                                           |
+| -------------- | ----------------------------------------------------------------------------------------------------- |
+| `Modal`        | Container with `callbackId`, `title`, `submitLabel`, `closeLabel`, `notifyOnClose`, `privateMetadata` |
+| `TextInput`    | Text field with `id`, `label`, `placeholder`, `initialValue`, `multiline`, `optional`, `maxLength`    |
+| `Select`       | Dropdown with `id`, `label`, `placeholder`, `initialOption`, `optional`                               |
+| `SelectOption` | Option for Select with `label` and `value`                                                            |
 
 ### Handling Modal Submissions
 
@@ -372,12 +365,12 @@ bot.onModalSubmit("feedback_form", async (event: ModalSubmitEvent) => {
 
 Return different responses from `onModalSubmit` to control modal behavior:
 
-| Response | Description |
-|----------|-------------|
-| `{ action: "close" }` | Close the modal (default if nothing returned) |
-| `{ action: "errors", errors: { fieldId: "Error message" } }` | Show validation errors on specific fields |
-| `{ action: "update", modal: ModalElement }` | Update the modal content |
-| `{ action: "push", modal: ModalElement }` | Push a new modal view onto the stack |
+| Response                                                     | Description                                   |
+| ------------------------------------------------------------ | --------------------------------------------- |
+| `{ action: "close" }`                                        | Close the modal (default if nothing returned) |
+| `{ action: "errors", errors: { fieldId: "Error message" } }` | Show validation errors on specific fields     |
+| `{ action: "update", modal: ModalElement }`                  | Update the modal content                      |
+| `{ action: "push", modal: ModalElement }`                    | Push a new modal view onto the stack          |
 
 ### Handling Modal Close
 
@@ -417,12 +410,12 @@ bot.onNewMention(async (thread, message) => {
 
 ### Platform Behavior
 
-| Platform | Streaming Method |
-|----------|------------------|
-| Slack | Native streaming API (`chatStream`) |
-| Teams | Post + edit with throttling |
-| Google Chat | Post + edit with throttling |
-| Discord | Post + edit with throttling |
+| Platform    | Streaming Method                    |
+| ----------- | ----------------------------------- |
+| Slack       | Native streaming API (`chatStream`) |
+| Teams       | Post + edit with throttling         |
+| Google Chat | Post + edit with throttling         |
+| Discord     | Post + edit with throttling         |
 
 The fallback method posts an initial message, then edits it as chunks arrive (throttled to avoid rate limits).
 
