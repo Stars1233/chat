@@ -554,7 +554,7 @@ const result = await thread.postEphemeral(user, "Private notification", {
   fallbackToDM: true,
 });
 
-if (result.usedFallback) {
+if (result?.usedFallback) {
   // Was sent as DM on Discord/Teams
   console.log(`Sent as DM: ${result.threadId}`);
 }
