@@ -18,6 +18,7 @@ import type {
   DividerElement,
   FieldsElement,
   ImageElement,
+  LinkButtonElement,
   SectionElement,
   TextElement,
 } from "chat";
@@ -45,6 +46,7 @@ export interface AdaptiveCardAction {
   type: string;
   title: string;
   data?: Record<string, unknown>;
+  url?: string;
   style?: string;
 }
 
@@ -175,9 +177,12 @@ function convertDividerToElement(
 
 function convertActionsToElements(element: ActionsElement): ConvertResult {
   // In Adaptive Cards, actions go at the card level, not inline
-  const actions: AdaptiveCardAction[] = element.children.map((button) =>
-    convertButtonToAction(button),
-  );
+  const actions: AdaptiveCardAction[] = element.children.map((button) => {
+    if (button.type === "link-button") {
+      return convertLinkButtonToAction(button);
+    }
+    return convertButtonToAction(button);
+  });
 
   return { elements: [], actions };
 }
@@ -190,6 +195,23 @@ function convertButtonToAction(button: ButtonElement): AdaptiveCardAction {
       actionId: button.id,
       value: button.value,
     },
+  };
+
+  const style = mapButtonStyle(button.style, "teams");
+  if (style) {
+    action.style = style;
+  }
+
+  return action;
+}
+
+function convertLinkButtonToAction(
+  button: LinkButtonElement,
+): AdaptiveCardAction {
+  const action: AdaptiveCardAction = {
+    type: "Action.OpenUrl",
+    title: convertEmoji(button.label),
+    url: button.url,
   };
 
   const style = mapButtonStyle(button.style, "teams");

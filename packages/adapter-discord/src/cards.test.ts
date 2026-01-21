@@ -7,6 +7,7 @@ import {
   Field,
   Fields,
   Image,
+  LinkButton,
   Section,
 } from "chat";
 import { ButtonStyle } from "discord-api-types/v10";
@@ -135,6 +136,33 @@ describe("cardToDiscordPayload", () => {
       style: ButtonStyle.Secondary,
       label: "Skip",
       custom_id: "skip",
+    });
+  });
+
+  it("converts link buttons using Link style", () => {
+    const card = Card({
+      children: [
+        Actions([
+          LinkButton({
+            url: "https://example.com/docs",
+            label: "View Docs",
+          }),
+        ]),
+      ],
+    });
+    const { components } = cardToDiscordPayload(card);
+
+    expect(components).toHaveLength(1);
+    expect(components[0].type).toBe(1); // Action Row
+
+    const buttons = components[0].components;
+    expect(buttons).toHaveLength(1);
+
+    expect(buttons[0]).toEqual({
+      type: 2,
+      style: ButtonStyle.Link,
+      label: "View Docs",
+      url: "https://example.com/docs",
     });
   });
 

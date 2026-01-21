@@ -42,6 +42,8 @@ import {
   type FieldElement,
   Fields,
   Image,
+  LinkButton,
+  type LinkButtonElement,
   Section,
   Text,
   type TextStyle,
@@ -85,6 +87,14 @@ export interface ButtonProps {
   label?: string;
   style?: ButtonStyle;
   value?: string;
+  children?: string | number;
+}
+
+/** Props for LinkButton component in JSX */
+export interface LinkButtonProps {
+  url: string;
+  label?: string;
+  style?: ButtonStyle;
   children?: string | number;
 }
 
@@ -151,6 +161,7 @@ export type CardJSXProps =
   | CardProps
   | TextProps
   | ButtonProps
+  | LinkButtonProps
   | ImageProps
   | FieldProps
   | ContainerProps
@@ -165,6 +176,7 @@ type CardComponentFunction =
   | typeof Card
   | typeof Text
   | typeof Button
+  | typeof LinkButton
   | typeof Image
   | typeof Field
   | typeof Divider
@@ -202,7 +214,11 @@ function isJSXElement(value: unknown): value is JSXElement {
 }
 
 /** Non-null card element for children arrays */
-type CardChildOrNested = CardChild | ButtonElement | FieldElement;
+type CardChildOrNested =
+  | CardChild
+  | ButtonElement
+  | LinkButtonElement
+  | FieldElement;
 
 /**
  * Process children, converting JSX elements to card elements.
@@ -244,6 +260,7 @@ type AnyCardElement =
   | CardElement
   | CardChild
   | ButtonElement
+  | LinkButtonElement
   | FieldElement
   | ModalElement
   | ModalChild
@@ -261,7 +278,14 @@ function isTextProps(props: CardJSXProps): props is TextProps {
  * Type guard to check if props match ButtonProps
  */
 function isButtonProps(props: CardJSXProps): props is ButtonProps {
-  return "id" in props && typeof props.id === "string";
+  return "id" in props && typeof props.id === "string" && !("url" in props);
+}
+
+/**
+ * Type guard to check if props match LinkButtonProps
+ */
+function isLinkButtonProps(props: CardJSXProps): props is LinkButtonProps {
+  return "url" in props && typeof props.url === "string" && !("id" in props);
 }
 
 /**
@@ -357,8 +381,8 @@ function resolveJSXElement(element: JSXElement): AnyCardElement {
   }
 
   if (type === Actions) {
-    // Actions takes array of ButtonElements
-    return Actions(processedChildren as ButtonElement[]);
+    // Actions takes array of ButtonElements and LinkButtonElements
+    return Actions(processedChildren as (ButtonElement | LinkButtonElement)[]);
   }
 
   if (type === Fields) {
@@ -381,6 +405,23 @@ function resolveJSXElement(element: JSXElement): AnyCardElement {
       label,
       style: props.style,
       value: props.value,
+    });
+  }
+
+  if (type === LinkButton) {
+    // LinkButton({ url, label, style })
+    // JSX children become the label
+    if (!isLinkButtonProps(props)) {
+      throw new Error("LinkButton requires a 'url' prop");
+    }
+    const label =
+      processedChildren.length > 0
+        ? String(processedChildren[0])
+        : (props.label ?? "");
+    return LinkButton({
+      url: props.url,
+      label,
+      style: props.style,
     });
   }
 

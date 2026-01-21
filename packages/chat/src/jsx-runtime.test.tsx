@@ -13,6 +13,7 @@ import {
   Field,
   Fields,
   Image,
+  LinkButton,
   Section,
   Text,
 } from "./cards";
@@ -132,6 +133,51 @@ describe("chat-sdk JSX runtime with actual JSX syntax", () => {
 
       if (result?.children[0].type === "actions") {
         expect(result.children[0].children[0].value).toBe("item-123");
+      }
+    });
+
+    it("creates LinkButton", () => {
+      const element = (
+        <Card>
+          <Actions>
+            <LinkButton url="https://example.com" style="primary">
+              Visit Site
+            </LinkButton>
+          </Actions>
+        </Card>
+      );
+      const result = toCardElement(element);
+
+      expect(result?.children).toHaveLength(1);
+      if (result?.children[0].type === "actions") {
+        expect(result.children[0].children).toHaveLength(1);
+        const linkBtn = result.children[0].children[0];
+        expect(linkBtn.type).toBe("link-button");
+        if (linkBtn.type === "link-button") {
+          expect(linkBtn.url).toBe("https://example.com");
+          expect(linkBtn.label).toBe("Visit Site");
+          expect(linkBtn.style).toBe("primary");
+        }
+      }
+    });
+
+    it("creates Actions with mixed Button and LinkButton", () => {
+      const element = (
+        <Card>
+          <Actions>
+            <Button id="submit" style="primary">
+              Submit
+            </Button>
+            <LinkButton url="https://docs.example.com">View Docs</LinkButton>
+          </Actions>
+        </Card>
+      );
+      const result = toCardElement(element);
+
+      if (result?.children[0].type === "actions") {
+        expect(result.children[0].children).toHaveLength(2);
+        expect(result.children[0].children[0].type).toBe("button");
+        expect(result.children[0].children[1].type).toBe("link-button");
       }
     });
   });

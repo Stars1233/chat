@@ -19,6 +19,7 @@ import {
   fromReactElement as _fromReactElement,
   Image as _Image,
   isCardElement as _isCardElement,
+  LinkButton as _LinkButton,
   Section as _Section,
 } from "./cards";
 import {
@@ -33,6 +34,7 @@ import {
   type DividerProps,
   type FieldProps,
   type ImageProps,
+  type LinkButtonProps,
   type TextProps,
 } from "./jsx-runtime";
 export const Actions = _Actions;
@@ -46,6 +48,7 @@ export const fromReactElement = _fromReactElement;
 export const Image = _Image;
 export const isCardElement = _isCardElement;
 export const isJSX = _isJSX;
+export const LinkButton = _LinkButton;
 export const Section = _Section;
 export const toCardElement = _toCardElement;
 export const toModalElement = _toModalElement;
@@ -79,6 +82,8 @@ export type {
   FieldElement,
   FieldsElement,
   ImageElement,
+  LinkButtonElement,
+  LinkButtonOptions,
   SectionElement,
   TextElement,
   TextStyle,
@@ -104,6 +109,7 @@ export type {
   DividerProps,
   FieldProps,
   ImageProps,
+  LinkButtonProps,
   TextProps,
 };
 // Emoji utilities

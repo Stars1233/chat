@@ -7,6 +7,7 @@ import {
   Field,
   Fields,
   Image,
+  LinkButton,
   Section,
 } from "chat";
 import { describe, expect, it } from "vitest";
@@ -214,6 +215,38 @@ describe("cardToGoogleCard", () => {
           ],
         },
       },
+    });
+  });
+
+  it("converts link buttons with openLink", () => {
+    const card = Card({
+      children: [
+        Actions([
+          LinkButton({
+            url: "https://example.com/docs",
+            label: "View Docs",
+            style: "primary",
+          }),
+        ]),
+      ],
+    });
+    const gchatCard = cardToGoogleCard(card);
+
+    const widgets = gchatCard.card.sections[0].widgets;
+    expect(widgets).toHaveLength(1);
+
+    const buttonList = widgets[0].buttonList;
+    expect(buttonList).toBeDefined();
+    expect(buttonList?.buttons).toHaveLength(1);
+
+    expect(buttonList?.buttons[0]).toEqual({
+      text: "View Docs",
+      onClick: {
+        openLink: {
+          url: "https://example.com/docs",
+        },
+      },
+      color: { red: 0.2, green: 0.5, blue: 0.9 }, // primary blue
     });
   });
 

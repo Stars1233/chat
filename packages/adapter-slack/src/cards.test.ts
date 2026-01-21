@@ -7,6 +7,7 @@ import {
   Field,
   Fields,
   Image,
+  LinkButton,
   Section,
 } from "chat";
 import { describe, expect, it } from "vitest";
@@ -164,6 +165,42 @@ describe("cardToBlockKit", () => {
       text: { type: "plain_text", text: "Skip", emoji: true },
       action_id: "skip",
     });
+  });
+
+  it("converts link buttons with url property", () => {
+    const card = Card({
+      children: [
+        Actions([
+          LinkButton({
+            url: "https://example.com/docs",
+            label: "View Docs",
+            style: "primary",
+          }),
+        ]),
+      ],
+    });
+    const blocks = cardToBlockKit(card);
+
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0].type).toBe("actions");
+
+    const elements = blocks[0].elements as Array<{
+      type: string;
+      text: { type: string; text: string; emoji: boolean };
+      action_id: string;
+      url: string;
+      style?: string;
+    }>;
+    expect(elements).toHaveLength(1);
+
+    expect(elements[0].type).toBe("button");
+    expect(elements[0].text).toEqual({
+      type: "plain_text",
+      text: "View Docs",
+      emoji: true,
+    });
+    expect(elements[0].url).toBe("https://example.com/docs");
+    expect(elements[0].style).toBe("primary");
   });
 
   it("converts fields", () => {

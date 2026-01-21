@@ -11,6 +11,7 @@ import {
   emoji,
   Field,
   Fields,
+  LinkButton,
   Modal,
   Section,
   Select,
@@ -96,6 +97,7 @@ bot.onNewMention(async (thread, message) => {
         <Button id="info">Show Info</Button>
         <Button id="feedback">Send Feedback</Button>
         <Button id="messages">Fetch Messages</Button>
+        <LinkButton url="https://vercel.com">Open Link</LinkButton>
         <Button id="goodbye" style="danger">
           Goodbye
         </Button>

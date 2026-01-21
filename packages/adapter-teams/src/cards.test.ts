@@ -7,6 +7,7 @@ import {
   Field,
   Fields,
   Image,
+  LinkButton,
   Section,
 } from "chat";
 import { describe, expect, it } from "vitest";
@@ -173,6 +174,29 @@ describe("cardToAdaptiveCard", () => {
       type: "Action.Submit",
       title: "Skip",
       data: { actionId: "skip", value: undefined },
+    });
+  });
+
+  it("converts link buttons to Action.OpenUrl", () => {
+    const card = Card({
+      children: [
+        Actions([
+          LinkButton({
+            url: "https://example.com/docs",
+            label: "View Docs",
+            style: "primary",
+          }),
+        ]),
+      ],
+    });
+    const adaptive = cardToAdaptiveCard(card);
+
+    expect(adaptive.actions).toHaveLength(1);
+    expect(adaptive.actions?.[0]).toEqual({
+      type: "Action.OpenUrl",
+      title: "View Docs",
+      url: "https://example.com/docs",
+      style: "positive",
     });
   });
 

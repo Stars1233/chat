@@ -11,6 +11,7 @@ import {
   Field,
   Fields,
   Image,
+  LinkButton,
   Section,
   Text,
 } from "./cards";
@@ -130,6 +131,44 @@ describe("toCardElement", () => {
   it("converts Button with children as label", () => {
     const button = jsx(Button, { id: "btn", children: "Label from children" });
     const actions = jsxs(Actions, { children: [button] });
+    const cardElement = jsxs(Card, { children: [actions] });
+    const card = toCardElement(cardElement);
+
+    if (card?.children[0]?.type === "actions") {
+      expect(card.children[0].children[0].label).toBe("Label from children");
+    }
+  });
+
+  it("converts LinkButton elements", () => {
+    const linkButton = jsx(LinkButton, {
+      url: "https://example.com",
+      label: "Visit Site",
+      style: "primary",
+    });
+    const actions = jsxs(Actions, { children: [linkButton] });
+    const cardElement = jsxs(Card, { children: [actions] });
+    const card = toCardElement(cardElement);
+
+    expect(card?.children).toHaveLength(1);
+    const actionsEl = card?.children[0];
+    expect(actionsEl?.type).toBe("actions");
+    if (actionsEl?.type === "actions") {
+      expect(actionsEl.children).toHaveLength(1);
+      expect(actionsEl.children[0].type).toBe("link-button");
+      if (actionsEl.children[0].type === "link-button") {
+        expect(actionsEl.children[0].url).toBe("https://example.com");
+        expect(actionsEl.children[0].label).toBe("Visit Site");
+        expect(actionsEl.children[0].style).toBe("primary");
+      }
+    }
+  });
+
+  it("converts LinkButton with children as label", () => {
+    const linkButton = jsx(LinkButton, {
+      url: "https://example.com",
+      children: "Label from children",
+    });
+    const actions = jsxs(Actions, { children: [linkButton] });
     const cardElement = jsxs(Card, { children: [actions] });
     const card = toCardElement(cardElement);
 

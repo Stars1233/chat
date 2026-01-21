@@ -12,6 +12,7 @@ import type {
   CardChild,
   CardElement,
   FieldsElement,
+  LinkButtonElement,
   SectionElement,
   TextElement,
 } from "chat";
@@ -138,9 +139,12 @@ function convertTextElement(element: TextElement): string {
  * Convert an actions element to a Discord action row.
  */
 function convertActionsElement(element: ActionsElement): DiscordActionRow {
-  const buttons: DiscordButton[] = element.children.map((button) =>
-    convertButtonElement(button),
-  );
+  const buttons: DiscordButton[] = element.children.map((button) => {
+    if (button.type === "link-button") {
+      return convertLinkButtonElement(button);
+    }
+    return convertButtonElement(button);
+  });
 
   return {
     type: 1, // Action Row
@@ -160,6 +164,18 @@ function convertButtonElement(button: ButtonElement): DiscordButton {
   };
 
   return discordButton;
+}
+
+/**
+ * Convert a link button element to a Discord link button.
+ */
+function convertLinkButtonElement(button: LinkButtonElement): DiscordButton {
+  return {
+    type: 2, // Button
+    style: ButtonStyle.Link,
+    label: button.label,
+    url: button.url,
+  };
 }
 
 /**

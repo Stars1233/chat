@@ -17,6 +17,7 @@ import type {
   DividerElement,
   FieldsElement,
   ImageElement,
+  LinkButtonElement,
   SectionElement,
   TextElement,
 } from "chat";
@@ -57,7 +58,7 @@ export interface GoogleChatWidget {
     bottomLabel?: string;
     startIcon?: { knownIcon?: string };
   };
-  buttonList?: { buttons: GoogleChatButton[] };
+  buttonList?: { buttons: (GoogleChatButton | GoogleChatLinkButton)[] };
   divider?: Record<string, never>;
 }
 
@@ -67,6 +68,16 @@ export interface GoogleChatButton {
     action: {
       function: string;
       parameters: Array<{ key: string; value: string }>;
+    };
+  };
+  color?: { red: number; green: number; blue: number };
+}
+
+export interface GoogleChatLinkButton {
+  text: string;
+  onClick: {
+    openLink: {
+      url: string;
     };
   };
   color?: { red: number; green: number; blue: number };
@@ -221,9 +232,13 @@ function convertActionsToWidget(
   element: ActionsElement,
   endpointUrl?: string,
 ): GoogleChatWidget {
-  const buttons: GoogleChatButton[] = element.children.map((button) =>
-    convertButtonToGoogleButton(button, endpointUrl),
-  );
+  const buttons: (GoogleChatButton | GoogleChatLinkButton)[] =
+    element.children.map((button) => {
+      if (button.type === "link-button") {
+        return convertLinkButtonToGoogleButton(button);
+      }
+      return convertButtonToGoogleButton(button, endpointUrl);
+    });
 
   return {
     buttonList: { buttons },
@@ -262,6 +277,28 @@ function convertButtonToGoogleButton(
     googleButton.color = { red: 0.2, green: 0.5, blue: 0.9 };
   } else if (button.style === "danger") {
     // Red color for danger
+    googleButton.color = { red: 0.9, green: 0.2, blue: 0.2 };
+  }
+
+  return googleButton;
+}
+
+function convertLinkButtonToGoogleButton(
+  button: LinkButtonElement,
+): GoogleChatLinkButton {
+  const googleButton: GoogleChatLinkButton = {
+    text: convertEmoji(button.label),
+    onClick: {
+      openLink: {
+        url: button.url,
+      },
+    },
+  };
+
+  // Apply button style colors
+  if (button.style === "primary") {
+    googleButton.color = { red: 0.2, green: 0.5, blue: 0.9 };
+  } else if (button.style === "danger") {
     googleButton.color = { red: 0.9, green: 0.2, blue: 0.2 };
   }
 

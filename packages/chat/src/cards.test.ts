@@ -8,6 +8,7 @@ import {
   Fields,
   Image,
   isCardElement,
+  LinkButton,
   Section,
   Text,
 } from "./cards";
@@ -112,6 +113,28 @@ describe("Card Builder Functions", () => {
     });
   });
 
+  describe("LinkButton", () => {
+    it("creates a link button element", () => {
+      const btn = LinkButton({
+        url: "https://example.com",
+        label: "Visit Site",
+      });
+      expect(btn.type).toBe("link-button");
+      expect(btn.url).toBe("https://example.com");
+      expect(btn.label).toBe("Visit Site");
+      expect(btn.style).toBeUndefined();
+    });
+
+    it("creates a styled link button", () => {
+      const btn = LinkButton({
+        url: "https://docs.example.com",
+        label: "View Docs",
+        style: "primary",
+      });
+      expect(btn.style).toBe("primary");
+    });
+  });
+
   describe("Actions", () => {
     it("creates an actions container", () => {
       const actions = Actions([
@@ -122,6 +145,16 @@ describe("Card Builder Functions", () => {
       expect(actions.children).toHaveLength(2);
       expect(actions.children[0].label).toBe("OK");
       expect(actions.children[1].label).toBe("Cancel");
+    });
+
+    it("creates actions with mixed button types", () => {
+      const actions = Actions([
+        Button({ id: "submit", label: "Submit", style: "primary" }),
+        LinkButton({ url: "https://example.com/help", label: "Help" }),
+      ]);
+      expect(actions.children).toHaveLength(2);
+      expect(actions.children[0].type).toBe("button");
+      expect(actions.children[1].type).toBe("link-button");
     });
 
     it("creates empty actions", () => {
