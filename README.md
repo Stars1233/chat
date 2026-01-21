@@ -191,6 +191,7 @@ import {
   Card,
   CardText,
   Button,
+  LinkButton,
   Actions,
   Section,
   Fields,
@@ -217,6 +218,9 @@ await thread.post(
       <Button id="reject" style="danger">
         Reject
       </Button>
+      <LinkButton url="https://example.com/order/1234">
+        View Order
+      </LinkButton>
     </Actions>
   </Card>
 );

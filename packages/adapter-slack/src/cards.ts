@@ -18,6 +18,7 @@ import type {
   DividerElement,
   FieldsElement,
   ImageElement,
+  LinkButtonElement,
   SectionElement,
   TextElement,
 } from "chat";
@@ -45,6 +46,14 @@ interface SlackButtonElement {
   text: SlackTextObject;
   action_id: string;
   value?: string;
+  style?: "primary" | "danger";
+}
+
+interface SlackLinkButtonElement {
+  type: "button";
+  text: SlackTextObject;
+  action_id: string;
+  url: string;
   style?: "primary" | "danger";
 }
 
@@ -156,9 +165,13 @@ function convertDividerToBlock(_element: DividerElement): SlackBlock {
 }
 
 function convertActionsToBlock(element: ActionsElement): SlackBlock {
-  const elements: SlackButtonElement[] = element.children.map((button) =>
-    convertButtonToElement(button),
-  );
+  const elements: (SlackButtonElement | SlackLinkButtonElement)[] =
+    element.children.map((button) => {
+      if (button.type === "link-button") {
+        return convertLinkButtonToElement(button);
+      }
+      return convertButtonToElement(button);
+    });
 
   return {
     type: "actions",
@@ -180,6 +193,28 @@ function convertButtonToElement(button: ButtonElement): SlackButtonElement {
   if (button.value) {
     element.value = button.value;
   }
+
+  const style = mapButtonStyle(button.style, "slack");
+  if (style) {
+    element.style = style as "primary" | "danger";
+  }
+
+  return element;
+}
+
+function convertLinkButtonToElement(
+  button: LinkButtonElement,
+): SlackLinkButtonElement {
+  const element: SlackLinkButtonElement = {
+    type: "button",
+    text: {
+      type: "plain_text",
+      text: convertEmoji(button.label),
+      emoji: true,
+    },
+    action_id: `link-${button.url.slice(0, 200)}`,
+    url: button.url,
+  };
 
   const style = mapButtonStyle(button.style, "slack");
   if (style) {

@@ -168,11 +168,15 @@ describe("fromReactElement - React JSX mode", () => {
       expect(result?.type).toBe("actions");
       if (result?.type === "actions") {
         expect(result.children).toHaveLength(2);
-        expect(result.children[0].id).toBe("approve");
-        expect(result.children[0].label).toBe("Approve");
-        expect(result.children[0].style).toBe("primary");
-        expect(result.children[1].id).toBe("reject");
-        expect(result.children[1].style).toBe("danger");
+        const btn0 = result.children[0];
+        const btn1 = result.children[1];
+        if (btn0.type === "button" && btn1.type === "button") {
+          expect(btn0.id).toBe("approve");
+          expect(btn0.label).toBe("Approve");
+          expect(btn0.style).toBe("primary");
+          expect(btn1.id).toBe("reject");
+          expect(btn1.style).toBe("danger");
+        }
       }
     });
 
@@ -189,7 +193,10 @@ describe("fromReactElement - React JSX mode", () => {
 
       const result = fromReactElement(reactCard);
       if (result?.type === "card" && result.children[0]?.type === "actions") {
-        expect(result.children[0].children[0].value).toBe("item-123");
+        const btn = result.children[0].children[0];
+        if (btn.type === "button") {
+          expect(btn.value).toBe("item-123");
+        }
       }
     });
   });

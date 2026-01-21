@@ -67,6 +67,17 @@ export interface ButtonElement {
   value?: string;
 }
 
+/** Link button element that opens a URL */
+export interface LinkButtonElement {
+  type: "link-button";
+  /** URL to open when clicked */
+  url: string;
+  /** Button label text */
+  label: string;
+  /** Visual style */
+  style?: ButtonStyle;
+}
+
 /** Text content element */
 export interface TextElement {
   type: "text";
@@ -93,8 +104,8 @@ export interface DividerElement {
 /** Container for action buttons */
 export interface ActionsElement {
   type: "actions";
-  /** Button elements */
-  children: ButtonElement[];
+  /** Button and link button elements */
+  children: (ButtonElement | LinkButtonElement)[];
 }
 
 /** Section container for grouping elements */
@@ -130,7 +141,12 @@ export type CardChild =
   | FieldsElement;
 
 /** Union of all element types (including nested children) */
-type AnyCardElement = CardChild | CardElement | ButtonElement | FieldElement;
+type AnyCardElement =
+  | CardChild
+  | CardElement
+  | ButtonElement
+  | LinkButtonElement
+  | FieldElement;
 
 /** Root card element */
 export interface CardElement {
@@ -274,10 +290,13 @@ export function Section(children: CardChild[]): SectionElement {
  * Actions([
  *   Button({ id: "ok", label: "OK" }),
  *   Button({ id: "cancel", label: "Cancel" }),
+ *   LinkButton({ url: "https://example.com", label: "Learn More" }),
  * ])
  * ```
  */
-export function Actions(children: ButtonElement[]): ActionsElement {
+export function Actions(
+  children: (ButtonElement | LinkButtonElement)[],
+): ActionsElement {
   return {
     type: "actions",
     children,
@@ -312,6 +331,34 @@ export function Button(options: ButtonOptions): ButtonElement {
     label: options.label,
     style: options.style,
     value: options.value,
+  };
+}
+
+/** Options for LinkButton */
+export interface LinkButtonOptions {
+  /** URL to open when clicked */
+  url: string;
+  /** Button label text */
+  label: string;
+  /** Visual style */
+  style?: ButtonStyle;
+}
+
+/**
+ * Create a LinkButton element that opens a URL when clicked.
+ *
+ * @example
+ * ```ts
+ * LinkButton({ url: "https://example.com", label: "View Docs" })
+ * LinkButton({ url: "https://example.com", label: "Learn More", style: "primary" })
+ * ```
+ */
+export function LinkButton(options: LinkButtonOptions): LinkButtonElement {
+  return {
+    type: "link-button",
+    url: options.url,
+    label: options.label,
+    style: options.style,
   };
 }
 
@@ -389,6 +436,7 @@ const componentMap = new Map<unknown, string>([
   [Section, "Section"],
   [Actions, "Actions"],
   [Button, "Button"],
+  [LinkButton, "LinkButton"],
   [Field, "Field"],
   [Fields, "Fields"],
 ]);
@@ -450,7 +498,10 @@ export function fromReactElement(element: unknown): AnyCardElement | null {
 
   // Helper to filter for CardChild elements
   const isCardChild = (el: AnyCardElement): el is CardChild =>
-    el.type !== "card" && el.type !== "button" && el.type !== "field";
+    el.type !== "card" &&
+    el.type !== "button" &&
+    el.type !== "link-button" &&
+    el.type !== "field";
 
   // Call the appropriate builder function based on component type
   switch (componentName) {
@@ -483,7 +534,8 @@ export function fromReactElement(element: unknown): AnyCardElement | null {
     case "Actions":
       return Actions(
         convertedChildren.filter(
-          (c): c is ButtonElement => c.type === "button",
+          (c): c is ButtonElement | LinkButtonElement =>
+            c.type === "button" || c.type === "link-button",
         ),
       );
 
@@ -495,6 +547,16 @@ export function fromReactElement(element: unknown): AnyCardElement | null {
         label: (props.label as string | undefined) ?? label,
         style: props.style as ButtonStyle | undefined,
         value: props.value as string | undefined,
+      });
+    }
+
+    case "LinkButton": {
+      // JSX: <LinkButton url="https://..." style="primary">Label</LinkButton>
+      const label = extractTextContent(props.children);
+      return LinkButton({
+        url: props.url as string,
+        label: (props.label as string | undefined) ?? label,
+        style: props.style as ButtonStyle | undefined,
       });
     }
 
