@@ -1,5 +1,17 @@
 # @chat-adapter/slack
 
+## 4.6.0
+
+### Minor Changes
+
+- 68e3f74: Add <LinkButton> component
+
+### Patch Changes
+
+- Updated dependencies [68e3f74]
+  - chat@4.6.0
+  - @chat-adapter/shared@4.6.0
+
 ## 4.5.0
 
 ### Minor Changes

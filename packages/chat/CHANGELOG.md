@@ -1,5 +1,11 @@
 # chat
 
+## 4.6.0
+
+### Minor Changes
+
+- 68e3f74: Add <LinkButton> component
+
 ## 4.5.0
 
 ### Minor Changes
