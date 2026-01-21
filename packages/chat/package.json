@@ -33,20 +33,20 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "unified": "^11.0.5",
+    "@workflow/serde": "4.0.1-beta.1",
+    "mdast-util-to-string": "^4.0.0",
+    "remark-gfm": "^4.0.0",
     "remark-parse": "^11.0.0",
     "remark-stringify": "^11.0.0",
-    "remark-gfm": "^4.0.0",
-    "mdast-util-to-string": "^4.0.0"
+    "unified": "^11.0.5"
   },
   "devDependencies": {
-    "@types/node": "^22.10.2",
     "@types/mdast": "^4.0.4",
+    "@types/node": "^22.10.2",
     "tsup": "^8.3.5",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8"
   },
-  "peerDependencies": {},
   "repository": {
     "type": "git",
     "url": "git+https://github.com/vercel-labs/chat.git",

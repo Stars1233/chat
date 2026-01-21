@@ -2,142 +2,19 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Chat } from "./chat";
 import { getEmoji } from "./emoji";
 import { jsx } from "./jsx-runtime";
-import { parseMarkdown } from "./markdown";
+import {
+  createMockAdapter,
+  createMockState,
+  createTestMessage,
+  mockLogger,
+} from "./mock-adapter";
 import { Modal, type ModalElement, TextInput } from "./modals";
 import type {
   ActionEvent,
   Adapter,
-  FormattedContent,
-  Lock,
-  Logger,
-  Message,
   ReactionEvent,
   StateAdapter,
 } from "./types";
-
-const mockLogger: Logger = {
-  debug: vi.fn(),
-  info: vi.fn(),
-  warn: vi.fn(),
-  error: vi.fn(),
-  child: () => mockLogger,
-};
-
-// Mock adapter
-function createMockAdapter(name: string): Adapter {
-  return {
-    name,
-    userName: `${name}-bot`,
-    initialize: vi.fn().mockResolvedValue(undefined),
-    handleWebhook: vi.fn().mockResolvedValue(new Response("ok")),
-    postMessage: vi
-      .fn()
-      .mockResolvedValue({ id: "msg-1", threadId: "t1", raw: {} }),
-    editMessage: vi
-      .fn()
-      .mockResolvedValue({ id: "msg-1", threadId: "t1", raw: {} }),
-    deleteMessage: vi.fn().mockResolvedValue(undefined),
-    addReaction: vi.fn().mockResolvedValue(undefined),
-    removeReaction: vi.fn().mockResolvedValue(undefined),
-    startTyping: vi.fn().mockResolvedValue(undefined),
-    fetchMessages: vi.fn().mockResolvedValue([]),
-    fetchThread: vi
-      .fn()
-      .mockResolvedValue({ id: "t1", channelId: "c1", metadata: {} }),
-    encodeThreadId: vi.fn(
-      (data: { channel: string; thread: string }) =>
-        `${name}:${data.channel}:${data.thread}`,
-    ),
-    decodeThreadId: vi.fn((id: string) => {
-      const [, channel, thread] = id.split(":");
-      return { channel, thread };
-    }),
-    parseMessage: vi.fn(),
-    renderFormatted: vi.fn((_content: FormattedContent) => "formatted"),
-    openDM: vi
-      .fn()
-      .mockImplementation((userId: string) =>
-        Promise.resolve(`${name}:D${userId}:`),
-      ),
-    isDM: vi
-      .fn()
-      .mockImplementation((threadId: string) => threadId.includes(":D")),
-    openModal: vi.fn().mockResolvedValue({ viewId: "V123" }),
-  };
-}
-
-// Mock state adapter
-function createMockState(): StateAdapter {
-  const subscriptions = new Set<string>();
-  const locks = new Map<string, Lock>();
-  const cache = new Map<string, unknown>();
-
-  return {
-    connect: vi.fn().mockResolvedValue(undefined),
-    disconnect: vi.fn().mockResolvedValue(undefined),
-    subscribe: vi.fn().mockImplementation(async (id: string) => {
-      subscriptions.add(id);
-    }),
-    unsubscribe: vi.fn().mockImplementation(async (id: string) => {
-      subscriptions.delete(id);
-    }),
-    isSubscribed: vi.fn().mockImplementation(async (id: string) => {
-      return subscriptions.has(id);
-    }),
-    listSubscriptions: vi.fn().mockImplementation(async function* () {
-      for (const id of subscriptions) yield id;
-    }),
-    acquireLock: vi
-      .fn()
-      .mockImplementation(async (threadId: string, ttlMs: number) => {
-        if (locks.has(threadId)) return null;
-        const lock: Lock = {
-          threadId,
-          token: "test-token",
-          expiresAt: Date.now() + ttlMs,
-        };
-        locks.set(threadId, lock);
-        return lock;
-      }),
-    releaseLock: vi.fn().mockImplementation(async (lock: Lock) => {
-      locks.delete(lock.threadId);
-    }),
-    extendLock: vi.fn().mockResolvedValue(true),
-    get: vi.fn().mockImplementation(async (key: string) => {
-      return cache.get(key) ?? null;
-    }),
-    set: vi.fn().mockImplementation(async (key: string, value: unknown) => {
-      cache.set(key, value);
-    }),
-    delete: vi.fn().mockImplementation(async (key: string) => {
-      cache.delete(key);
-    }),
-  };
-}
-
-// Helper to create a test message
-function createTestMessage(
-  text: string,
-  overrides: Partial<Message> = {},
-): Message {
-  return {
-    id: "msg-1",
-    threadId: "slack:C123:1234.5678",
-    text,
-    formatted: parseMarkdown(text),
-    raw: {},
-    author: {
-      userId: "U123",
-      userName: "user",
-      fullName: "Test User",
-      isBot: false,
-      isMe: false,
-    },
-    metadata: { dateSent: new Date(), edited: false },
-    attachments: [],
-    ...overrides,
-  };
-}
 
 describe("Chat", () => {
   let chat: Chat<{ slack: Adapter }>;
@@ -176,7 +53,7 @@ describe("Chat", () => {
     chat.onNewMention(handler);
 
     // Note: mockAdapter has userName "slack-bot", so we mention that
-    const message = createTestMessage("Hey @slack-bot help me");
+    const message = createTestMessage("msg-1", "Hey @slack-bot help me");
 
     await chat.handleIncomingMessage(
       mockAdapter,
@@ -199,7 +76,7 @@ describe("Chat", () => {
     // Subscribe to the thread
     await mockState.subscribe("slack:C123:1234.5678");
 
-    const message = createTestMessage("Follow up message");
+    const message = createTestMessage("msg-1", "Follow up message");
 
     await chat.handleIncomingMessage(
       mockAdapter,
@@ -215,7 +92,7 @@ describe("Chat", () => {
     const handler = vi.fn().mockResolvedValue(undefined);
     chat.onNewMention(handler);
 
-    const message = createTestMessage("I am the bot", {
+    const message = createTestMessage("msg-1", "I am the bot", {
       author: {
         userId: "BOT",
         userName: "testbot",
@@ -238,7 +115,7 @@ describe("Chat", () => {
     const helpHandler = vi.fn().mockResolvedValue(undefined);
     chat.onNewMessage(/help/i, helpHandler);
 
-    const message = createTestMessage("Can someone help me?");
+    const message = createTestMessage("msg-1", "Can someone help me?");
 
     await chat.handleIncomingMessage(
       mockAdapter,
@@ -254,7 +131,7 @@ describe("Chat", () => {
       const handler = vi.fn().mockResolvedValue(undefined);
       chat.onNewMention(handler);
 
-      const message = createTestMessage("Hey @slack-bot help me");
+      const message = createTestMessage("msg-1", "Hey @slack-bot help me");
 
       await chat.handleIncomingMessage(
         mockAdapter,
@@ -272,7 +149,7 @@ describe("Chat", () => {
       const handler = vi.fn().mockResolvedValue(undefined);
       chat.onNewMessage(/help/i, handler);
 
-      const message = createTestMessage("I need help");
+      const message = createTestMessage("msg-1", "I need help");
 
       await chat.handleIncomingMessage(
         mockAdapter,
@@ -293,7 +170,10 @@ describe("Chat", () => {
       await mockState.subscribe("slack:C123:1234.5678");
 
       // Message with @mention
-      const message = createTestMessage("Hey @slack-bot what about this?");
+      const message = createTestMessage(
+        "msg-1",
+        "Hey @slack-bot what about this?",
+      );
 
       await chat.handleIncomingMessage(
         mockAdapter,
@@ -319,7 +199,10 @@ describe("Chat", () => {
       await mockState.subscribe("slack:C123:1234.5678");
 
       // Now send a message WITH @mention in the subscribed thread
-      const message = createTestMessage("Hey @slack-bot are you there?");
+      const message = createTestMessage(
+        "msg-1",
+        "Hey @slack-bot are you there?",
+      );
 
       await chat.handleIncomingMessage(
         mockAdapter,
@@ -340,7 +223,7 @@ describe("Chat", () => {
       chat.onSubscribedMessage(subscribedHandler);
 
       // Thread is NOT subscribed - send a message with @mention
-      const message = createTestMessage("Hey @slack-bot help me");
+      const message = createTestMessage("msg-1", "Hey @slack-bot help me");
 
       await chat.handleIncomingMessage(
         mockAdapter,
@@ -364,7 +247,7 @@ describe("Chat", () => {
       chat.onSubscribedMessage(handler);
 
       await mockState.subscribe("slack:C123:1234.5678");
-      const message = createTestMessage("Follow up");
+      const message = createTestMessage("msg-1", "Follow up");
 
       await chat.handleIncomingMessage(
         mockAdapter,
@@ -386,7 +269,7 @@ describe("Chat", () => {
       });
       chat.onNewMention(handler);
 
-      const message = createTestMessage("Hey @slack-bot help");
+      const message = createTestMessage("msg-1", "Hey @slack-bot help");
 
       await chat.handleIncomingMessage(
         mockAdapter,
@@ -1115,7 +998,7 @@ describe("Chat", () => {
       });
       chat.onNewMention(handler);
 
-      const message = createTestMessage("Hey @slack-bot help");
+      const message = createTestMessage("msg-1", "Hey @slack-bot help");
 
       await chat.handleIncomingMessage(
         mockAdapter,
@@ -1131,7 +1014,7 @@ describe("Chat", () => {
       const handler = vi.fn().mockResolvedValue(undefined);
       chat.onNewMention(handler);
 
-      const message = createTestMessage("Hey @slack-bot help");
+      const message = createTestMessage("msg-1", "Hey @slack-bot help");
 
       await chat.handleIncomingMessage(
         mockAdapter,

@@ -6,6 +6,7 @@ import type { Root } from "mdast";
 import type { CardElement } from "./cards";
 import type { CardJSXElement } from "./jsx-runtime";
 import type { Logger, LogLevel } from "./logger";
+import type { Message } from "./message";
 import type { ModalElement } from "./modals";
 
 // =============================================================================
@@ -623,49 +624,6 @@ export interface FetchResult<TRawMessage = unknown> {
  * This is the canonical representation of message formatting.
  */
 export type FormattedContent = Root;
-
-export interface Message<TRawMessage = unknown> {
-  /** Unique message ID */
-  readonly id: string;
-  /** Thread this message belongs to */
-  readonly threadId: string;
-
-  /** Plain text content (all formatting stripped) */
-  text: string;
-  /**
-   * Structured formatting as an AST (mdast Root).
-   * This is the canonical representation - use this for processing.
-   * Use `stringifyMarkdown(message.formatted)` to get markdown string.
-   */
-  formatted: FormattedContent;
-  /** Platform-specific raw payload (escape hatch) */
-  raw: TRawMessage;
-
-  /** Message author */
-  author: Author;
-  /** Message metadata */
-  metadata: MessageMetadata;
-  /** Attachments */
-  attachments: Attachment[];
-
-  /**
-   * Whether the bot is @-mentioned in this message.
-   *
-   * This is set by the Chat SDK before passing the message to handlers.
-   * It checks for `@username` in the message text using the adapter's
-   * configured `userName` and optional `botUserId`.
-   *
-   * @example
-   * ```typescript
-   * chat.onSubscribedMessage(async (thread, message) => {
-   *   if (message.isMention) {
-   *     await thread.post("You mentioned me!");
-   *   }
-   * });
-   * ```
-   */
-  isMention?: boolean;
-}
 
 /** Raw message returned from adapter (before wrapping as SentMessage) */
 export interface RawMessage<TRawMessage = unknown> {

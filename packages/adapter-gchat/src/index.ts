@@ -17,14 +17,13 @@ import type {
   FetchResult,
   FormattedContent,
   Logger,
-  Message,
   RawMessage,
   ReactionEvent,
   StateAdapter,
   ThreadInfo,
   WebhookOptions,
 } from "chat";
-import { convertEmojiPlaceholders, defaultEmojiResolver } from "chat";
+import { convertEmojiPlaceholders, defaultEmojiResolver, Message } from "chat";
 import { type chat_v1, google } from "googleapis";
 import { cardToGoogleCard } from "./cards";
 import { GoogleChatFormatConverter } from "./markdown";
@@ -909,7 +908,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
       this.userName,
     );
 
-    const parsedMessage: Message<unknown> = {
+    const parsedMessage = new Message({
       id: message.name,
       threadId,
       text: this.formatConverter.extractPlainText(text),
@@ -929,7 +928,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
       attachments: (message.attachment || []).map((att) =>
         this.createAttachment(att),
       ),
-    };
+    });
 
     this.logger.debug("Pub/Sub parsed message", {
       threadId,
@@ -1101,7 +1100,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
         });
     }
 
-    return {
+    return new Message({
       id: message.name,
       threadId,
       text: this.formatConverter.extractPlainText(text),
@@ -1121,7 +1120,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
       attachments: (message.attachment || []).map((att) =>
         this.createAttachment(att),
       ),
-    };
+    });
   }
 
   async postMessage(
@@ -1776,7 +1775,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
     // Use isMessageFromSelf for proper isMe determination
     const isMe = this.isMessageFromSelf(msg as GoogleChatMessage);
 
-    return {
+    return new Message({
       id: msg.name || "",
       threadId: msgThreadId,
       text: this.formatConverter.extractPlainText(msg.text || ""),
@@ -1794,7 +1793,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
         edited: false,
       },
       attachments: [],
-    };
+    });
   }
 
   async fetchThread(threadId: string): Promise<ThreadInfo> {

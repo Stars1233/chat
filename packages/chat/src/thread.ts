@@ -1,5 +1,7 @@
+import { WORKFLOW_DESERIALIZE, WORKFLOW_SERIALIZE } from "@workflow/serde";
 import type { Root } from "mdast";
 import { cardToFallbackText } from "./cards";
+import type { Chat } from "./chat";
 import { type CardJSXElement, isJSX, toCardElement } from "./jsx-runtime";
 import {
   paragraph,
@@ -8,11 +10,11 @@ import {
   text as textNode,
   toPlainText,
 } from "./markdown";
+import { Message } from "./message";
 import type {
   Adapter,
   AdapterPostableMessage,
   Attachment,
-  Message,
   PostableMessage,
   SentMessage,
   StateAdapter,
@@ -20,6 +22,17 @@ import type {
   Thread,
 } from "./types";
 import { THREAD_STATE_TTL_MS } from "./types";
+
+/**
+ * Serialized thread data for passing to external systems (e.g., workflow engines).
+ */
+export interface SerializedThread {
+  _type: "chat:Thread";
+  id: string;
+  channelId: string;
+  isDM: boolean;
+  adapterName: string;
+}
 
 interface ThreadImplConfig {
   id: string;
@@ -330,6 +343,84 @@ export class ThreadImpl<TState = Record<string, unknown>>
     return `<@${userId}>`;
   }
 
+  /**
+   * Serialize the thread to a plain JSON object.
+   * Use this to pass thread data to external systems like workflow engines.
+   *
+   * @example
+   * ```typescript
+   * // Pass to a workflow
+   * await workflow.start("my-workflow", {
+   *   thread: thread.toJSON(),
+   *   message: serializeMessage(message),
+   * });
+   * ```
+   */
+  toJSON(): SerializedThread {
+    return {
+      _type: "chat:Thread",
+      id: this.id,
+      channelId: this.channelId,
+      isDM: this.isDM,
+      adapterName: this.adapter.name,
+    };
+  }
+
+  /**
+   * Reconstruct a Thread from serialized JSON data.
+   * Requires the Chat instance to look up the adapter and state.
+   *
+   * @param chat - The Chat instance with registered adapters
+   * @param json - The serialized thread data from toJSON()
+   * @returns A new ThreadImpl instance
+   *
+   * @example
+   * ```typescript
+   * // In a workflow handler
+   * const thread = ThreadImpl.fromJSON(chat, data.thread);
+   * await thread.post("Hello from workflow!");
+   * ```
+   */
+  static fromJSON<TState = Record<string, unknown>>(
+    chat: Chat<Record<string, Adapter>, TState>,
+    json: SerializedThread,
+  ): ThreadImpl<TState> {
+    const adapter = chat.getAdapter(json.adapterName);
+    if (!adapter) {
+      throw new Error(
+        `Adapter "${json.adapterName}" not found in chat instance`,
+      );
+    }
+
+    return new ThreadImpl<TState>({
+      id: json.id,
+      adapter,
+      channelId: json.channelId,
+      stateAdapter: chat.getState(),
+      isDM: json.isDM,
+    });
+  }
+
+  /**
+   * Serialize a ThreadImpl instance for @workflow/serde.
+   * This static method is automatically called by workflow serialization.
+   */
+  static [WORKFLOW_SERIALIZE](instance: ThreadImpl): SerializedThread {
+    return instance.toJSON();
+  }
+
+  /**
+   * Deserialize a ThreadImpl from @workflow/serde.
+   * Note: This returns the serialized data as-is because deserialization
+   * requires a Chat instance. Use chat.reviver() or ThreadImpl.fromJSON()
+   * with the Chat instance to fully reconstruct the thread.
+   */
+  static [WORKFLOW_DESERIALIZE](data: SerializedThread): SerializedThread {
+    // Return the data as-is - full deserialization requires a Chat instance
+    // The workflow engine should use chat.reviver() to complete deserialization
+    return data;
+  }
+
   private createSentMessage(
     messageId: string,
     postable: AdapterPostableMessage,
@@ -362,6 +453,10 @@ export class ThreadImpl<TState = Record<string, unknown>>
         edited: false,
       },
       attachments,
+
+      toJSON() {
+        return new Message(this).toJSON();
+      },
 
       async edit(
         newContent: string | PostableMessage | CardJSXElement,

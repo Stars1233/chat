@@ -1,6 +1,7 @@
 import { isJSX, toModalElement } from "./jsx-runtime";
+import { Message, type SerializedMessage } from "./message";
 import type { ModalElement } from "./modals";
-import { ThreadImpl } from "./thread";
+import { type SerializedThread, ThreadImpl } from "./thread";
 import type {
   ActionEvent,
   ActionHandler,
@@ -12,7 +13,6 @@ import type {
   Logger,
   LogLevel,
   MentionHandler,
-  Message,
   MessageHandler,
   ModalCloseEvent,
   ModalCloseHandler,
@@ -459,6 +459,42 @@ export class Chat<
    */
   getAdapter<K extends keyof TAdapters>(name: K): TAdapters[K] {
     return this.adapters.get(name as string) as TAdapters[K];
+  }
+
+  /**
+   * Get a JSON.parse reviver function that automatically deserializes
+   * chat:Thread and chat:Message objects.
+   *
+   * Use this when parsing JSON that contains serialized Thread or Message objects
+   * (e.g., from workflow engine payloads).
+   *
+   * @returns A reviver function for JSON.parse
+   *
+   * @example
+   * ```typescript
+   * // Parse workflow payload with automatic deserialization
+   * const data = JSON.parse(payload, chat.reviver());
+   *
+   * // data.thread is now a ThreadImpl instance
+   * // data.message is now a Message object with Date fields restored
+   * await data.thread.post("Hello from workflow!");
+   * ```
+   */
+  reviver(): (key: string, value: unknown) => unknown {
+    // eslint-disable-next-line @typescript-eslint/no-this-alias
+    const chat = this;
+    return function reviver(_key: string, value: unknown): unknown {
+      if (value && typeof value === "object" && "_type" in value) {
+        const typed = value as { _type: string };
+        if (typed._type === "chat:Thread") {
+          return ThreadImpl.fromJSON(chat, value as SerializedThread);
+        }
+        if (typed._type === "chat:Message") {
+          return Message.fromJSON(value as SerializedMessage);
+        }
+      }
+      return value;
+    };
   }
 
   // ChatInstance interface implementations

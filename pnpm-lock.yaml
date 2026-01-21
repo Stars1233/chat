@@ -215,6 +215,9 @@ importers:
 
   packages/chat:
     dependencies:
+      '@workflow/serde':
+        specifier: 4.0.1-beta.1
+        version: 4.0.1-beta.1
       mdast-util-to-string:
         specifier: ^4.0.0
         version: 4.0.0
@@ -1470,6 +1473,9 @@ packages:
   '@vladfrangu/async_event_emitter@2.4.7':
     resolution: {integrity: sha512-Xfe6rpCTxSxfbswi/W/Pz7zp1WWSNn4A0eW4mLkQUewCrXXtMj31lCg+iQyTkh/CkusZSq9eDflu7tjEDXUY6g==}
     engines: {node: '>=v14.0.0', npm: '>=7.0.0'}
+
+  '@workflow/serde@4.0.1-beta.1':
+    resolution: {integrity: sha512-JdCvZk0sD1qk2XzteSHVNGbpRM8YcvRBglSJy3FysYgi19pBkk3me2P9gzFpPrnQS6IhAPnEqnJOAODHg1iZrA==}
 
   acorn@8.15.0:
     resolution: {integrity: sha512-NZyJarBfL7nWwIq+FDL6Zp/yHEhePMNnnJ0y3qfieCrmNvYct8uvtiV41UvlSe6apAfk0fY1FbWx+NwfmpvtTg==}
@@ -3961,6 +3967,8 @@ snapshots:
       tinyrainbow: 1.2.0
 
   '@vladfrangu/async_event_emitter@2.4.7': {}
+
+  '@workflow/serde@4.0.1-beta.1': {}
 
   acorn@8.15.0: {}
 

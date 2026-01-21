@@ -22,12 +22,16 @@ import type {
   FetchResult,
   FormattedContent,
   Logger,
-  Message,
   RawMessage,
   ThreadInfo,
   WebhookOptions,
 } from "chat";
-import { convertEmojiPlaceholders, defaultEmojiResolver, getEmoji } from "chat";
+import {
+  convertEmojiPlaceholders,
+  defaultEmojiResolver,
+  getEmoji,
+  Message,
+} from "chat";
 import {
   Client,
   type Message as DiscordJsMessage,
@@ -468,7 +472,7 @@ export class DiscordAdapter implements Adapter<DiscordThreadId, unknown> {
     });
 
     // Convert to SDK Message format
-    const chatMessage: Message = {
+    const chatMessage = new Message({
       id: data.id,
       threadId,
       text: data.content,
@@ -493,7 +497,7 @@ export class DiscordAdapter implements Adapter<DiscordThreadId, unknown> {
       })),
       raw: data,
       isMention: isMentioned,
-    };
+    });
 
     try {
       await this.chat.handleIncomingMessage(this, threadId, chatMessage);
@@ -1093,7 +1097,7 @@ export class DiscordAdapter implements Adapter<DiscordThreadId, unknown> {
     const isBot = author.bot ?? false;
     const isMe = author.id === this.botUserId;
 
-    return {
+    return new Message({
       id: msg.id,
       threadId,
       text: this.formatConverter.extractPlainText(msg.content),
@@ -1122,7 +1126,7 @@ export class DiscordAdapter implements Adapter<DiscordThreadId, unknown> {
         width: att.width ?? undefined,
         height: att.height ?? undefined,
       })),
-    };
+    });
   }
 
   /**
@@ -1550,7 +1554,7 @@ export class DiscordAdapter implements Adapter<DiscordThreadId, unknown> {
     });
 
     // Convert discord.js message to our Message format
-    const chatMessage: Message = {
+    const chatMessage = new Message({
       id: message.id,
       threadId,
       text: message.content,
@@ -1587,7 +1591,7 @@ export class DiscordAdapter implements Adapter<DiscordThreadId, unknown> {
       },
       // Add isMention flag for the chat handlers
       isMention: isMentioned,
-    };
+    });
 
     try {
       await this.chat.handleIncomingMessage(this, threadId, chatMessage);

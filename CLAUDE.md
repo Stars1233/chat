@@ -110,6 +110,27 @@ Uses **Biome** with strict rules:
 - `noExplicitAny` - avoid `any` types
 - `noNonNullAssertion` - avoid `!` assertions
 
+## Testing
+
+### Test Utilities
+
+The `packages/chat/src/mock-adapter.ts` file provides shared test utilities:
+
+- `createMockAdapter(name)` - Creates a mock Adapter with vi.fn() mocks for all methods
+- `createMockState()` - Creates a mock StateAdapter with working in-memory subscriptions, locks, and cache
+- `createTestMessage(id, text, overrides?)` - Creates a test Message object
+- `mockLogger` - A mock Logger that captures all log calls
+
+Example usage:
+
+```typescript
+import { createMockAdapter, createMockState, createTestMessage } from "./mock-adapter";
+
+const adapter = createMockAdapter("slack");
+const state = createMockState();
+const message = createTestMessage("msg-1", "Hello world");
+```
+
 ## Recording & Replay Tests
 
 Production webhook interactions can be recorded and converted into replay tests:

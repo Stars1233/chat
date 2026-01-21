@@ -47,7 +47,6 @@ import type {
   FileUpload,
   FormattedContent,
   Logger,
-  Message,
   RawMessage,
   ReactionEvent,
   ThreadInfo,
@@ -56,6 +55,7 @@ import type {
 import {
   convertEmojiPlaceholders,
   defaultEmojiResolver,
+  Message,
   NotImplementedError,
 } from "chat";
 import { cardToAdaptiveCard } from "./cards";
@@ -668,7 +668,7 @@ export class TeamsAdapter implements Adapter<TeamsThreadId, unknown> {
 
     const isMe = this.isMessageFromSelf(activity);
 
-    return {
+    return new Message({
       id: activity.id || "",
       threadId,
       text: this.formatConverter.extractPlainText(normalizedText),
@@ -698,7 +698,7 @@ export class TeamsAdapter implements Adapter<TeamsThreadId, unknown> {
             !(att.contentType === "text/html" && !att.contentUrl),
         )
         .map((att) => this.createAttachment(att)),
-    };
+    });
   }
 
   /**
@@ -1289,7 +1289,7 @@ export class TeamsAdapter implements Adapter<TeamsThreadId, unknown> {
           msg.from?.application?.id === this.config.appId ||
           msg.from?.user?.id === this.config.appId;
 
-        return {
+        return new Message({
           id: msg.id,
           threadId,
           text: this.extractTextFromGraphMessage(msg),
@@ -1318,7 +1318,7 @@ export class TeamsAdapter implements Adapter<TeamsThreadId, unknown> {
             edited: !!msg.lastModifiedDateTime,
           },
           attachments: this.extractAttachmentsFromGraphMessage(msg),
-        };
+        });
       });
 
       // Determine nextCursor based on direction
@@ -1502,7 +1502,7 @@ export class TeamsAdapter implements Adapter<TeamsThreadId, unknown> {
         msg.from?.application?.id === this.config.appId ||
         msg.from?.user?.id === this.config.appId;
 
-      return {
+      return new Message({
         id: msg.id,
         threadId,
         text: this.extractTextFromGraphMessage(msg),
@@ -1530,7 +1530,7 @@ export class TeamsAdapter implements Adapter<TeamsThreadId, unknown> {
           edited: !!msg.lastModifiedDateTime,
         },
         attachments: this.extractAttachmentsFromGraphMessage(msg),
-      };
+      });
     });
 
     // Determine nextCursor
