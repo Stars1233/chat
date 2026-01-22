@@ -464,6 +464,16 @@ export class ThreadImpl<TState = Record<string, unknown>>
     this._recentMessages = result.messages;
   }
 
+  async fetchMessage(messageId: string): Promise<SentMessage | null> {
+    if (!this.adapter.fetchMessage) {
+      throw new Error(
+        `Adapter ${this.adapter.name} does not support fetchMessage()`,
+      );
+    }
+    const message = await this.adapter.fetchMessage(this.id, messageId);
+    return message ? this.createSentMessageFromMessage(message) : null;
+  }
+
   mentionUser(userId: string): string {
     return `<@${userId}>`;
   }
@@ -603,6 +613,57 @@ export class ThreadImpl<TState = Record<string, unknown>>
     };
 
     return sentMessage;
+  }
+
+  private createSentMessageFromMessage(message: Message): SentMessage {
+    const adapter = this.adapter;
+    const threadId = this.id;
+    const messageId = message.id;
+    const self = this;
+
+    return {
+      id: message.id,
+      threadId: message.threadId,
+      text: message.text,
+      formatted: message.formatted,
+      raw: message.raw,
+      author: message.author,
+      metadata: message.metadata,
+      attachments: message.attachments,
+      isMention: message.isMention,
+
+      toJSON() {
+        return message.toJSON();
+      },
+
+      async edit(
+        newContent: string | PostableMessage | CardJSXElement,
+      ): Promise<SentMessage> {
+        let postable: string | AdapterPostableMessage = newContent as
+          | string
+          | AdapterPostableMessage;
+        if (isJSX(newContent)) {
+          const card = toCardElement(newContent);
+          if (!card)
+            throw new Error("Invalid JSX element: must be a Card element");
+          postable = card;
+        }
+        await adapter.editMessage(threadId, messageId, postable);
+        return self.createSentMessage(messageId, postable, threadId);
+      },
+
+      async delete(): Promise<void> {
+        await adapter.deleteMessage(threadId, messageId);
+      },
+
+      async addReaction(emoji: string): Promise<void> {
+        await adapter.addReaction(threadId, messageId, emoji);
+      },
+
+      async removeReaction(emoji: string): Promise<void> {
+        await adapter.removeReaction(threadId, messageId, emoji);
+      },
+    };
   }
 }
 

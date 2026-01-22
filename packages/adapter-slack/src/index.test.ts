@@ -6,7 +6,12 @@ import { createHmac } from "node:crypto";
 import { ValidationError } from "@chat-adapter/shared";
 import type { Logger } from "chat";
 import { describe, expect, it, vi } from "vitest";
-import { createSlackAdapter, SlackAdapter } from "./index";
+import {
+  createSlackAdapter,
+  decodeSlackModalContext,
+  encodeSlackModalContext,
+  SlackAdapter,
+} from "./index";
 
 const mockLogger: Logger = {
   debug: vi.fn(),
@@ -877,5 +882,221 @@ describe("formatted text extraction", () => {
 
     const message = adapter.parseMessage(event);
     expect(message.text).toContain("@john");
+  });
+});
+
+// ============================================================================
+// Modal Context Encoding/Decoding Tests
+// ============================================================================
+
+describe("encodeSlackModalContext", () => {
+  it("encodes threadId only", () => {
+    const encoded = encodeSlackModalContext("slack:C123:1234567890.123456");
+    const parsed = JSON.parse(encoded);
+
+    expect(parsed._type).toBe("chat:SlackModalContext");
+    expect(parsed.v).toBe(1);
+    expect(parsed.t).toBe("slack:C123:1234567890.123456");
+    expect(parsed.m).toBeUndefined();
+    expect(parsed.u).toBeUndefined();
+  });
+
+  it("encodes threadId and messageId", () => {
+    const encoded = encodeSlackModalContext(
+      "slack:C123:1234567890.123456",
+      "1234567890.999999",
+    );
+    const parsed = JSON.parse(encoded);
+
+    expect(parsed.t).toBe("slack:C123:1234567890.123456");
+    expect(parsed.m).toBe("1234567890.999999");
+    expect(parsed.u).toBeUndefined();
+  });
+
+  it("encodes threadId, messageId, and user metadata", () => {
+    const encoded = encodeSlackModalContext(
+      "slack:C123:1234567890.123456",
+      "1234567890.999999",
+      "user-custom-data",
+    );
+    const parsed = JSON.parse(encoded);
+
+    expect(parsed.t).toBe("slack:C123:1234567890.123456");
+    expect(parsed.m).toBe("1234567890.999999");
+    expect(parsed.u).toBe("user-custom-data");
+  });
+
+  it("truncates user metadata when too large", () => {
+    const largeMetadata = "x".repeat(5000); // Exceeds 3000 char limit
+    const warnMock = vi.fn();
+    const logger = { ...mockLogger, warn: warnMock };
+
+    const encoded = encodeSlackModalContext(
+      "slack:C123:1234567890.123456",
+      "1234567890.999999",
+      largeMetadata,
+      logger,
+    );
+    const parsed = JSON.parse(encoded);
+
+    expect(parsed.u.length).toBeLessThan(5000);
+    expect(encoded.length).toBeLessThanOrEqual(3000);
+    expect(warnMock).toHaveBeenCalledWith(
+      "Modal privateMetadata truncated to fit Slack's 3000 char limit",
+      expect.objectContaining({
+        originalSize: 5000,
+        limit: 3000,
+      }),
+    );
+  });
+
+  it("does not truncate user metadata when it fits", () => {
+    const smallMetadata = "small-data";
+    const warnMock = vi.fn();
+    const logger = { ...mockLogger, warn: warnMock };
+
+    const encoded = encodeSlackModalContext(
+      "slack:C123:1234567890.123456",
+      undefined,
+      smallMetadata,
+      logger,
+    );
+    const parsed = JSON.parse(encoded);
+
+    expect(parsed.u).toBe(smallMetadata);
+    expect(warnMock).not.toHaveBeenCalled();
+  });
+
+  it("handles undefined messageId with user metadata", () => {
+    const encoded = encodeSlackModalContext(
+      "slack:C123:1234567890.123456",
+      undefined,
+      "user-data",
+    );
+    const parsed = JSON.parse(encoded);
+
+    expect(parsed.t).toBe("slack:C123:1234567890.123456");
+    expect(parsed.m).toBeUndefined();
+    expect(parsed.u).toBe("user-data");
+  });
+});
+
+describe("decodeSlackModalContext", () => {
+  it("decodes valid context with all fields", () => {
+    const encoded = JSON.stringify({
+      _type: "chat:SlackModalContext",
+      v: 1,
+      t: "slack:C123:1234567890.123456",
+      m: "1234567890.999999",
+      u: "user-data",
+    });
+
+    const result = decodeSlackModalContext(encoded);
+
+    expect(result).toEqual({
+      threadId: "slack:C123:1234567890.123456",
+      messageId: "1234567890.999999",
+      privateMetadata: "user-data",
+    });
+  });
+
+  it("decodes valid context with only threadId", () => {
+    const encoded = JSON.stringify({
+      _type: "chat:SlackModalContext",
+      v: 1,
+      t: "slack:C123:1234567890.123456",
+    });
+
+    const result = decodeSlackModalContext(encoded);
+
+    expect(result).toEqual({
+      threadId: "slack:C123:1234567890.123456",
+      messageId: undefined,
+      privateMetadata: undefined,
+    });
+  });
+
+  it("returns null for undefined metadata", () => {
+    const result = decodeSlackModalContext(undefined);
+    expect(result).toBeNull();
+  });
+
+  it("returns null for empty string metadata", () => {
+    const result = decodeSlackModalContext("");
+    expect(result).toBeNull();
+  });
+
+  it("returns null for invalid JSON", () => {
+    const result = decodeSlackModalContext("not-valid-json");
+    expect(result).toBeNull();
+  });
+
+  it("returns null for JSON without type marker", () => {
+    const result = decodeSlackModalContext(
+      JSON.stringify({ t: "thread-id", m: "msg-id" }),
+    );
+    expect(result).toBeNull();
+  });
+
+  it("returns null for wrong type marker", () => {
+    const result = decodeSlackModalContext(
+      JSON.stringify({ _type: "other:type", v: 1, t: "thread-id" }),
+    );
+    expect(result).toBeNull();
+  });
+
+  it("returns null for wrong version", () => {
+    const result = decodeSlackModalContext(
+      JSON.stringify({ _type: "chat:SlackModalContext", v: 2, t: "thread-id" }),
+    );
+    expect(result).toBeNull();
+  });
+
+  it("returns null for missing threadId", () => {
+    const result = decodeSlackModalContext(
+      JSON.stringify({ _type: "chat:SlackModalContext", v: 1 }),
+    );
+    expect(result).toBeNull();
+  });
+
+  it("returns null for non-string threadId", () => {
+    const result = decodeSlackModalContext(
+      JSON.stringify({ _type: "chat:SlackModalContext", v: 1, t: 123 }),
+    );
+    expect(result).toBeNull();
+  });
+
+  it("returns null for raw user metadata (backwards compat)", () => {
+    const result = decodeSlackModalContext("my-custom-session-id");
+    expect(result).toBeNull();
+  });
+
+  it("round-trips with encodeSlackModalContext", () => {
+    const threadId = "slack:C123:1234567890.123456";
+    const messageId = "1234567890.999999";
+    const userMetadata = '{"key": "value"}';
+
+    const encoded = encodeSlackModalContext(threadId, messageId, userMetadata);
+    const decoded = decodeSlackModalContext(encoded);
+
+    expect(decoded).toEqual({
+      threadId,
+      messageId,
+      privateMetadata: userMetadata,
+    });
+  });
+
+  it("handles JSON as user metadata", () => {
+    const threadId = "slack:C123:1234567890.123456";
+    const userMetadata = JSON.stringify({ sessionId: "abc", step: 3 });
+
+    const encoded = encodeSlackModalContext(threadId, undefined, userMetadata);
+    const decoded = decodeSlackModalContext(encoded);
+
+    expect(decoded?.privateMetadata).toBe(userMetadata);
+    expect(JSON.parse(decoded?.privateMetadata ?? "")).toEqual({
+      sessionId: "abc",
+      step: 3,
+    });
   });
 });

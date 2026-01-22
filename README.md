@@ -281,7 +281,7 @@ Open modal dialogs to collect structured user input. Modals support text inputs,
 
 ### Opening a Modal
 
-Modals are opened in response to button clicks using `event.openModal()`:
+Modals are opened in response to button clicks using `event.openModal()`. The SDK automatically tracks the thread and message context, making it available as `relatedThread` and `relatedMessage` in the submit/close handlers:
 
 ```tsx
 import { Modal, TextInput, Select, SelectOption } from "chat";
@@ -295,7 +295,7 @@ bot.onAction("feedback", async (event) => {
       submitLabel="Send"
       closeLabel="Cancel"
       notifyOnClose
-      privateMetadata={event.threadId}
+      privateMetadata="optional-custom-data" // Optional: your own custom data
     >
       <TextInput
         id="message"
@@ -330,7 +330,7 @@ bot.onAction("feedback", async (event) => {
 
 ### Handling Modal Submissions
 
-Handle form submissions with `onModalSubmit`:
+Handle form submissions with `onModalSubmit`. The event includes `relatedThread` and `relatedMessage` which automatically reference the thread/message where the modal was triggered:
 
 ```typescript
 import type { ModalSubmitEvent } from "chat";
@@ -350,11 +350,12 @@ bot.onModalSubmit("feedback_form", async (event: ModalSubmitEvent) => {
   console.log("Received feedback:", { message, category, email });
 
   // Post confirmation to the original thread
-  if (event.privateMetadata) {
-    await event.adapter.postMessage(
-      event.privateMetadata,
-      `Feedback received! Category: ${category}`
-    );
+  if (event.relatedThread) {
+    await event.relatedThread.post(`Feedback received! Category: ${category}`);
+  }
+  // Optionally update the original message that triggered the modal
+  if (event.relatedMessage) {
+    await event.relatedMessage.edit("✅ Feedback submitted!");
   }
 
   // Return nothing to close the modal
@@ -383,16 +384,15 @@ bot.onModalClose("feedback_form", async (event: ModalCloseEvent) => {
   console.log(`${event.user.userName} cancelled the feedback form`);
 
   // Post a follow-up to the original thread
-  if (event.privateMetadata) {
-    await event.adapter.postMessage(
-      event.privateMetadata,
+  if (event.relatedThread) {
+    await event.relatedThread.post(
       "No worries, let us know if you change your mind!"
     );
   }
 });
 ```
 
-The `ModalSubmitEvent` includes `callbackId`, `viewId`, `values`, `privateMetadata`, `user`, `adapter`, and `raw` properties. The `ModalCloseEvent` includes the same properties except `values`.
+The `ModalSubmitEvent` includes `callbackId`, `viewId`, `values`, `privateMetadata`, `user`, `adapter`, `relatedThread`, `relatedMessage`, and `raw` properties. The `ModalCloseEvent` includes the same properties except `values`.
 
 ## AI Integration & Streaming
 

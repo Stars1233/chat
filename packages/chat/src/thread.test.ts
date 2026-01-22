@@ -842,4 +842,181 @@ describe("ThreadImpl", () => {
     // Note: Streaming is prevented at the type level - postEphemeral accepts
     // AdapterPostableMessage | CardJSXElement which excludes AsyncIterable<string>
   });
+
+  describe("fetchMessage", () => {
+    let thread: ThreadImpl;
+    let mockAdapter: Adapter;
+    let mockState: ReturnType<typeof createMockState>;
+
+    beforeEach(() => {
+      mockAdapter = createMockAdapter();
+      mockState = createMockState();
+
+      thread = new ThreadImpl({
+        id: "slack:C123:1234.5678",
+        adapter: mockAdapter,
+        channelId: "C123",
+        stateAdapter: mockState,
+      });
+    });
+
+    it("should fetch a message by ID and return SentMessage", async () => {
+      const mockMessage = createTestMessage("msg-123", "Hello World");
+      (mockAdapter.fetchMessage as ReturnType<typeof vi.fn>).mockResolvedValue(
+        mockMessage,
+      );
+
+      const result = await thread.fetchMessage("msg-123");
+
+      expect(mockAdapter.fetchMessage).toHaveBeenCalledWith(
+        "slack:C123:1234.5678",
+        "msg-123",
+      );
+      expect(result).not.toBeNull();
+      expect(result?.id).toBe("msg-123");
+      expect(result?.text).toBe("Hello World");
+    });
+
+    it("should return null when message is not found", async () => {
+      (mockAdapter.fetchMessage as ReturnType<typeof vi.fn>).mockResolvedValue(
+        null,
+      );
+
+      const result = await thread.fetchMessage("nonexistent");
+
+      expect(mockAdapter.fetchMessage).toHaveBeenCalledWith(
+        "slack:C123:1234.5678",
+        "nonexistent",
+      );
+      expect(result).toBeNull();
+    });
+
+    it("should return SentMessage with edit capability", async () => {
+      const mockMessage = createTestMessage("msg-123", "Original content");
+      (mockAdapter.fetchMessage as ReturnType<typeof vi.fn>).mockResolvedValue(
+        mockMessage,
+      );
+
+      const result = await thread.fetchMessage("msg-123");
+
+      expect(result).not.toBeNull();
+      expect(typeof result?.edit).toBe("function");
+
+      // Test edit
+      await result?.edit("Updated content");
+      expect(mockAdapter.editMessage).toHaveBeenCalledWith(
+        "slack:C123:1234.5678",
+        "msg-123",
+        "Updated content",
+      );
+    });
+
+    it("should return SentMessage with delete capability", async () => {
+      const mockMessage = createTestMessage("msg-123", "To be deleted");
+      (mockAdapter.fetchMessage as ReturnType<typeof vi.fn>).mockResolvedValue(
+        mockMessage,
+      );
+
+      const result = await thread.fetchMessage("msg-123");
+
+      expect(result).not.toBeNull();
+      expect(typeof result?.delete).toBe("function");
+
+      // Test delete
+      await result?.delete();
+      expect(mockAdapter.deleteMessage).toHaveBeenCalledWith(
+        "slack:C123:1234.5678",
+        "msg-123",
+      );
+    });
+
+    it("should return SentMessage with addReaction capability", async () => {
+      const mockMessage = createTestMessage("msg-123", "Test");
+      (mockAdapter.fetchMessage as ReturnType<typeof vi.fn>).mockResolvedValue(
+        mockMessage,
+      );
+
+      const result = await thread.fetchMessage("msg-123");
+
+      expect(result).not.toBeNull();
+      expect(typeof result?.addReaction).toBe("function");
+
+      // Test addReaction
+      await result?.addReaction("thumbsup");
+      expect(mockAdapter.addReaction).toHaveBeenCalledWith(
+        "slack:C123:1234.5678",
+        "msg-123",
+        "thumbsup",
+      );
+    });
+
+    it("should return SentMessage with removeReaction capability", async () => {
+      const mockMessage = createTestMessage("msg-123", "Test");
+      (mockAdapter.fetchMessage as ReturnType<typeof vi.fn>).mockResolvedValue(
+        mockMessage,
+      );
+
+      const result = await thread.fetchMessage("msg-123");
+
+      expect(result).not.toBeNull();
+      expect(typeof result?.removeReaction).toBe("function");
+
+      // Test removeReaction
+      await result?.removeReaction("thumbsup");
+      expect(mockAdapter.removeReaction).toHaveBeenCalledWith(
+        "slack:C123:1234.5678",
+        "msg-123",
+        "thumbsup",
+      );
+    });
+
+    it("should preserve original message properties in SentMessage", async () => {
+      const mockMessage = createTestMessage("msg-123", "Test message", {
+        author: {
+          userId: "U456",
+          userName: "testuser",
+          fullName: "Test User",
+          isBot: false,
+          isMe: false,
+        },
+        isMention: true,
+      });
+      (mockAdapter.fetchMessage as ReturnType<typeof vi.fn>).mockResolvedValue(
+        mockMessage,
+      );
+
+      const result = await thread.fetchMessage("msg-123");
+
+      expect(result).not.toBeNull();
+      expect(result?.threadId).toBe("slack:C123:1234.5678");
+      expect(result?.author.userId).toBe("U456");
+      expect(result?.author.userName).toBe("testuser");
+      expect(result?.isMention).toBe(true);
+    });
+
+    it("should throw error when adapter does not support fetchMessage", async () => {
+      delete (mockAdapter as { fetchMessage?: unknown }).fetchMessage;
+
+      await expect(thread.fetchMessage("msg-123")).rejects.toThrow(
+        "does not support fetchMessage()",
+      );
+    });
+
+    it("should have toJSON method on returned SentMessage", async () => {
+      const mockMessage = createTestMessage("msg-123", "Test");
+      (mockAdapter.fetchMessage as ReturnType<typeof vi.fn>).mockResolvedValue(
+        mockMessage,
+      );
+
+      const result = await thread.fetchMessage("msg-123");
+
+      expect(result).not.toBeNull();
+      expect(typeof result?.toJSON).toBe("function");
+
+      const json = result?.toJSON();
+      expect(json).toBeDefined();
+      expect(json?._type).toBe("chat:Message");
+      expect(json?.id).toBe("msg-123");
+    });
+  });
 });

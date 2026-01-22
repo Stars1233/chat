@@ -801,7 +801,14 @@ describe("Chat", () => {
       };
       const result = await capturedEvent?.openModal(modal);
 
-      expect(mockAdapter.openModal).toHaveBeenCalledWith("trigger-123", modal);
+      expect(mockAdapter.openModal).toHaveBeenCalledWith(
+        "trigger-123",
+        modal,
+        expect.objectContaining({
+          threadId: "slack:C123:1234.5678",
+          messageId: "msg-1",
+        }),
+      );
       expect(result).toEqual({ viewId: "V123" });
     });
 
@@ -846,6 +853,10 @@ describe("Chat", () => {
           type: "modal",
           callbackId: "jsx_modal",
           title: "JSX Modal",
+        }),
+        expect.objectContaining({
+          threadId: "slack:C123:1234.5678",
+          messageId: "msg-1",
         }),
       );
       expect(result).toEqual({ viewId: "V123" });

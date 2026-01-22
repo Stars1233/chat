@@ -152,7 +152,6 @@ bot.onAction("feedback", async (event) => {
       submitLabel="Send"
       closeLabel="Cancel"
       notifyOnClose
-      privateMetadata={event.threadId}
     >
       <TextInput
         id="message"
@@ -195,19 +194,12 @@ bot.onModalSubmit("feedback_form", async (event) => {
     email,
     user: event.user.userName,
   });
-
-  // Post confirmation to the original thread
-  if (event.privateMetadata) {
-    // We need to post to the thread
-    const adapter = event.adapter;
-    await adapter.postMessage(
-      event.privateMetadata,
-      `${emoji.check} **Feedback received!**\n\n` +
-        `**Category:** ${category}\n` +
-        `**Message:** ${message}` +
-        (email ? `\n**Email:** ${email}` : ""),
-    );
-  }
+  await event.relatedThread?.post(
+    `${emoji.check} **Feedback received!**\n\n` +
+      `**Category:** ${category}\n` +
+      `**Message:** ${message}` +
+      (email ? `\n**Email:** ${email}` : ""),
+  );
 });
 
 // Handle modal close (cancel)

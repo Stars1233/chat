@@ -22,6 +22,7 @@ import type {
   FormattedContent,
   Logger,
   ModalElement,
+  ModalOpenContext,
   ModalResponse,
   RawMessage,
   ReactionEvent,
@@ -33,12 +34,86 @@ import type {
 import {
   ChatError,
   convertEmojiPlaceholders,
+  type DecodedModalContext,
   defaultEmojiResolver,
   Message,
 } from "chat";
 import { cardToBlockKit, cardToFallbackText } from "./cards";
 import { SlackFormatConverter } from "./markdown";
 import { modalToSlackView, type SlackModalResponse } from "./modals";
+
+interface SlackModalContext {
+  _type: "chat:SlackModalContext";
+  v: 1;
+  t: string; // threadId
+  m?: string; // messageId
+  u?: string; // user privateMetadata
+}
+
+const SLACK_MAX_PRIVATE_METADATA_SIZE = 3000;
+
+function encodeSlackModalContext(
+  threadId: string,
+  messageId?: string,
+  userMetadata?: string,
+  logger?: Logger,
+): string {
+  const context: SlackModalContext = {
+    _type: "chat:SlackModalContext",
+    v: 1,
+    t: threadId,
+  };
+  if (messageId) {
+    context.m = messageId;
+  }
+  const baseSize = JSON.stringify(context).length;
+  const maxUserMetadataSize = SLACK_MAX_PRIVATE_METADATA_SIZE - baseSize - 10;
+
+  if (userMetadata) {
+    if (userMetadata.length > maxUserMetadataSize) {
+      logger?.warn(
+        "Modal privateMetadata truncated to fit Slack's 3000 char limit",
+        {
+          originalSize: userMetadata.length,
+          truncatedSize: maxUserMetadataSize,
+          limit: SLACK_MAX_PRIVATE_METADATA_SIZE,
+        },
+      );
+      context.u = userMetadata.slice(0, maxUserMetadataSize);
+    } else {
+      context.u = userMetadata;
+    }
+  }
+
+  return JSON.stringify(context);
+}
+
+function decodeSlackModalContext(
+  metadata: string | undefined,
+): DecodedModalContext | null {
+  if (!metadata) {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(metadata);
+    if (
+      typeof parsed === "object" &&
+      parsed !== null &&
+      parsed._type === "chat:SlackModalContext" &&
+      parsed.v === 1 &&
+      typeof parsed.t === "string"
+    ) {
+      return {
+        threadId: parsed.t,
+        messageId: parsed.m,
+        privateMetadata: parsed.u,
+      };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
 
 export interface SlackAdapterConfig {
   /** Bot token (xoxb-...) */
@@ -470,6 +545,11 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
       }
     }
 
+    // Decode modal context from Slack's private_metadata
+    const decodedContext = decodeSlackModalContext(
+      payload.view.private_metadata,
+    );
+
     const event = {
       callbackId: payload.view.callback_id,
       viewId: payload.view.id,
@@ -490,9 +570,14 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
       callbackId: payload.view.callback_id,
       viewId: payload.view.id,
       user: payload.user.username,
+      hasDecodedContext: !!decodedContext,
     });
 
-    const response = await this.chat.processModalSubmit(event, options);
+    const response = await this.chat.processModalSubmit(
+      event,
+      decodedContext ?? undefined,
+      options,
+    );
 
     if (response) {
       const slackResponse = this.modalResponseToSlack(response);
@@ -514,6 +599,10 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
       return;
     }
 
+    const decodedContext = decodeSlackModalContext(
+      payload.view.private_metadata,
+    );
+
     const event = {
       callbackId: payload.view.callback_id,
       viewId: payload.view.id,
@@ -532,11 +621,11 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
     this.logger.debug("Processing Slack view closed", {
       callbackId: payload.view.callback_id,
       viewId: payload.view.id,
-      privateMetadata: payload.view.private_metadata,
       user: payload.user.username,
+      hasDecodedContext: !!decodedContext,
     });
 
-    this.chat.processModalClose(event, options);
+    this.chat.processModalClose(event, decodedContext ?? undefined, options);
   }
 
   private modalResponseToSlack(response: ModalResponse): SlackModalResponse {
@@ -987,8 +1076,23 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
   async openModal(
     triggerId: string,
     modal: ModalElement,
+    context?: ModalOpenContext,
   ): Promise<{ viewId: string }> {
-    const view = modalToSlackView(modal);
+    let modalWithContext = modal;
+    if (context) {
+      const encodedContext = encodeSlackModalContext(
+        context.threadId,
+        context.messageId,
+        context.userMetadata,
+        this.logger,
+      );
+      modalWithContext = {
+        ...modal,
+        privateMetadata: encodedContext,
+      };
+    }
+
+    const view = modalToSlackView(modalWithContext);
 
     this.logger.debug("Slack API: views.open", {
       triggerId,
@@ -1517,6 +1621,38 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
     }
   }
 
+  async fetchMessage(
+    threadId: string,
+    messageId: string,
+  ): Promise<Message<unknown> | null> {
+    const { channel, threadTs } = this.decodeThreadId(threadId);
+
+    try {
+      const result = await this.client.conversations.replies({
+        channel,
+        ts: threadTs,
+        oldest: messageId,
+        inclusive: true,
+        limit: 1,
+      });
+
+      const messages = (result.messages || []) as SlackEvent[];
+      const target = messages.find((msg) => msg.ts === messageId);
+      if (!target) return null;
+
+      return await this.parseSlackMessage(target, threadId);
+    } catch (error) {
+      const slackError = error as { data?: { error?: string } };
+      if (
+        slackError.data?.error === "message_not_found" ||
+        slackError.data?.error === "thread_not_found"
+      ) {
+        return null;
+      }
+      this.handleSlackError(error);
+    }
+  }
+
   encodeThreadId(platformData: SlackThreadId): string {
     return `slack:${platformData.channel}:${platformData.threadTs}`;
   }
@@ -1649,3 +1785,6 @@ export {
   SlackFormatConverter,
   SlackFormatConverter as SlackMarkdownConverter,
 } from "./markdown";
+
+// Export modal context functions for testing
+export { encodeSlackModalContext, decodeSlackModalContext };

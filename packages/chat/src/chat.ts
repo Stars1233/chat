@@ -14,6 +14,7 @@ import type {
   Author,
   ChatConfig,
   ChatInstance,
+  DecodedModalContext,
   EmojiValue,
   Logger,
   LogLevel,
@@ -26,6 +27,7 @@ import type {
   ModalSubmitHandler,
   ReactionEvent,
   ReactionHandler,
+  SentMessage,
   StateAdapter,
   SubscribedMessageHandler,
   Thread,
@@ -606,24 +608,29 @@ export class Chat<
   }
 
   async processModalSubmit(
-    event: Omit<ModalSubmitEvent, "thread">,
+    event: Omit<ModalSubmitEvent, "relatedThread" | "relatedMessage">,
+    context?: DecodedModalContext,
     _options?: WebhookOptions,
   ): Promise<ModalResponse | undefined> {
-    this.logger.debug("Incoming modal submit", {
-      adapter: event.adapter.name,
-      callbackId: event.callbackId,
-      viewId: event.viewId,
-      user: event.user.userName,
-    });
+    const { relatedThread, relatedMessage, privateMetadata } =
+      await this.resolveModalContext(
+        event.adapter,
+        context,
+        event.privateMetadata,
+      );
 
-    // Run matching handlers, return first response
+    const fullEvent: ModalSubmitEvent = {
+      ...event,
+      privateMetadata,
+      relatedThread,
+      relatedMessage,
+    };
+
     for (const { callbackIds, handler } of this.modalSubmitHandlers) {
       if (callbackIds.length === 0 || callbackIds.includes(event.callbackId)) {
         try {
-          const response = await handler(event as ModalSubmitEvent);
-          if (response) {
-            return response;
-          }
+          const response = await handler(fullEvent);
+          if (response) return response;
         } catch (err) {
           this.logger.error("Modal submit handler error", {
             error: err,
@@ -635,23 +642,31 @@ export class Chat<
   }
 
   processModalClose(
-    event: Omit<ModalCloseEvent, "thread">,
+    event: Omit<ModalCloseEvent, "relatedThread" | "relatedMessage">,
+    context?: DecodedModalContext,
     options?: WebhookOptions,
   ): void {
     const task = (async () => {
-      this.logger.debug("Incoming modal close", {
-        adapter: event.adapter.name,
-        callbackId: event.callbackId,
-        viewId: event.viewId,
-        user: event.user.userName,
-      });
+      const { relatedThread, relatedMessage, privateMetadata } =
+        await this.resolveModalContext(
+          event.adapter,
+          context,
+          event.privateMetadata,
+        );
+
+      const fullEvent: ModalCloseEvent = {
+        ...event,
+        privateMetadata,
+        relatedThread,
+        relatedMessage,
+      };
 
       for (const { callbackIds, handler } of this.modalCloseHandlers) {
         if (
           callbackIds.length === 0 ||
           callbackIds.includes(event.callbackId)
         ) {
-          await handler(event as ModalCloseEvent);
+          await handler(fullEvent);
         }
       }
     })().catch((err) => {
@@ -664,6 +679,45 @@ export class Chat<
     if (options?.waitUntil) {
       options.waitUntil(task);
     }
+  }
+
+  private async resolveModalContext(
+    adapter: Adapter,
+    context: DecodedModalContext | undefined,
+    fallbackMetadata: string | undefined,
+  ): Promise<{
+    relatedThread: Thread | undefined;
+    relatedMessage: SentMessage | undefined;
+    privateMetadata: string | undefined;
+  }> {
+    if (!context) {
+      return {
+        relatedThread: undefined,
+        relatedMessage: undefined,
+        privateMetadata: fallbackMetadata,
+      };
+    }
+    const relatedThread = (await this.createThread(
+      adapter,
+      context.threadId,
+      {} as Message,
+      false,
+    )) as Thread;
+
+    let relatedMessage: SentMessage | undefined;
+    if (context.messageId) {
+      try {
+        relatedMessage =
+          (await relatedThread.fetchMessage(context.messageId)) ?? undefined;
+      } catch {
+        // Message may have been deleted
+      }
+    }
+    return {
+      relatedThread,
+      relatedMessage,
+      privateMetadata: context.privateMetadata,
+    };
   }
 
   /**
@@ -724,7 +778,12 @@ export class Chat<
           modalElement = converted;
         }
 
-        return event.adapter.openModal(event.triggerId, modalElement);
+        const context = {
+          threadId: event.threadId,
+          messageId: event.messageId,
+          userMetadata: modalElement.privateMetadata,
+        };
+        return event.adapter.openModal(event.triggerId, modalElement, context);
       },
     };
 

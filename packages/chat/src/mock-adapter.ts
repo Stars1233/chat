@@ -68,6 +68,7 @@ export function createMockAdapter(name = "slack"): Adapter {
       .fn()
       .mockImplementation((threadId: string) => threadId.includes(":D")),
     openModal: vi.fn().mockResolvedValue({ viewId: "V123" }),
+    fetchMessage: vi.fn().mockResolvedValue(null),
   };
 }
 
