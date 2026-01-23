@@ -35,6 +35,7 @@ import type {
 import { ChatError, ConsoleLogger, LockError } from "./types";
 
 const DEFAULT_LOCK_TTL_MS = 30_000; // 30 seconds
+/** TTL for message deduplication entries */
 const DEDUPE_TTL_MS = 60_000; // 60 seconds
 const MODAL_CONTEXT_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 

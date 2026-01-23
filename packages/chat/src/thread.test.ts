@@ -1,12 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { Message } from "./message";
 import {
   createMockAdapter,
   createMockState,
   createTestMessage,
 } from "./mock-adapter";
 import { ThreadImpl } from "./thread";
-import type { Adapter } from "./types";
+import type { Adapter, Message } from "./types";
 
 describe("ThreadImpl", () => {
   describe("Per-thread state", () => {
@@ -273,7 +272,11 @@ describe("ThreadImpl", () => {
         adapter: mockAdapter,
         channelId: "C123",
         stateAdapter: mockState,
-        currentMessage: createTestMessage("original-msg", "test", {
+        currentMessage: {
+          id: "original-msg",
+          threadId: "slack:C123:1234.5678",
+          text: "test",
+          formatted: { type: "root", children: [] },
           raw: { team_id: "T123" },
           author: {
             userId: "U456",
@@ -282,7 +285,9 @@ describe("ThreadImpl", () => {
             isBot: false,
             isMe: false,
           },
-        }),
+          metadata: { dateSent: new Date(), edited: false },
+          attachments: [],
+        },
       });
 
       const textStream = createTextStream(["Hello"]);
