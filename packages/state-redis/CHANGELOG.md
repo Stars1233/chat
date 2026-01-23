@@ -1,5 +1,12 @@
 # @chat-adapter/state-redis
 
+## 4.7.0
+
+### Patch Changes
+
+- Updated dependencies [a13f43e]
+  - chat@4.7.0
+
 ## 4.6.0
 
 ### Patch Changes

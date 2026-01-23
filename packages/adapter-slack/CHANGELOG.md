@@ -1,5 +1,17 @@
 # @chat-adapter/slack
 
+## 4.7.0
+
+### Minor Changes
+
+- a13f43e: Add relatedThread and relatedMessage to modal events.
+
+### Patch Changes
+
+- Updated dependencies [a13f43e]
+  - chat@4.7.0
+  - @chat-adapter/shared@4.7.0
+
 ## 4.6.0
 
 ### Minor Changes
