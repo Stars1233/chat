@@ -1,0 +1,348 @@
+{
+  "botName": "Vercel Support Insights",
+  "botUserId": "U0A6PEGC2TH",
+  "mention": {
+    "token": "qY6M8tstciNRVwMruwbMKjef",
+    "team_id": "T0A6R9YLSKA",
+    "api_app_id": "A0A6YH3HM43",
+    "event": {
+      "type": "app_mention",
+      "user": "U0A60JBHJBE",
+      "ts": "1769220155.940449",
+      "client_msg_id": "bd2ed218-66b1-4ead-84db-72cc508204ab",
+      "text": "<@U0A6PEGC2TH> Hello",
+      "team": "T0A6R9YLSKA",
+      "blocks": [
+        {
+          "type": "rich_text",
+          "block_id": "L2Wjk",
+          "elements": [
+            {
+              "type": "rich_text_section",
+              "elements": [
+                {
+                  "type": "user",
+                  "user_id": "U0A6PEGC2TH"
+                },
+                {
+                  "type": "text",
+                  "text": " Hello"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "channel": "C0A9GJ2PUTB",
+      "event_ts": "1769220155.940449"
+    },
+    "type": "event_callback",
+    "event_id": "Ev0AATDEL38U",
+    "event_time": 1769220155,
+    "authorizations": [
+      {
+        "enterprise_id": null,
+        "team_id": "T0A6R9YLSKA",
+        "user_id": "U0A6PEGC2TH",
+        "is_bot": true,
+        "is_enterprise_install": false
+      }
+    ],
+    "is_ext_shared_channel": false
+  },
+  "action": {
+    "type": "block_actions",
+    "user": {
+      "id": "U0A60JBHJBE",
+      "username": "vishal.yathish",
+      "name": "vishal.yathish",
+      "team_id": "T0A6R9YLSKA"
+    },
+    "api_app_id": "A0A6YH3HM43",
+    "token": "qY6M8tstciNRVwMruwbMKjef",
+    "container": {
+      "type": "message",
+      "message_ts": "1769220161.503009",
+      "channel_id": "C0A9GJ2PUTB",
+      "is_ephemeral": false,
+      "thread_ts": "1769220155.940449"
+    },
+    "trigger_id": "10367455086084.10229338706656.e675a0c0dacc24a1f7b84a7a426d1197",
+    "team": {
+      "id": "T0A6R9YLSKA",
+      "domain": "vishalslackbotdev"
+    },
+    "enterprise": null,
+    "is_enterprise_install": false,
+    "channel": {
+      "id": "C0A9GJ2PUTB",
+      "name": "spam-report-formatting"
+    },
+    "message": {
+      "user": "U0A6PEGC2TH",
+      "type": "message",
+      "ts": "1769220161.503009",
+      "bot_id": "B0A7HR8P8D7",
+      "app_id": "A0A6YH3HM43",
+      "text": "*:wave: Welcome!* Connected via slack I'm now listening to this thread.",
+      "team": "T0A6R9YLSKA",
+      "thread_ts": "1769220155.940449",
+      "parent_user_id": "U0A60JBHJBE",
+      "blocks": [
+        {
+          "type": "header",
+          "block_id": "jJQhN",
+          "text": {
+            "type": "plain_text",
+            "text": ":wave: Welcome!",
+            "emoji": true
+          }
+        },
+        {
+          "type": "actions",
+          "block_id": "XH72R",
+          "elements": [
+            {
+              "type": "button",
+              "action_id": "feedback",
+              "text": {
+                "type": "plain_text",
+                "text": "Send Feedback",
+                "emoji": true
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "state": {
+      "values": {}
+    },
+    "response_url": "https://hooks.slack.com/actions/T0A6R9YLSKA/10348409316023/sPe1cI1jl72ZPyKpdJYaBV9s",
+    "actions": [
+      {
+        "action_id": "feedback",
+        "block_id": "XH72R",
+        "text": {
+          "type": "plain_text",
+          "text": "Send Feedback",
+          "emoji": true
+        },
+        "type": "button",
+        "action_ts": "1769220166.113300"
+      }
+    ]
+  },
+  "viewSubmission": {
+    "type": "view_submission",
+    "team": {
+      "id": "T0A6R9YLSKA",
+      "domain": "vishalslackbotdev"
+    },
+    "user": {
+      "id": "U0A60JBHJBE",
+      "username": "vishal.yathish",
+      "name": "vishal.yathish",
+      "team_id": "T0A6R9YLSKA"
+    },
+    "api_app_id": "A0A6YH3HM43",
+    "token": "qY6M8tstciNRVwMruwbMKjef",
+    "trigger_id": "10348409668983.10229338706656.91080fe083940dcea332270e757368a5",
+    "view": {
+      "id": "V0AB2P1M2HX",
+      "team_id": "T0A6R9YLSKA",
+      "type": "modal",
+      "blocks": [
+        {
+          "type": "input",
+          "block_id": "message",
+          "label": {
+            "type": "plain_text",
+            "text": "Your Feedback",
+            "emoji": true
+          },
+          "optional": false,
+          "dispatch_action": false,
+          "element": {
+            "type": "plain_text_input",
+            "action_id": "message",
+            "placeholder": {
+              "type": "plain_text",
+              "text": "Tell us what you think...",
+              "emoji": true
+            },
+            "multiline": true
+          }
+        },
+        {
+          "type": "input",
+          "block_id": "category",
+          "label": {
+            "type": "plain_text",
+            "text": "Category",
+            "emoji": true
+          },
+          "optional": false,
+          "dispatch_action": false,
+          "element": {
+            "type": "static_select",
+            "action_id": "category",
+            "placeholder": {
+              "type": "plain_text",
+              "text": "Select a category",
+              "emoji": true
+            },
+            "options": [
+              {
+                "text": {
+                  "type": "plain_text",
+                  "text": "Bug Report",
+                  "emoji": true
+                },
+                "value": "bug"
+              },
+              {
+                "text": {
+                  "type": "plain_text",
+                  "text": "Feature Request",
+                  "emoji": true
+                },
+                "value": "feature"
+              }
+            ]
+          }
+        },
+        {
+          "type": "input",
+          "block_id": "email",
+          "label": {
+            "type": "plain_text",
+            "text": "Email (optional)",
+            "emoji": true
+          },
+          "optional": true,
+          "dispatch_action": false,
+          "element": {
+            "type": "plain_text_input",
+            "action_id": "email",
+            "placeholder": {
+              "type": "plain_text",
+              "text": "your@email.com",
+              "emoji": true
+            },
+            "multiline": false
+          }
+        }
+      ],
+      "private_metadata": "d57850a7-5bab-414d-b11e-ca355b55d629",
+      "callback_id": "feedback_form",
+      "state": {
+        "values": {
+          "message": {
+            "message": {
+              "type": "plain_text_input",
+              "value": "Hello!"
+            }
+          },
+          "category": {
+            "category": {
+              "type": "static_select",
+              "selected_option": {
+                "text": {
+                  "type": "plain_text",
+                  "text": "Feature Request",
+                  "emoji": true
+                },
+                "value": "feature"
+              }
+            }
+          },
+          "email": {
+            "email": {
+              "type": "plain_text_input",
+              "value": "hello@vercel.com"
+            }
+          }
+        }
+      },
+      "hash": "1769220166.YVocmHYs",
+      "title": {
+        "type": "plain_text",
+        "text": "Send Feedback",
+        "emoji": true
+      },
+      "clear_on_close": false,
+      "notify_on_close": true,
+      "close": {
+        "type": "plain_text",
+        "text": "Cancel",
+        "emoji": true
+      },
+      "submit": {
+        "type": "plain_text",
+        "text": "Send",
+        "emoji": true
+      },
+      "previous_view_id": null,
+      "root_view_id": "V0AB2P1M2HX",
+      "app_id": "A0A6YH3HM43",
+      "external_id": "",
+      "app_installed_team_id": "T0A6R9YLSKA",
+      "bot_id": "B0A7HR8P8D7"
+    },
+    "response_urls": [],
+    "is_enterprise_install": false,
+    "enterprise": null
+  },
+  "modalContext": {
+    "contextId": "d57850a7-5bab-414d-b11e-ca355b55d629",
+    "thread": {
+      "_type": "chat:Thread",
+      "id": "slack:C0A9GJ2PUTB:1769220155.940449",
+      "channelId": "C0A9GJ2PUTB",
+      "isDM": false,
+      "adapterName": "slack"
+    },
+    "message": {
+      "_type": "chat:Message",
+      "id": "1769220161.503009",
+      "threadId": "slack:C0A9GJ2PUTB:1769220155.940449",
+      "text": ":wave: Welcome! Connected via slack I'm now listening to this thread. Try these actions: :sparkles: Mention me with \"AI\" to enable AI assistant mode --- DM Support: No Platform: slack --- [Say Hello] [Ephemeral response] [Show Info] [Send Feedback] [Fetch Messages] [Open Link] [Goodbye]",
+      "formatted": {
+        "type": "root",
+        "children": [
+          {
+            "type": "paragraph",
+            "children": [
+              {
+                "type": "text",
+                "value": ":wave: Welcome!"
+              }
+            ]
+          }
+        ]
+      },
+      "raw": {
+        "user": "U0A6PEGC2TH",
+        "type": "message",
+        "ts": "1769220161.503009",
+        "bot_id": "B0A7HR8P8D7",
+        "app_id": "A0A6YH3HM43",
+        "team": "T0A6R9YLSKA",
+        "thread_ts": "1769220155.940449"
+      },
+      "author": {
+        "userId": "U0A6PEGC2TH",
+        "userName": "Vercel Support Insights",
+        "fullName": "Vercel Support Insights",
+        "isBot": true,
+        "isMe": true
+      },
+      "metadata": {
+        "dateSent": "2026-01-24T02:02:41.503Z",
+        "edited": false
+      },
+      "attachments": []
+    }
+  }
+}

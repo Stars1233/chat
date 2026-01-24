@@ -722,9 +722,6 @@ export class Chat<
       return { relatedThread: undefined, relatedMessage: undefined };
     }
 
-    // Delete after retrieval (one-time use)
-    await this._stateAdapter.delete(key);
-
     // Reconstruct thread with adapter directly
     const adapter = this.adapters.get(adapterName);
     const thread = ThreadImpl.fromJSON(stored.thread, adapter);
@@ -762,12 +759,26 @@ export class Chat<
       return;
     }
 
+    const [isSubscribed, fetchedMessage] = await Promise.all([
+      this._stateAdapter.isSubscribed(event.threadId),
+      event.messageId && event.adapter.fetchMessage
+        ? event.adapter
+            .fetchMessage(event.threadId, event.messageId)
+            .catch((err) => {
+              this.logger.warn("Failed to fetch message for action event", {
+                messageId: event.messageId,
+                error: err,
+              });
+              return null;
+            })
+        : Promise.resolve(null),
+    ]);
+
     // Create thread for the action event
-    const isSubscribed = await this._stateAdapter.isSubscribed(event.threadId);
     const thread = await this.createThread(
       event.adapter,
       event.threadId,
-      {} as Message,
+      fetchedMessage ?? ({} as Message),
       isSubscribed,
     );
 

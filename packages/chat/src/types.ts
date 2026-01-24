@@ -168,6 +168,19 @@ export interface Adapter<TThreadId = unknown, TRawMessage = unknown> {
   /** Fetch thread metadata */
   fetchThread(threadId: string): Promise<ThreadInfo>;
 
+  /**
+   * Fetch a single message by ID.
+   * Optional - adapters that don't implement this will return null.
+   *
+   * @param threadId - The thread ID containing the message
+   * @param messageId - The platform-specific message ID
+   * @returns The message, or null if not found/not supported
+   */
+  fetchMessage?(
+    threadId: string,
+    messageId: string,
+  ): Promise<Message<TRawMessage> | null>;
+
   /** Encode platform-specific data into a thread ID string */
   encodeThreadId(platformData: TThreadId): string;
 

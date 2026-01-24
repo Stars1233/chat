@@ -34,7 +34,9 @@ import {
   ChatError,
   convertEmojiPlaceholders,
   defaultEmojiResolver,
+  isJSX,
   Message,
+  toModalElement,
 } from "chat";
 import { cardToBlockKit, cardToFallbackText } from "./cards";
 import { SlackFormatConverter } from "./markdown";
@@ -495,7 +497,7 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
     );
 
     if (response) {
-      const slackResponse = this.modalResponseToSlack(response);
+      const slackResponse = this.modalResponseToSlack(response, contextId);
       return new Response(JSON.stringify(slackResponse), {
         status: 200,
         headers: { "Content-Type": "application/json" },
@@ -534,25 +536,45 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
     this.chat.processModalClose(event, contextId, options);
   }
 
-  private modalResponseToSlack(response: ModalResponse): SlackModalResponse {
+  private modalResponseToSlack(
+    response: ModalResponse,
+    contextId?: string,
+  ): SlackModalResponse {
     switch (response.action) {
       case "close":
         return {};
       case "errors":
         return { response_action: "errors", errors: response.errors };
-      case "update":
+      case "update": {
+        const modal = this.convertModalJSX(response.modal);
+        const view = modalToSlackView(modal, contextId);
         return {
           response_action: "update",
-          view: modalToSlackView(response.modal),
+          view,
         };
-      case "push":
+      }
+      case "push": {
+        const modal = this.convertModalJSX(response.modal);
+        const view = modalToSlackView(modal, contextId);
         return {
           response_action: "push",
-          view: modalToSlackView(response.modal),
+          view,
         };
+      }
       default:
         return {};
     }
+  }
+
+  private convertModalJSX(modal: ModalElement): ModalElement {
+    if (isJSX(modal)) {
+      const converted = toModalElement(modal);
+      if (!converted) {
+        throw new Error("Invalid JSX element: must be a Modal element");
+      }
+      return converted;
+    }
+    return modal;
   }
 
   private verifySignature(
@@ -1508,6 +1530,34 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
           channel: result.channel,
         },
       };
+    } catch (error) {
+      this.handleSlackError(error);
+    }
+  }
+
+  /**
+   * Fetch a single message by ID (timestamp).
+   */
+  async fetchMessage(
+    threadId: string,
+    messageId: string,
+  ): Promise<Message<unknown> | null> {
+    const { channel, threadTs } = this.decodeThreadId(threadId);
+
+    try {
+      const result = await this.client.conversations.replies({
+        channel,
+        ts: threadTs,
+        oldest: messageId,
+        inclusive: true,
+        limit: 1,
+      });
+
+      const messages = (result.messages || []) as SlackEvent[];
+      const target = messages.find((msg) => msg.ts === messageId);
+      if (!target) return null;
+
+      return this.parseSlackMessage(target, threadId);
     } catch (error) {
       this.handleSlackError(error);
     }

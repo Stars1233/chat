@@ -2,11 +2,24 @@
  * Modal elements for form dialogs.
  */
 
+import type { FieldsElement, TextElement } from "./cards";
+
 // ============================================================================
 // Modal Element Types
 // ============================================================================
 
-export type ModalChild = TextInputElement | SelectElement;
+export const VALID_MODAL_CHILD_TYPES = [
+  "text_input",
+  "select",
+  "text",
+  "fields",
+] as const;
+
+export type ModalChild =
+  | TextInputElement
+  | SelectElement
+  | TextElement
+  | FieldsElement;
 
 export interface ModalElement {
   type: "modal";
@@ -51,6 +64,25 @@ export function isModalElement(value: unknown): value is ModalElement {
     "type" in value &&
     (value as ModalElement).type === "modal"
   );
+}
+
+export function filterModalChildren(children: unknown[]): ModalChild[] {
+  const validChildren = children.filter(
+    (c): c is ModalChild =>
+      typeof c === "object" &&
+      c !== null &&
+      "type" in c &&
+      VALID_MODAL_CHILD_TYPES.includes(
+        (c as { type: string })
+          .type as (typeof VALID_MODAL_CHILD_TYPES)[number],
+      ),
+  );
+  if (validChildren.length < children.length) {
+    console.warn(
+      "[chat] Modal contains unsupported child elements that were ignored",
+    );
+  }
+  return validChildren;
 }
 
 // ============================================================================
@@ -201,12 +233,7 @@ export function fromReactModalElement(
         submitLabel: props.submitLabel as string | undefined,
         closeLabel: props.closeLabel as string | undefined,
         notifyOnClose: props.notifyOnClose as boolean | undefined,
-        children: convertedChildren.filter(
-          (c): c is ModalChild =>
-            c !== null &&
-            "type" in c &&
-            (c.type === "text_input" || c.type === "select"),
-        ),
+        children: filterModalChildren(convertedChildren),
       });
 
     case "TextInput":

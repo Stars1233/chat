@@ -22,6 +22,7 @@ import {
   Chat,
   type Logger,
   type Message,
+  type ModalSubmitEvent,
   type ReactionEvent,
   type StateAdapter,
   type Thread,
@@ -144,8 +145,10 @@ export interface SlackTestContext {
   mockClient: MockSlackClient;
   tracker: ReturnType<typeof createWaitUntilTracker>;
   captured: CapturedMessages;
+  state: StateAdapter;
   sendWebhook: (fixture: unknown) => Promise<void>;
   sendSlackAction: (fixture: unknown) => Promise<void>;
+  sendSlackViewSubmission: (fixture: unknown) => Promise<Response>;
 }
 
 /**
@@ -158,6 +161,7 @@ export function createSlackTestContext(
     onSubscribed?: (thread: Thread, message: Message) => Promise<void>;
     onAction?: (event: ActionEvent) => Promise<void>;
     onReaction?: (event: ReactionEvent) => Promise<void>;
+    onModalSubmit?: (event: ModalSubmitEvent) => Promise<void>;
   },
 ): SlackTestContext {
   const adapter = createSlackAdapter({
@@ -175,10 +179,11 @@ export function createSlackTestContext(
   });
   injectMockSlackClient(adapter, mockClient);
 
+  const stateAdapter = createMemoryState();
   const chat = new Chat({
     userName: fixtures.botName,
     adapters: { slack: adapter },
-    state: createMemoryState(),
+    state: stateAdapter,
     logger: "error",
   });
 
@@ -215,6 +220,14 @@ export function createSlackTestContext(
     chat.onReaction(handlers.onReaction);
   }
 
+  if (handlers.onModalSubmit) {
+    const handler = handlers.onModalSubmit;
+    chat.onModalSubmit(async (event) => {
+      await handler(event);
+      return undefined;
+    });
+  }
+
   const tracker = createWaitUntilTracker();
 
   return {
@@ -223,6 +236,7 @@ export function createSlackTestContext(
     mockClient,
     tracker,
     captured,
+    state: stateAdapter,
     sendWebhook: async (fixture: unknown) => {
       await chat.webhooks.slack(
         createSignedSlackRequest(JSON.stringify(fixture)),
@@ -237,6 +251,15 @@ export function createSlackTestContext(
         { waitUntil: tracker.waitUntil },
       );
       await tracker.waitForAll();
+    },
+    sendSlackViewSubmission: async (fixture: unknown) => {
+      const body = `payload=${encodeURIComponent(JSON.stringify(fixture))}`;
+      const response = await chat.webhooks.slack(
+        createSignedSlackRequest(body, "application/x-www-form-urlencoded"),
+        { waitUntil: tracker.waitUntil },
+      );
+      await tracker.waitForAll();
+      return response;
     },
   };
 }

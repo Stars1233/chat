@@ -49,6 +49,7 @@ export function createMockAdapter(name = "slack"): Adapter {
     fetchThread: vi
       .fn()
       .mockResolvedValue({ id: "t1", channelId: "c1", metadata: {} }),
+    fetchMessage: vi.fn().mockResolvedValue(null),
     encodeThreadId: vi.fn(
       (data: { channel: string; thread: string }) =>
         `${name}:${data.channel}:${data.thread}`,

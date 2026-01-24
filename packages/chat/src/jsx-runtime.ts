@@ -50,6 +50,7 @@ import {
 } from "./cards";
 
 import {
+  filterModalChildren,
   isModalElement,
   Modal,
   type ModalChild,
@@ -459,7 +460,7 @@ function resolveJSXElement(element: JSXElement): AnyCardElement {
       submitLabel: props.submitLabel,
       closeLabel: props.closeLabel,
       notifyOnClose: props.notifyOnClose,
-      children: processedChildren as unknown as ModalChild[],
+      children: filterModalChildren(processedChildren),
     });
   }
 
