@@ -6,6 +6,7 @@ import {
   createGoogleChatAdapter,
   type GoogleChatAdapter,
 } from "@chat-adapter/gchat";
+import { createGitHubAdapter, type GitHubAdapter } from "@chat-adapter/github";
 import { createSlackAdapter, type SlackAdapter } from "@chat-adapter/slack";
 import { createTeamsAdapter, type TeamsAdapter } from "@chat-adapter/teams";
 import { ConsoleLogger } from "chat";
@@ -16,6 +17,7 @@ const logger = new ConsoleLogger("info");
 
 export type Adapters = {
   discord?: DiscordAdapter;
+  github?: GitHubAdapter;
   slack?: SlackAdapter;
   teams?: TeamsAdapter;
   gchat?: GoogleChatAdapter;
@@ -60,6 +62,14 @@ const GCHAT_METHODS = [
   "addReaction",
   "removeReaction",
   "openDM",
+  "fetchMessages",
+];
+const GITHUB_METHODS = [
+  "postMessage",
+  "editMessage",
+  "deleteMessage",
+  "addReaction",
+  "removeReaction",
   "fetchMessages",
 ];
 
@@ -148,6 +158,40 @@ export function buildAdapters(): Adapters {
     } catch {
       console.warn(
         "[chat] Invalid GOOGLE_CHAT_CREDENTIALS JSON, skipping gchat adapter",
+      );
+    }
+  }
+
+  // GitHub adapter (optional)
+  // Supports both PAT auth (GITHUB_TOKEN) and GitHub App auth (GITHUB_APP_ID + GITHUB_PRIVATE_KEY)
+  if (process.env.GITHUB_WEBHOOK_SECRET) {
+    if (process.env.GITHUB_TOKEN) {
+      // PAT authentication
+      adapters.github = withRecording(
+        createGitHubAdapter({
+          token: process.env.GITHUB_TOKEN,
+          webhookSecret: process.env.GITHUB_WEBHOOK_SECRET,
+          userName: process.env.GITHUB_BOT_USERNAME || "chat-sdk-bot",
+          logger: logger.child("github"),
+        }),
+        "github",
+        GITHUB_METHODS,
+      );
+    } else if (process.env.GITHUB_APP_ID && process.env.GITHUB_PRIVATE_KEY) {
+      // GitHub App authentication (multi-tenant if no GITHUB_INSTALLATION_ID)
+      adapters.github = withRecording(
+        createGitHubAdapter({
+          appId: process.env.GITHUB_APP_ID,
+          privateKey: process.env.GITHUB_PRIVATE_KEY,
+          installationId: process.env.GITHUB_INSTALLATION_ID
+            ? parseInt(process.env.GITHUB_INSTALLATION_ID, 10)
+            : undefined,
+          webhookSecret: process.env.GITHUB_WEBHOOK_SECRET,
+          userName: process.env.GITHUB_BOT_USERNAME || "chat-sdk-bot[bot]",
+          logger: logger.child("github"),
+        }),
+        "github",
+        GITHUB_METHODS,
       );
     }
   }
