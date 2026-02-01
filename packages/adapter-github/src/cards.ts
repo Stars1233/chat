@@ -2,7 +2,7 @@
  * Convert CardElement to GitHub-flavored markdown.
  *
  * Since GitHub doesn't support rich cards natively, we render cards
- * as formatted markdown with blockquotes, bold text, and links.
+ * as formatted markdown with bold text, dividers, and links.
  */
 
 import type {
@@ -16,7 +16,7 @@ import type {
 /**
  * Convert a CardElement to GitHub-flavored markdown.
  *
- * Cards are rendered as blockquotes with:
+ * Cards are rendered as clean markdown with:
  * - Bold title and subtitle
  * - Text content
  * - Fields as key-value pairs
@@ -39,14 +39,14 @@ import type {
  * });
  *
  * // Output:
- * // > **Order #1234**
- * // > Status update
- * // >
- * // > Your order has been shipped!
- * // >
- * // > **Tracking:** ABC123
- * // >
- * // > [Track Order](https://track.example.com)
+ * // **Order #1234**
+ * // Status update
+ * //
+ * // Your order has been shipped!
+ * //
+ * // **Tracking:** ABC123
+ * //
+ * // [Track Order](https://track.example.com)
  * ```
  */
 export function cardToGitHubMarkdown(card: CardElement): string {
@@ -54,23 +54,23 @@ export function cardToGitHubMarkdown(card: CardElement): string {
 
   // Title (bold)
   if (card.title) {
-    lines.push(`> **${escapeMarkdown(card.title)}**`);
+    lines.push(`**${escapeMarkdown(card.title)}**`);
   }
 
   // Subtitle
   if (card.subtitle) {
-    lines.push(`> ${escapeMarkdown(card.subtitle)}`);
+    lines.push(escapeMarkdown(card.subtitle));
   }
 
   // Add spacing after header if there are children
   if ((card.title || card.subtitle) && card.children.length > 0) {
-    lines.push(">");
+    lines.push("");
   }
 
   // Header image
   if (card.imageUrl) {
-    lines.push(`> ![](${card.imageUrl})`);
-    lines.push(">");
+    lines.push(`![](${card.imageUrl})`);
+    lines.push("");
   }
 
   // Children
@@ -79,11 +79,11 @@ export function cardToGitHubMarkdown(card: CardElement): string {
     const childLines = renderChild(child);
 
     if (childLines.length > 0) {
-      lines.push(...childLines.map((line) => `> ${line}`));
+      lines.push(...childLines);
 
       // Add spacing between children (except last)
       if (i < card.children.length - 1) {
-        lines.push(">");
+        lines.push("");
       }
     }
   }

@@ -10,7 +10,7 @@ describe("cardToGitHubMarkdown", () => {
       children: [],
     };
     const result = cardToGitHubMarkdown(card);
-    expect(result).toBe("> **Hello World**");
+    expect(result).toBe("**Hello World**");
   });
 
   it("should render card with title and subtitle", () => {
@@ -21,7 +21,7 @@ describe("cardToGitHubMarkdown", () => {
       children: [],
     };
     const result = cardToGitHubMarkdown(card);
-    expect(result).toBe("> **Order #1234**\n> Status update");
+    expect(result).toBe("**Order #1234**\nStatus update");
   });
 
   it("should render card with text content", () => {
@@ -36,9 +36,7 @@ describe("cardToGitHubMarkdown", () => {
       ],
     };
     const result = cardToGitHubMarkdown(card);
-    expect(result).toBe(
-      "> **Notification**\n>\n> Your order has been shipped!",
-    );
+    expect(result).toBe("**Notification**\n\nYour order has been shipped!");
   });
 
   it("should render card with fields", () => {
