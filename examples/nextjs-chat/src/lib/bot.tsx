@@ -49,7 +49,6 @@ const agent = new ToolLoopAgent({
 
 // Handle new @mentions of the bot
 bot.onNewMention(async (thread, message) => {
-  console.log("new mention", message.text);
   await thread.subscribe();
 
   // Check if user wants to enable AI mode (mention contains "AI")
