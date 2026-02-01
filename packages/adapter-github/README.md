@@ -150,13 +150,13 @@ See the [GitHub Webhooks documentation](https://docs.github.com/en/webhooks/usin
 
 1. Go to repository/org **Settings → Webhooks → Add webhook**
 2. Set **Payload URL** to `https://your-domain.com/api/webhooks/github`
-3. Set **Content type** to `application/json`
+3. Set **Content type** to `application/json` (**required** - the default `application/x-www-form-urlencoded` will not work)
 4. Set **Secret** to match your `webhookSecret`
 5. Select events:
    - [Issue comments](https://docs.github.com/en/webhooks/webhook-events-and-payloads#issue_comment) (PR-level)
    - [Pull request review comments](https://docs.github.com/en/webhooks/webhook-events-and-payloads#pull_request_review_comment) (line-specific)
 
-**For GitHub Apps:** Webhooks are configured during app creation.
+**For GitHub Apps:** Webhooks are configured during app creation. Make sure to select `application/json` as the content type.
 
 ## Features
 
@@ -211,6 +211,10 @@ Supports [GitHub's reaction emoji](https://docs.github.com/en/rest/reactions/rea
 
 - Verify `GITHUB_WEBHOOK_SECRET` matches your webhook configuration
 - Ensure the request body isn't being modified before verification
+
+### "Invalid JSON" error
+
+- Change webhook **Content type** to `application/json` (GitHub defaults to `application/x-www-form-urlencoded` which doesn't work)
 
 ### Bot not responding to mentions
 

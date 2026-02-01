@@ -278,6 +278,12 @@ export class GitHubAdapter
     const eventType = request.headers.get("x-github-event");
     this.logger.debug("GitHub webhook event type", { eventType });
 
+    // Handle ping event (webhook verification)
+    if (eventType === "ping") {
+      this.logger.info("GitHub webhook ping received");
+      return new Response("pong", { status: 200 });
+    }
+
     // Parse the JSON payload
     let payload:
       | IssueCommentWebhookPayload
@@ -285,7 +291,14 @@ export class GitHubAdapter
     try {
       payload = JSON.parse(body);
     } catch {
-      return new Response("Invalid JSON", { status: 400 });
+      this.logger.error("GitHub webhook invalid JSON", {
+        contentType: request.headers.get("content-type"),
+        bodyPreview: body.substring(0, 200),
+      });
+      return new Response(
+        "Invalid JSON. Make sure webhook Content-Type is set to application/json",
+        { status: 400 },
+      );
     }
 
     // Extract and store installation ID for multi-tenant mode
