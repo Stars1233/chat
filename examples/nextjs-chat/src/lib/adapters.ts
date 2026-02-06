@@ -7,6 +7,7 @@ import {
   type GoogleChatAdapter,
 } from "@chat-adapter/gchat";
 import { createGitHubAdapter, type GitHubAdapter } from "@chat-adapter/github";
+import { createLinearAdapter, type LinearAdapter } from "@chat-adapter/linear";
 import { createSlackAdapter, type SlackAdapter } from "@chat-adapter/slack";
 import { createTeamsAdapter, type TeamsAdapter } from "@chat-adapter/teams";
 import { ConsoleLogger } from "chat";
@@ -18,6 +19,7 @@ const logger = new ConsoleLogger("info");
 export type Adapters = {
   discord?: DiscordAdapter;
   github?: GitHubAdapter;
+  linear?: LinearAdapter;
   slack?: SlackAdapter;
   teams?: TeamsAdapter;
   gchat?: GoogleChatAdapter;
@@ -70,6 +72,13 @@ const GITHUB_METHODS = [
   "deleteMessage",
   "addReaction",
   "removeReaction",
+  "fetchMessages",
+];
+const LINEAR_METHODS = [
+  "postMessage",
+  "editMessage",
+  "deleteMessage",
+  "addReaction",
   "fetchMessages",
 ];
 
@@ -192,6 +201,33 @@ export function buildAdapters(): Adapters {
         }),
         "github",
         GITHUB_METHODS,
+      );
+    }
+  }
+
+  // Linear adapter (optional)
+  if (process.env.LINEAR_WEBHOOK_SECRET) {
+    if (process.env.LINEAR_API_KEY) {
+      adapters.linear = withRecording(
+        createLinearAdapter({
+          apiKey: process.env.LINEAR_API_KEY,
+          webhookSecret: process.env.LINEAR_WEBHOOK_SECRET,
+          userName: process.env.LINEAR_BOT_USERNAME || "chat-sdk-bot",
+          logger: logger.child("linear"),
+        }),
+        "linear",
+        LINEAR_METHODS,
+      );
+    } else if (process.env.LINEAR_ACCESS_TOKEN) {
+      adapters.linear = withRecording(
+        createLinearAdapter({
+          accessToken: process.env.LINEAR_ACCESS_TOKEN,
+          webhookSecret: process.env.LINEAR_WEBHOOK_SECRET,
+          userName: process.env.LINEAR_BOT_USERNAME || "chat-sdk-bot",
+          logger: logger.child("linear"),
+        }),
+        "linear",
+        LINEAR_METHODS,
       );
     }
   }
