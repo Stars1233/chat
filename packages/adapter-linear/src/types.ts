@@ -68,12 +68,19 @@ export type LinearAdapterConfig =
 /**
  * Decoded thread ID for Linear.
  *
- * Each Linear issue is a single thread.
- * All comments on an issue belong to the same thread.
+ * Thread types:
+ * - Issue-level: Top-level comments on the issue (no commentId)
+ * - Comment thread: Replies nested under a specific root comment (has commentId)
  */
 export interface LinearThreadId {
   /** Linear issue UUID */
   issueId: string;
+  /**
+   * Root comment ID for comment-level threads.
+   * If present, this is a comment thread (replies nest under this comment).
+   * If absent, this is an issue-level thread (top-level comment).
+   */
+  commentId?: string;
 }
 
 // =============================================================================

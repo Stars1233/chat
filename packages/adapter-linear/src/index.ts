@@ -1,5 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { extractCard, ValidationError } from "@chat-adapter/shared";
+import type { LinearFetch, User } from "@linear/sdk";
 import { LinearClient } from "@linear/sdk";
 import type {
   Adapter,
@@ -220,6 +221,10 @@ export class LinearAdapter
 
   /**
    * Handle a new comment created on an issue.
+   *
+   * Threading logic:
+   * - If the comment has a parentId, it's a reply -> thread under the parent (root comment)
+   * - If no parentId, this is a root comment -> thread under this comment's own ID
    */
   private handleCommentCreated(
     payload: CommentWebhookPayload,
@@ -240,7 +245,12 @@ export class LinearAdapter
       return;
     }
 
-    const threadId = this.encodeThreadId({ issueId: data.issueId });
+    // Determine thread: use parentId as root if it's a reply, otherwise this comment is the root
+    const rootCommentId = data.parentId || data.id;
+    const threadId = this.encodeThreadId({
+      issueId: data.issueId,
+      commentId: rootCommentId,
+    });
 
     // Build message
     const message = this.buildMessage(data, actor, threadId);
@@ -325,14 +335,17 @@ export class LinearAdapter
   /**
    * Post a message to a thread (create a comment on an issue).
    *
-   * Uses LinearClient.createComment({ issueId, body }).
+   * For comment-level threads, uses parentId to reply under the root comment.
+   * For issue-level threads, creates a top-level comment.
+   *
+   * Uses LinearClient.createComment({ issueId, body, parentId? }).
    * @see https://linear.app/developers/sdk-fetching-and-modifying-data#mutations
    */
   async postMessage(
     threadId: string,
     message: AdapterPostableMessage,
   ): Promise<RawMessage<LinearRawMessage>> {
-    const { issueId } = this.decodeThreadId(threadId);
+    const { issueId, commentId } = this.decodeThreadId(threadId);
 
     // Render message to markdown
     let body: string;
@@ -347,9 +360,11 @@ export class LinearAdapter
     body = convertEmojiPlaceholders(body, "linear");
 
     // Create the comment via Linear SDK
+    // If commentId is present, reply under that comment (comment-level thread)
     const commentPayload = await this.linearClient.createComment({
       issueId,
       body,
+      parentId: commentId,
     });
 
     const comment = await commentPayload.comment;
@@ -478,22 +493,110 @@ export class LinearAdapter
   }
 
   /**
-   * Fetch messages from a thread (issue comments).
+   * Fetch messages from a thread.
+   *
+   * For issue-level threads: fetches all top-level issue comments.
+   * For comment-level threads: fetches the root comment and its children (replies).
    */
   async fetchMessages(
     threadId: string,
     options?: FetchOptions,
   ): Promise<FetchResult<LinearRawMessage>> {
-    const { issueId } = this.decodeThreadId(threadId);
+    const { issueId, commentId } = this.decodeThreadId(threadId);
 
+    if (commentId) {
+      // Comment-level thread: fetch root comment's children
+      return this.fetchCommentThread(threadId, issueId, commentId, options);
+    }
+
+    // Issue-level thread: fetch all top-level comments
+    return this.fetchIssueComments(threadId, issueId, options);
+  }
+
+  /**
+   * Fetch top-level comments on an issue.
+   */
+  private async fetchIssueComments(
+    threadId: string,
+    issueId: string,
+    options?: FetchOptions,
+  ): Promise<FetchResult<LinearRawMessage>> {
     const issue = await this.linearClient.issue(issueId);
     const commentsConnection = await issue.comments({
       first: options?.limit ?? 50,
     });
 
+    const messages = await this.commentsToMessages(
+      commentsConnection.nodes,
+      threadId,
+      issueId,
+    );
+
+    return {
+      messages,
+      nextCursor: commentsConnection.pageInfo.hasNextPage
+        ? commentsConnection.pageInfo.endCursor
+        : undefined,
+    };
+  }
+
+  /**
+   * Fetch a comment thread (root comment + its children/replies).
+   */
+  private async fetchCommentThread(
+    threadId: string,
+    issueId: string,
+    commentId: string,
+    options?: FetchOptions,
+  ): Promise<FetchResult<LinearRawMessage>> {
+    const rootComment = await this.linearClient.comment({ id: commentId });
+    if (!rootComment) {
+      return { messages: [] };
+    }
+
+    // Get the children (replies) of the root comment
+    const childrenConnection = await rootComment.children({
+      first: options?.limit ?? 50,
+    });
+
+    // Include the root comment as the first message, then its children
+    const rootMessages = await this.commentsToMessages(
+      [rootComment],
+      threadId,
+      issueId,
+    );
+    const childMessages = await this.commentsToMessages(
+      childrenConnection.nodes,
+      threadId,
+      issueId,
+    );
+
+    return {
+      messages: [...rootMessages, ...childMessages],
+      nextCursor: childrenConnection.pageInfo.hasNextPage
+        ? childrenConnection.pageInfo.endCursor
+        : undefined,
+    };
+  }
+
+  /**
+   * Convert an array of Linear SDK Comment objects to Message instances.
+   */
+  private async commentsToMessages(
+    comments: Array<{
+      id: string;
+      body: string;
+      createdAt: Date;
+      updatedAt: Date;
+      url: string;
+      user: LinearFetch<User> | undefined;
+    }>,
+    threadId: string,
+    issueId: string,
+  ): Promise<Message<LinearRawMessage>[]> {
     const messages: Message<LinearRawMessage>[] = [];
 
-    for (const comment of commentsConnection.nodes) {
+    for (const comment of comments) {
       const user = await comment.user;
       const author: Author = {
         userId: user?.id || "unknown",
@@ -538,12 +641,7 @@ export class LinearAdapter
       );
     }
 
-    return {
-      messages,
-      nextCursor: commentsConnection.pageInfo.hasNextPage
-        ? commentsConnection.pageInfo.endCursor
-        : undefined,
-    };
+    return messages;
   }
 
   /**
@@ -571,16 +669,23 @@ export class LinearAdapter
   /**
    * Encode a Linear thread ID.
    *
-   * Format: linear:{issueId}
+   * Formats:
+   * - Issue-level: linear:{issueId}
+   * - Comment thread: linear:{issueId}:c:{commentId}
    */
   encodeThreadId(platformData: LinearThreadId): string {
+    if (platformData.commentId) {
+      return `linear:${platformData.issueId}:c:${platformData.commentId}`;
+    }
     return `linear:${platformData.issueId}`;
   }
 
   /**
    * Decode a Linear thread ID.
    *
-   * Format: linear:{issueId}
+   * Formats:
+   * - Issue-level: linear:{issueId}
+   * - Comment thread: linear:{issueId}:c:{commentId}
    */
   decodeThreadId(threadId: string): LinearThreadId {
     if (!threadId.startsWith("linear:")) {
@@ -590,15 +695,25 @@ export class LinearAdapter
       );
     }
 
-    const issueId = threadId.slice(7);
-    if (!issueId) {
+    const withoutPrefix = threadId.slice(7);
+    if (!withoutPrefix) {
       throw new ValidationError(
         "linear",
         `Invalid Linear thread ID format: ${threadId}`,
       );
     }
 
-    return { issueId };
+    // Check for comment thread format: {issueId}:c:{commentId}
+    const commentMatch = withoutPrefix.match(/^([^:]+):c:([^:]+)$/);
+    if (commentMatch) {
+      return {
+        issueId: commentMatch[1],
+        commentId: commentMatch[2],
+      };
+    }
+
+    // Issue-level format: {issueId}
+    return { issueId: withoutPrefix };
   }
 
   /**

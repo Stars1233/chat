@@ -77,17 +77,15 @@ Best for personal projects, testing, or single-workspace bots.
 
 ### Option B: OAuth Application
 
-Better for multi-workspace integrations and public apps.
+Use OAuth if you want the bot to have its **own identity** in Linear (not attributed to you personally), or if you're building a public integration that other workspaces can install.
 
-1. Go to [Settings > API > OAuth applications](https://linear.app/settings/api/applications/new)
-2. Create a new OAuth2 application
-3. Configure redirect URLs
-4. Request the following [scopes](https://linear.app/developers/oauth-2-0-authentication#redirect-user-access-requests-to-linear):
-   - `read` - Read access (always required)
-   - `comments:create` - Create and update issue comments
-   - `issues:create` - Create and update issues (if your bot creates issues)
-5. Implement the [OAuth flow](https://linear.app/developers/oauth-2-0-authentication) to get an access token
-6. Set `LINEAR_ACCESS_TOKEN` environment variable
+> **Do you need OAuth?** For most use cases (personal bot, single workspace), **Option A (API Key) is simpler and sufficient**. You only need OAuth if:
+>
+> - You want the bot to appear as its own user (not as you)
+> - You're building a public app others install into their workspaces
+> - You want the bot to be `@`-mentionable as an [Agent](https://linear.app/developers/agents)
+
+See the [full OAuth setup guide](#oauth-setup-guide) below for step-by-step instructions.
 
 ### Webhook Setup
 
@@ -117,13 +115,19 @@ See the [Linear Webhooks documentation](https://linear.app/developers/webhooks) 
 
 ## Thread Model
 
-Each Linear issue maps to one thread:
+Linear has two levels of comment threading:
 
-| Type          | Thread ID Format     |
-| ------------- | -------------------- |
-| Issue comment | `linear:{issueId}`   |
+| Type            | Description                              | Thread ID Format                      |
+| --------------- | ---------------------------------------- | ------------------------------------- |
+| Issue-level     | Top-level comments on an issue           | `linear:{issueId}`                    |
+| Comment thread  | Replies nested under a specific comment  | `linear:{issueId}:c:{commentId}`      |
 
-Example thread ID: `linear:2174add1-f7c8-44e3-bbf3-2d60b5ea8bc9`
+When a user writes a comment, the bot replies **within the same comment thread** (nested under the same card). This matches the expected Linear UX where conversations are grouped.
+
+Example thread IDs:
+
+- `linear:2174add1-f7c8-44e3-bbf3-2d60b5ea8bc9` (issue-level)
+- `linear:2174add1-f7c8-44e3-bbf3-2d60b5ea8bc9:c:comment-abc123` (comment thread)
 
 ## Reactions
 
@@ -174,6 +178,96 @@ Linear supports standard [emoji reactions](https://linear.app/docs/comment-on-is
 
 - Linear API has [rate limits](https://linear.app/developers/graphql#rate-limiting)
 - The SDK handles rate limiting automatically in most cases
+
+## OAuth Setup Guide
+
+This guide walks through setting up a Linear OAuth application for your bot. This is only needed if you want the bot to act as its own identity rather than as your personal account (see [Option B](#option-b-oauth-application) above).
+
+### 1. Create the OAuth Application
+
+1. Go to [Settings > API > Applications](https://linear.app/settings/api/applications/new) in Linear
+2. Fill in:
+   - **Application name**: Your bot's name (e.g., "v0 Bot") -- this is how it appears in Linear
+   - **Application icon**: Upload an icon for the bot
+   - **Redirect callback URLs**: Add your OAuth callback URL (e.g., `https://your-domain.com/api/auth/linear/callback`)
+3. Click **Create**
+4. Note your **Client ID** and **Client Secret**
+
+**What are redirect URLs?** These are URLs in *your* application where Linear redirects the user after they authorize your app. They are **not** the same as webhook URLs. Your server handles this callback to exchange the authorization code for an access token.
+
+### 2. Implement the OAuth Callback
+
+Your app needs an endpoint to handle the OAuth redirect. When a workspace admin clicks "Install" on your app, Linear redirects them to your callback URL with an authorization `code`. You exchange this code for an access token.
+
+Example callback endpoint (Next.js API route):
+
+```typescript
+// app/api/auth/linear/callback/route.ts
+export async function GET(request: Request) {
+  const url = new URL(request.url);
+  const code = url.searchParams.get("code");
+
+  // Exchange code for access token
+  const response = await fetch("https://api.linear.app/oauth/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      code,
+      client_id: process.env.LINEAR_CLIENT_ID,
+      client_secret: process.env.LINEAR_CLIENT_SECRET,
+      redirect_uri: "https://your-domain.com/api/auth/linear/callback",
+      grant_type: "authorization_code",
+    }),
+  });
+
+  const { access_token } = await response.json();
+  // Store access_token securely for use with the adapter
+}
+```
+
+### 3. Build the Authorization URL
+
+Direct workspace admins to this URL to install the app:
+
+```
+https://linear.app/oauth/authorize?
+  client_id=YOUR_CLIENT_ID&
+  redirect_uri=https://your-domain.com/api/auth/linear/callback&
+  response_type=code&
+  scope=read,comments:create,issues:create&
+  state=RANDOM_STATE_VALUE
+```
+
+**Scopes to request:**
+
+| Scope | Required | Description |
+| ----- | -------- | ----------- |
+| `read` | Yes | Read workspace data (always included) |
+| `comments:create` | Yes | Create and update issue comments |
+| `issues:create` | Optional | Create and update issues |
+| `app:mentionable` | Optional | Make the bot `@`-mentionable (requires `actor=app`) |
+| `app:assignable` | Optional | Allow assigning issues to the bot (requires `actor=app`) |
+
+To make the bot its own user identity (recommended for agents), add `actor=app` to the authorization URL. This requires workspace admin to install.
+
+### 4. Use the Access Token
+
+Once you have the access token, pass it to the adapter:
+
+```typescript
+createLinearAdapter({
+  accessToken: storedAccessToken,
+  webhookSecret: process.env.LINEAR_WEBHOOK_SECRET!,
+  userName: "v0-bot",
+  logger: console,
+});
+```
+
+### 5. Token Refresh (if applicable)
+
+OAuth applications created after October 1, 2025 have refresh tokens enabled by default. Access tokens expire after **24 hours**. See the [Linear OAuth docs](https://linear.app/developers/oauth-2-0-authentication#refresh-an-access-token) for refresh token handling.
+
+For full details, see the [Linear OAuth 2.0 documentation](https://linear.app/developers/oauth-2-0-authentication).
 
 ## License
 

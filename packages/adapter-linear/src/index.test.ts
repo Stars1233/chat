@@ -20,7 +20,7 @@ function createTestAdapter(): LinearAdapter {
 }
 
 describe("encodeThreadId", () => {
-  it("should encode a simple issue ID", () => {
+  it("should encode an issue-level thread ID", () => {
     const adapter = createTestAdapter();
     const result = adapter.encodeThreadId({
       issueId: "abc123-def456-789",
@@ -28,29 +28,69 @@ describe("encodeThreadId", () => {
     expect(result).toBe("linear:abc123-def456-789");
   });
 
-  it("should encode a UUID issue ID", () => {
+  it("should encode a UUID issue-level thread ID", () => {
     const adapter = createTestAdapter();
     const result = adapter.encodeThreadId({
       issueId: "2174add1-f7c8-44e3-bbf3-2d60b5ea8bc9",
     });
     expect(result).toBe("linear:2174add1-f7c8-44e3-bbf3-2d60b5ea8bc9");
   });
+
+  it("should encode a comment-level thread ID", () => {
+    const adapter = createTestAdapter();
+    const result = adapter.encodeThreadId({
+      issueId: "issue-123",
+      commentId: "comment-456",
+    });
+    expect(result).toBe("linear:issue-123:c:comment-456");
+  });
+
+  it("should encode a comment-level thread with UUIDs", () => {
+    const adapter = createTestAdapter();
+    const result = adapter.encodeThreadId({
+      issueId: "2174add1-f7c8-44e3-bbf3-2d60b5ea8bc9",
+      commentId: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    });
+    expect(result).toBe(
+      "linear:2174add1-f7c8-44e3-bbf3-2d60b5ea8bc9:c:a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    );
+  });
 });
 
 describe("decodeThreadId", () => {
-  it("should decode a valid thread ID", () => {
+  it("should decode an issue-level thread ID", () => {
     const adapter = createTestAdapter();
     const result = adapter.decodeThreadId("linear:abc123-def456-789");
     expect(result).toEqual({ issueId: "abc123-def456-789" });
   });
 
-  it("should decode a UUID thread ID", () => {
+  it("should decode a UUID issue-level thread ID", () => {
     const adapter = createTestAdapter();
     const result = adapter.decodeThreadId(
       "linear:2174add1-f7c8-44e3-bbf3-2d60b5ea8bc9",
     );
     expect(result).toEqual({
       issueId: "2174add1-f7c8-44e3-bbf3-2d60b5ea8bc9",
+    });
+  });
+
+  it("should decode a comment-level thread ID", () => {
+    const adapter = createTestAdapter();
+    const result = adapter.decodeThreadId("linear:issue-123:c:comment-456");
+    expect(result).toEqual({
+      issueId: "issue-123",
+      commentId: "comment-456",
+    });
+  });
+
+  it("should decode a comment-level thread with UUIDs", () => {
+    const adapter = createTestAdapter();
+    const result = adapter.decodeThreadId(
+      "linear:2174add1-f7c8-44e3-bbf3-2d60b5ea8bc9:c:a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    );
+    expect(result).toEqual({
+      issueId: "2174add1-f7c8-44e3-bbf3-2d60b5ea8bc9",
+      commentId: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
     });
   });
 
@@ -77,9 +117,20 @@ describe("decodeThreadId", () => {
 });
 
 describe("encodeThreadId / decodeThreadId roundtrip", () => {
-  it("should round-trip correctly", () => {
+  it("should round-trip issue-level thread ID", () => {
     const adapter = createTestAdapter();
     const original = { issueId: "2174add1-f7c8-44e3-bbf3-2d60b5ea8bc9" };
+    const encoded = adapter.encodeThreadId(original);
+    const decoded = adapter.decodeThreadId(encoded);
+    expect(decoded).toEqual(original);
+  });
+
+  it("should round-trip comment-level thread ID", () => {
+    const adapter = createTestAdapter();
+    const original = {
+      issueId: "2174add1-f7c8-44e3-bbf3-2d60b5ea8bc9",
+      commentId: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    };
     const encoded = adapter.encodeThreadId(original);
     const decoded = adapter.decodeThreadId(encoded);
     expect(decoded).toEqual(original);
