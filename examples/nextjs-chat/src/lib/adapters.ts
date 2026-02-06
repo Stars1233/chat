@@ -206,8 +206,10 @@ export function buildAdapters(): Adapters {
   }
 
   // Linear adapter (optional)
+  // Supports API key, OAuth app (client credentials), or pre-obtained access token
   if (process.env.LINEAR_WEBHOOK_SECRET) {
     if (process.env.LINEAR_API_KEY) {
+      // API key authentication (simplest)
       adapters.linear = withRecording(
         createLinearAdapter({
           apiKey: process.env.LINEAR_API_KEY,
@@ -218,7 +220,24 @@ export function buildAdapters(): Adapters {
         "linear",
         LINEAR_METHODS,
       );
+    } else if (
+      process.env.LINEAR_CLIENT_ID &&
+      process.env.LINEAR_CLIENT_SECRET
+    ) {
+      // OAuth app with client credentials (recommended for apps)
+      adapters.linear = withRecording(
+        createLinearAdapter({
+          clientId: process.env.LINEAR_CLIENT_ID,
+          clientSecret: process.env.LINEAR_CLIENT_SECRET,
+          webhookSecret: process.env.LINEAR_WEBHOOK_SECRET,
+          userName: process.env.LINEAR_BOT_USERNAME || "chat-sdk-bot",
+          logger: logger.child("linear"),
+        }),
+        "linear",
+        LINEAR_METHODS,
+      );
     } else if (process.env.LINEAR_ACCESS_TOKEN) {
+      // Pre-obtained OAuth access token
       adapters.linear = withRecording(
         createLinearAdapter({
           accessToken: process.env.LINEAR_ACCESS_TOKEN,

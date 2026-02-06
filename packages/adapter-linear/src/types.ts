@@ -43,8 +43,8 @@ export interface LinearAdapterAPIKeyConfig extends LinearAdapterBaseConfig {
 }
 
 /**
- * Configuration using an OAuth access token.
- * Use this for OAuth applications that authenticate as a user or app.
+ * Configuration using an OAuth access token (pre-obtained).
+ * Use this if you've already obtained an access token through the OAuth flow.
  *
  * @see https://linear.app/developers/oauth-2-0-authentication
  */
@@ -52,14 +52,35 @@ export interface LinearAdapterOAuthConfig extends LinearAdapterBaseConfig {
   /** OAuth access token obtained through the OAuth flow */
   accessToken: string;
   apiKey?: never;
+  clientId?: never;
+  clientSecret?: never;
 }
 
 /**
- * Linear adapter configuration - API Key or OAuth token.
+ * Configuration using OAuth client credentials (recommended for apps).
+ * The adapter handles token management internally - no need to store tokens.
+ *
+ * Uses the client_credentials grant type to obtain an app-level token.
+ * The token is valid for 30 days and auto-refreshes on 401.
+ *
+ * @see https://linear.app/developers/oauth-2-0-authentication#client-credentials-tokens
+ */
+export interface LinearAdapterAppConfig extends LinearAdapterBaseConfig {
+  /** OAuth application client ID */
+  clientId: string;
+  /** OAuth application client secret */
+  clientSecret: string;
+  apiKey?: never;
+  accessToken?: never;
+}
+
+/**
+ * Linear adapter configuration - API Key, OAuth token, or OAuth App (client credentials).
  */
 export type LinearAdapterConfig =
   | LinearAdapterAPIKeyConfig
-  | LinearAdapterOAuthConfig;
+  | LinearAdapterOAuthConfig
+  | LinearAdapterAppConfig;
 
 // =============================================================================
 // Thread ID

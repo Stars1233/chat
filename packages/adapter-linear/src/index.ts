@@ -33,6 +33,7 @@ import type {
 // Re-export types
 export type {
   LinearAdapterAPIKeyConfig,
+  LinearAdapterAppConfig,
   LinearAdapterConfig,
   LinearAdapterOAuthConfig,
   LinearRawMessage,
@@ -89,12 +90,19 @@ export class LinearAdapter
   readonly name = "linear";
   readonly userName: string;
 
-  private linearClient: LinearClient;
+  private linearClient!: LinearClient;
   private webhookSecret: string;
   private chat: ChatInstance | null = null;
   private logger: Logger;
   private _botUserId: string | null = null;
   private formatConverter = new LinearFormatConverter();
+
+  // Client credentials auth state
+  private clientCredentials: {
+    clientId: string;
+    clientSecret: string;
+  } | null = null;
+  private accessTokenExpiry: number | null = null;
 
   /** Bot user ID used for self-message detection */
   get botUserId(): string | undefined {
@@ -114,13 +122,26 @@ export class LinearAdapter
       this.linearClient = new LinearClient({
         accessToken: config.accessToken,
       });
+    } else if ("clientId" in config && config.clientId) {
+      // Client credentials mode - token will be fetched during initialize()
+      this.clientCredentials = {
+        clientId: config.clientId,
+        clientSecret: config.clientSecret,
+      };
     } else {
-      throw new Error("LinearAdapter requires either apiKey or accessToken");
+      throw new Error(
+        "LinearAdapter requires either apiKey, accessToken, or clientId/clientSecret",
+      );
     }
   }
 
   async initialize(chat: ChatInstance): Promise<void> {
     this.chat = chat;
+
+    // For client credentials mode, fetch an access token first
+    if (this.clientCredentials) {
+      await this.refreshClientCredentialsToken();
+    }
 
     // Fetch the bot's user ID for self-message detection
     // @see https://linear.app/developers/sdk-fetching-and-modifying-data
@@ -133,6 +154,68 @@ export class LinearAdapter
       });
     } catch (error) {
       this.logger.warn("Could not fetch Linear bot user ID", { error });
+    }
+  }
+
+  /**
+   * Fetch a new access token using client credentials grant.
+   * The token is valid for 30 days. The adapter auto-refreshes on 401.
+   *
+   * @see https://linear.app/developers/oauth-2-0-authentication#client-credentials-tokens
+   */
+  private async refreshClientCredentialsToken(): Promise<void> {
+    if (!this.clientCredentials) return;
+
+    const { clientId, clientSecret } = this.clientCredentials;
+
+    const response = await fetch("https://api.linear.app/oauth/token", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({
+        grant_type: "client_credentials",
+        client_id: clientId,
+        client_secret: clientSecret,
+        scope: "read,write,comments:create,issues:create",
+      }),
+    });
+
+    if (!response.ok) {
+      const errorBody = await response.text();
+      throw new Error(
+        `Failed to fetch Linear client credentials token: ${response.status} ${errorBody}`,
+      );
+    }
+
+    const data = (await response.json()) as {
+      access_token: string;
+      expires_in: number;
+    };
+
+    this.linearClient = new LinearClient({
+      accessToken: data.access_token,
+    });
+
+    // Track expiry so we can proactively refresh (with 1 hour buffer)
+    this.accessTokenExpiry = Date.now() + data.expires_in * 1000 - 3600000;
+
+    this.logger.info("Linear client credentials token obtained", {
+      expiresIn: `${Math.round(data.expires_in / 86400)} days`,
+    });
+  }
+
+  /**
+   * Ensure the client credentials token is still valid. Refresh if expired.
+   */
+  private async ensureValidToken(): Promise<void> {
+    if (
+      this.clientCredentials &&
+      this.accessTokenExpiry &&
+      Date.now() > this.accessTokenExpiry
+    ) {
+      this.logger.info("Linear access token expired, refreshing...");
+      await this.refreshClientCredentialsToken();
     }
   }
 
@@ -345,6 +428,7 @@ export class LinearAdapter
     threadId: string,
     message: AdapterPostableMessage,
   ): Promise<RawMessage<LinearRawMessage>> {
+    await this.ensureValidToken();
     const { issueId, commentId } = this.decodeThreadId(threadId);
 
     // Render message to markdown
@@ -400,6 +484,7 @@ export class LinearAdapter
     messageId: string,
     message: AdapterPostableMessage,
   ): Promise<RawMessage<LinearRawMessage>> {
+    await this.ensureValidToken();
     const { issueId } = this.decodeThreadId(threadId);
 
     // Render message to markdown
@@ -447,6 +532,7 @@ export class LinearAdapter
    * Uses LinearClient.deleteComment(id).
    */
   async deleteMessage(_threadId: string, messageId: string): Promise<void> {
+    await this.ensureValidToken();
     await this.linearClient.deleteComment(messageId);
   }
 
@@ -461,6 +547,7 @@ export class LinearAdapter
     messageId: string,
     emoji: EmojiValue | string,
   ): Promise<void> {
+    await this.ensureValidToken();
     const emojiStr = this.resolveEmoji(emoji);
     await this.linearClient.createReaction({
       commentId: messageId,
@@ -502,6 +589,7 @@ export class LinearAdapter
     threadId: string,
     options?: FetchOptions,
   ): Promise<FetchResult<LinearRawMessage>> {
+    await this.ensureValidToken();
     const { issueId, commentId } = this.decodeThreadId(threadId);
 
     if (commentId) {
@@ -648,6 +736,7 @@ export class LinearAdapter
    * Fetch thread info for a Linear issue.
    */
   async fetchThread(threadId: string): Promise<ThreadInfo> {
+    await this.ensureValidToken();
     const { issueId } = this.decodeThreadId(threadId);
 
     const issue = await this.linearClient.issue(issueId);
