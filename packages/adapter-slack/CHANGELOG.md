@@ -1,5 +1,14 @@
 # @chat-adapter/slack
 
+## 4.8.0
+
+### Patch Changes
+
+- ba2a9ca: Fix double-wrapping of Slack mentions when input already contains `<@user>` format
+- Updated dependencies [cca9867]
+  - chat@4.8.0
+  - @chat-adapter/shared@4.8.0
+
 ## 4.7.2
 
 ### Patch Changes

@@ -1,6 +1,6 @@
 {
   "name": "@chat-adapter/linear",
-  "version": "0.0.1",
+  "version": "4.8.0",
   "description": "Linear adapter for chat - issue comment threads",
   "type": "module",
   "main": "./dist/index.js",
