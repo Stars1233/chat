@@ -15,6 +15,7 @@
     "@chat-adapter/discord": "workspace:*",
     "@chat-adapter/gchat": "workspace:*",
     "@chat-adapter/github": "workspace:*",
+    "@chat-adapter/linear": "workspace:*",
     "@chat-adapter/slack": "workspace:*",
     "@chat-adapter/state-redis": "workspace:*",
     "@chat-adapter/teams": "workspace:*",
