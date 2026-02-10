@@ -183,9 +183,7 @@ describe("Slack Multi-Workspace Replay Tests", () => {
     expect(mentions).toHaveLength(2);
     expect(mentions[0].message.text).toContain("testing");
     expect(mentions[1].message.text).toContain("hello from team 2");
-    expect(mentions[1].message.author.userId).toBe(
-      team2.mention.event.user,
-    );
+    expect(mentions[1].message.author.userId).toBe(team2.mention.event.user);
   });
 
   it("should encrypt token when encryption key is provided", async () => {
