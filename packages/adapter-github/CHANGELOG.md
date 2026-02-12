@@ -1,5 +1,13 @@
 # @chat-adapter/github
 
+## 4.9.1
+
+### Patch Changes
+
+- Updated dependencies [18ce1d0]
+  - @chat-adapter/shared@4.9.1
+  - chat@4.9.1
+
 ## 4.9.0
 
 ### Patch Changes

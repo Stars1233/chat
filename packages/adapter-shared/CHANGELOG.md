@@ -1,5 +1,12 @@
 # @chat-adapter/shared
 
+## 4.9.1
+
+### Patch Changes
+
+- 18ce1d0: Exclude action buttons from card fallback text so they no longer appear in Slack notification previews
+  - chat@4.9.1
+
 ## 4.9.0
 
 ### Patch Changes
