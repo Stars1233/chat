@@ -259,7 +259,9 @@ function childToFallbackText(child: CardChild): string | null {
         .map((f) => `**${convertEmoji(f.label)}**: ${convertEmoji(f.value)}`)
         .join("\n");
     case "actions":
-      return `[${child.children.map((b) => convertEmoji(b.label)).join("] [")}]`;
+      // Actions are interactive-only — exclude from fallback text.
+      // See: https://docs.slack.dev/reference/methods/chat.postMessage
+      return null;
     case "section":
       return child.children
         .map((c) => childToFallbackText(c))
