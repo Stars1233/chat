@@ -126,6 +126,7 @@ export interface ModalProps {
   submitLabel?: string;
   closeLabel?: string;
   notifyOnClose?: boolean;
+  privateMetadata?: string;
   children?: unknown;
 }
 
@@ -460,6 +461,7 @@ function resolveJSXElement(element: JSXElement): AnyCardElement {
       submitLabel: props.submitLabel,
       closeLabel: props.closeLabel,
       notifyOnClose: props.notifyOnClose,
+      privateMetadata: props.privateMetadata,
       children: filterModalChildren(processedChildren),
     });
   }

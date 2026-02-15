@@ -32,6 +32,52 @@ export interface SlackModalResponse {
   view?: SlackView;
 }
 
+// ============================================================================
+// Private metadata encoding
+// ============================================================================
+
+export interface ModalMetadata {
+  contextId?: string;
+  privateMetadata?: string;
+}
+
+/**
+ * Encode contextId and user privateMetadata into a single string
+ * for Slack's private_metadata field.
+ */
+export function encodeModalMetadata(meta: ModalMetadata): string | undefined {
+  if (!meta.contextId && !meta.privateMetadata) return undefined;
+  return JSON.stringify({ c: meta.contextId, m: meta.privateMetadata });
+}
+
+/**
+ * Decode Slack's private_metadata back into contextId and user privateMetadata.
+ * Falls back to treating the raw string as a plain contextId for backward compat.
+ */
+export function decodeModalMetadata(raw?: string): ModalMetadata {
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw);
+    if (
+      typeof parsed === "object" &&
+      parsed !== null &&
+      ("c" in parsed || "m" in parsed)
+    ) {
+      return {
+        contextId: parsed.c || undefined,
+        privateMetadata: parsed.m || undefined,
+      };
+    }
+  } catch {
+    // Not JSON — treat as legacy plain contextId
+  }
+  return { contextId: raw };
+}
+
+// ============================================================================
+// Modal view conversion
+// ============================================================================
+
 export function modalToSlackView(
   modal: ModalElement,
   contextId?: string,

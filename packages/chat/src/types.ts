@@ -1301,6 +1301,11 @@ export interface ModalSubmitEvent<TRawMessage = unknown> {
   /** Raw platform-specific payload */
   raw: unknown;
   /**
+   * The private metadata string set when the modal was created.
+   * Use this to pass arbitrary context (e.g., JSON) through the modal lifecycle.
+   */
+  privateMetadata?: string;
+  /**
    * The thread where the modal was originally triggered from.
    * Available when the modal was opened via ActionEvent.openModal().
    */
@@ -1327,6 +1332,11 @@ export interface ModalCloseEvent<TRawMessage = unknown> {
   adapter: Adapter;
   /** Raw platform-specific payload */
   raw: unknown;
+  /**
+   * The private metadata string set when the modal was created.
+   * Use this to pass arbitrary context (e.g., JSON) through the modal lifecycle.
+   */
+  privateMetadata?: string;
   /**
    * The thread where the modal was originally triggered from.
    * Available when the modal was opened via ActionEvent.openModal().

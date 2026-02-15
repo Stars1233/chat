@@ -48,7 +48,12 @@ import {
   isEncryptedTokenData,
 } from "./crypto";
 import { SlackFormatConverter } from "./markdown";
-import { modalToSlackView, type SlackModalResponse } from "./modals";
+import {
+  decodeModalMetadata,
+  encodeModalMetadata,
+  modalToSlackView,
+  type SlackModalResponse,
+} from "./modals";
 
 export interface SlackAdapterConfig {
   /** Bot token (xoxb-...). Required for single-workspace mode. Omit for multi-workspace. */
@@ -781,13 +786,16 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
       }
     }
 
-    // The contextId is stored in private_metadata
-    const contextId = payload.view.private_metadata || undefined;
+    // Decode contextId and user privateMetadata from private_metadata
+    const { contextId, privateMetadata } = decodeModalMetadata(
+      payload.view.private_metadata || undefined,
+    );
 
     const event = {
       callbackId: payload.view.callback_id,
       viewId: payload.view.id,
       values,
+      privateMetadata,
       user: {
         userId: payload.user.id,
         userName: payload.user.username || payload.user.name || "unknown",
@@ -825,12 +833,15 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
       return;
     }
 
-    // The contextId is stored in private_metadata
-    const contextId = payload.view.private_metadata || undefined;
+    // Decode contextId and user privateMetadata from private_metadata
+    const { contextId, privateMetadata } = decodeModalMetadata(
+      payload.view.private_metadata || undefined,
+    );
 
     const event = {
       callbackId: payload.view.callback_id,
       viewId: payload.view.id,
+      privateMetadata,
       user: {
         userId: payload.user.id,
         userName: payload.user.username || payload.user.name || "unknown",
@@ -856,7 +867,11 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
         return { response_action: "errors", errors: response.errors };
       case "update": {
         const modal = this.convertModalJSX(response.modal);
-        const view = modalToSlackView(modal, contextId);
+        const metadata = encodeModalMetadata({
+          contextId,
+          privateMetadata: modal.privateMetadata,
+        });
+        const view = modalToSlackView(modal, metadata);
         return {
           response_action: "update",
           view,
@@ -864,7 +879,11 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
       }
       case "push": {
         const modal = this.convertModalJSX(response.modal);
-        const view = modalToSlackView(modal, contextId);
+        const metadata = encodeModalMetadata({
+          contextId,
+          privateMetadata: modal.privateMetadata,
+        });
+        const view = modalToSlackView(modal, metadata);
         return {
           response_action: "push",
           view,
@@ -1326,7 +1345,11 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
     modal: ModalElement,
     contextId?: string,
   ): Promise<{ viewId: string }> {
-    const view = modalToSlackView(modal, contextId);
+    const metadata = encodeModalMetadata({
+      contextId,
+      privateMetadata: modal.privateMetadata,
+    });
+    const view = modalToSlackView(modal, metadata);
 
     this.logger.debug("Slack API: views.open", {
       triggerId,

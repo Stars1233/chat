@@ -577,4 +577,19 @@ describe("toModalElement", () => {
     expect(modal?.closeLabel).toBe("Cancel");
     expect(modal?.notifyOnClose).toBe(true);
   });
+
+  it("preserves privateMetadata from JSX props", () => {
+    const metadata = JSON.stringify({ chatId: "abc", scope: "team" });
+    const jsxElement = jsx(Modal, {
+      callbackId: "meta_modal",
+      title: "With Metadata",
+      privateMetadata: metadata,
+    });
+    const modal = toModalElement(jsxElement);
+
+    expect(modal?.privateMetadata).toBe(metadata);
+    const parsed = JSON.parse(modal?.privateMetadata as string);
+    expect(parsed.chatId).toBe("abc");
+    expect(parsed.scope).toBe("team");
+  });
 });

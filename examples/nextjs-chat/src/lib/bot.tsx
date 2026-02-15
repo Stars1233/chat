@@ -100,6 +100,9 @@ bot.onNewMention(async (thread, message) => {
         <Button id="info">Show Info</Button>
         <Button id="feedback">Send Feedback</Button>
         <Button id="messages">Fetch Messages</Button>
+        <Button id="report" value="bug">
+          Report Bug
+        </Button>
         <LinkButton url="https://vercel.com">Open Link</LinkButton>
         <Button id="goodbye" style="danger">
           Goodbye
@@ -175,6 +178,70 @@ bot.onAction("feedback", async (event) => {
         optional
       />
     </Modal>,
+  );
+});
+
+// Open bug report modal with privateMetadata carrying context from button value
+bot.onAction("report", async (event) => {
+  await event.openModal(
+    <Modal
+      callbackId="report_form"
+      title="Report Bug"
+      submitLabel="Submit"
+      privateMetadata={JSON.stringify({
+        reportType: event.value,
+        threadId: event.threadId,
+        reporter: event.user.userId,
+      })}
+    >
+      <TextInput
+        id="title"
+        label="Bug Title"
+        placeholder="Brief description of the issue"
+      />
+      <TextInput
+        id="steps"
+        label="Steps to Reproduce"
+        placeholder="1. Go to...\n2. Click on..."
+        multiline
+      />
+      <Select id="severity" label="Severity">
+        <SelectOption label="Low" value="low" />
+        <SelectOption label="Medium" value="medium" />
+        <SelectOption label="High" value="high" />
+        <SelectOption label="Critical" value="critical" />
+      </Select>
+    </Modal>,
+  );
+});
+
+// Handle bug report modal — reads context from privateMetadata
+bot.onModalSubmit("report_form", async (event) => {
+  console.log("report_form privateMetadata:", event.privateMetadata);
+  const metadata = event.privateMetadata
+    ? JSON.parse(event.privateMetadata)
+    : {};
+  const { title, steps, severity } = event.values;
+
+  if (!title || title.length < 3) {
+    return {
+      action: "errors" as const,
+      errors: { title: "Title must be at least 3 characters" },
+    };
+  }
+
+  await event.relatedThread?.post(
+    <Card title={`${emoji.memo} Bug Report Filed`}>
+      <Fields>
+        <Field label="Title" value={title} />
+        <Field label="Severity" value={severity} />
+        <Field label="Reporter" value={event.user.fullName} />
+        <Field label="Report Type" value={metadata.reportType || "unknown"} />
+        <Field label="Thread" value={metadata.threadId || "unknown"} />
+      </Fields>
+      <Divider />
+      <Text>{`**Steps to Reproduce:**\n${steps}`}</Text>
+    </Card>,
   );
 });
 

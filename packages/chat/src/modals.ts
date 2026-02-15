@@ -28,6 +28,8 @@ export interface ModalElement {
   submitLabel?: string;
   closeLabel?: string;
   notifyOnClose?: boolean;
+  /** Arbitrary string passed through the modal lifecycle (e.g., JSON context). */
+  privateMetadata?: string;
   children: ModalChild[];
 }
 
@@ -95,6 +97,8 @@ export interface ModalOptions {
   submitLabel?: string;
   closeLabel?: string;
   notifyOnClose?: boolean;
+  /** Arbitrary string passed through the modal lifecycle (e.g., JSON context). */
+  privateMetadata?: string;
   children?: ModalChild[];
 }
 
@@ -106,6 +110,7 @@ export function Modal(options: ModalOptions): ModalElement {
     submitLabel: options.submitLabel,
     closeLabel: options.closeLabel,
     notifyOnClose: options.notifyOnClose,
+    privateMetadata: options.privateMetadata,
     children: options.children ?? [],
   };
 }
@@ -233,6 +238,7 @@ export function fromReactModalElement(
         submitLabel: props.submitLabel as string | undefined,
         closeLabel: props.closeLabel as string | undefined,
         notifyOnClose: props.notifyOnClose as boolean | undefined,
+        privateMetadata: props.privateMetadata as string | undefined,
         children: filterModalChildren(convertedChildren),
       });
 

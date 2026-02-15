@@ -1,6 +1,10 @@
 import { Modal, Select, SelectOption, TextInput } from "chat";
 import { describe, expect, it } from "vitest";
-import { modalToSlackView } from "./modals";
+import {
+  decodeModalMetadata,
+  encodeModalMetadata,
+  modalToSlackView,
+} from "./modals";
 
 describe("modalToSlackView", () => {
   it("converts a simple modal with text input", () => {
@@ -300,5 +304,99 @@ describe("modalToSlackView", () => {
     expect(view.blocks[0].type).toBe("input");
     expect(view.blocks[1].type).toBe("input");
     expect(view.blocks[2].type).toBe("input");
+  });
+});
+
+describe("encodeModalMetadata", () => {
+  it("returns undefined when both fields are empty", () => {
+    expect(encodeModalMetadata({})).toBeUndefined();
+  });
+
+  it("encodes contextId only", () => {
+    const encoded = encodeModalMetadata({ contextId: "uuid-123" });
+    expect(encoded).toBeDefined();
+    const parsed = JSON.parse(encoded as string);
+    expect(parsed.c).toBe("uuid-123");
+    expect(parsed.m).toBeUndefined();
+  });
+
+  it("encodes privateMetadata only", () => {
+    const encoded = encodeModalMetadata({
+      privateMetadata: '{"chatId":"abc"}',
+    });
+    expect(encoded).toBeDefined();
+    const parsed = JSON.parse(encoded as string);
+    expect(parsed.c).toBeUndefined();
+    expect(parsed.m).toBe('{"chatId":"abc"}');
+  });
+
+  it("encodes both contextId and privateMetadata", () => {
+    const encoded = encodeModalMetadata({
+      contextId: "uuid-123",
+      privateMetadata: '{"chatId":"abc"}',
+    });
+    expect(encoded).toBeDefined();
+    const parsed = JSON.parse(encoded as string);
+    expect(parsed.c).toBe("uuid-123");
+    expect(parsed.m).toBe('{"chatId":"abc"}');
+  });
+});
+
+describe("decodeModalMetadata", () => {
+  it("returns empty object for undefined input", () => {
+    expect(decodeModalMetadata(undefined)).toEqual({});
+  });
+
+  it("returns empty object for empty string", () => {
+    expect(decodeModalMetadata("")).toEqual({});
+  });
+
+  it("decodes contextId only", () => {
+    const encoded = JSON.stringify({ c: "uuid-123" });
+    expect(decodeModalMetadata(encoded)).toEqual({
+      contextId: "uuid-123",
+      privateMetadata: undefined,
+    });
+  });
+
+  it("decodes privateMetadata only", () => {
+    const encoded = JSON.stringify({ m: '{"chatId":"abc"}' });
+    expect(decodeModalMetadata(encoded)).toEqual({
+      contextId: undefined,
+      privateMetadata: '{"chatId":"abc"}',
+    });
+  });
+
+  it("decodes both contextId and privateMetadata", () => {
+    const encoded = JSON.stringify({
+      c: "uuid-123",
+      m: '{"chatId":"abc"}',
+    });
+    expect(decodeModalMetadata(encoded)).toEqual({
+      contextId: "uuid-123",
+      privateMetadata: '{"chatId":"abc"}',
+    });
+  });
+
+  it("falls back to treating plain string as contextId (backward compat)", () => {
+    expect(decodeModalMetadata("plain-uuid-456")).toEqual({
+      contextId: "plain-uuid-456",
+    });
+  });
+
+  it("falls back for JSON without c/m keys", () => {
+    expect(decodeModalMetadata('{"other":"value"}')).toEqual({
+      contextId: '{"other":"value"}',
+    });
+  });
+
+  it("roundtrips encode then decode", () => {
+    const original = {
+      contextId: "ctx-1",
+      privateMetadata: '{"key":"val"}',
+    };
+    const encoded = encodeModalMetadata(original);
+    const decoded = decodeModalMetadata(encoded);
+    expect(decoded).toEqual(original);
   });
 });
