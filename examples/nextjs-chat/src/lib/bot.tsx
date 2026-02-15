@@ -115,8 +115,44 @@ bot.onNewMention(async (thread, message) => {
 bot.onAction("ephemeral", async (event) => {
   await event.thread.postEphemeral(
     event.user,
-    "This is an ephemeral response!",
+    <Card title={`${emoji.eyes} Ephemeral Message`}>
+      <Text>
+        Only you can see this message. It will disappear when you reload.
+      </Text>
+      <Text>Try opening a modal from this ephemeral:</Text>
+      <Actions>
+        <Button id="ephemeral_modal" style="primary">
+          Open Modal
+        </Button>
+      </Actions>
+    </Card>,
     { fallbackToDM: true },
+  );
+});
+
+bot.onAction("ephemeral_modal", async (event) => {
+  await event.openModal(
+    <Modal
+      callbackId="ephemeral_modal_form"
+      title="Ephemeral Modal"
+      submitLabel="Submit"
+      closeLabel="Cancel"
+    >
+      <TextInput
+        id="response"
+        label="Your Response"
+        placeholder="Type something..."
+      />
+    </Modal>,
+  );
+});
+
+bot.onModalSubmit("ephemeral_modal_form", async (event) => {
+  await event.relatedMessage?.edit(
+    <Card title={`${emoji.check} Submitted!`}>
+      <Text>Your response: **{event.values.response}**</Text>
+      <Text>The original ephemeral message was updated.</Text>
+    </Card>,
   );
 });
 

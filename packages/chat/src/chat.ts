@@ -682,22 +682,26 @@ export class Chat<
   }
 
   /**
-   * Store modal context server-side and return a context ID.
+   * Store modal context server-side with a context ID.
    * Called when opening a modal to preserve thread/message for the submit handler.
    */
-  private async storeModalContext(
+  private storeModalContext(
     adapterName: string,
+    contextId: string,
     thread: ThreadImpl<TState>,
     message?: Message,
-  ): Promise<string> {
-    const contextId = crypto.randomUUID();
+  ): void {
     const key = `modal-context:${adapterName}:${contextId}`;
     const context: StoredModalContext = {
       thread: thread.toJSON(),
       message: message?.toJSON(),
     };
-    await this._stateAdapter.set(key, context, MODAL_CONTEXT_TTL_MS);
-    return contextId;
+    this._stateAdapter.set(key, context, MODAL_CONTEXT_TTL_MS).catch((err) => {
+      this.logger.error("Failed to store modal context", {
+        contextId,
+        error: err,
+      });
+    });
   }
 
   /**
@@ -759,26 +763,36 @@ export class Chat<
       return;
     }
 
+    const isEphemeralMessage = event.messageId?.startsWith("ephemeral:");
     const [isSubscribed, fetchedMessage] = await Promise.all([
       this._stateAdapter.isSubscribed(event.threadId),
-      event.messageId && event.adapter.fetchMessage
+      event.messageId && event.adapter.fetchMessage && !isEphemeralMessage
         ? event.adapter
             .fetchMessage(event.threadId, event.messageId)
-            .catch((err) => {
-              this.logger.warn("Failed to fetch message for action event", {
-                messageId: event.messageId,
-                error: err,
-              });
-              return null;
-            })
+            .catch(() => null)
         : Promise.resolve(null),
     ]);
+
+    const messageForThread = fetchedMessage
+      ? new Message(fetchedMessage)
+      : event.messageId
+        ? new Message({
+            id: event.messageId,
+            threadId: event.threadId,
+            text: "",
+            formatted: { type: "root", children: [] },
+            raw: event.raw,
+            author: event.user,
+            metadata: { dateSent: new Date(), edited: false },
+            attachments: [],
+          })
+        : ({} as Message);
 
     // Create thread for the action event
     const thread = await this.createThread(
       event.adapter,
       event.threadId,
-      fetchedMessage ?? ({} as Message),
+      messageForThread,
       isSubscribed,
     );
 
@@ -815,8 +829,10 @@ export class Chat<
           recentMessage && typeof recentMessage.toJSON === "function"
             ? recentMessage
             : undefined;
-        const contextId = await this.storeModalContext(
+        const contextId = crypto.randomUUID();
+        this.storeModalContext(
           event.adapter.name,
+          contextId,
           thread as ThreadImpl<TState>,
           message,
         );

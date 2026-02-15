@@ -285,7 +285,12 @@ export class ThreadImpl<TState = Record<string, unknown>>
     const rawMessage = await this.adapter.postMessage(this.id, postable);
 
     // Create a SentMessage with edit/delete capabilities
-    return this.createSentMessage(rawMessage.id, postable, rawMessage.threadId);
+    const result = this.createSentMessage(
+      rawMessage.id,
+      postable,
+      rawMessage.threadId,
+    );
+    return result;
   }
 
   async postEphemeral(

@@ -155,6 +155,7 @@ interface SlackBlockActionsPayload {
     message_ts: string;
     channel_id: string;
     is_ephemeral?: boolean;
+    thread_ts?: string;
   };
   channel: {
     id: string;
@@ -719,7 +720,8 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
 
     const channel = payload.channel?.id || payload.container?.channel_id;
     const messageTs = payload.message?.ts || payload.container?.message_ts;
-    const threadTs = payload.message?.thread_ts || messageTs;
+    const threadTs =
+      payload.message?.thread_ts || payload.container?.thread_ts || messageTs;
 
     if (!channel || !messageTs) {
       this.logger.warn("Missing channel or message_ts in block_actions", {
@@ -733,6 +735,13 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
       channel,
       threadTs: threadTs || messageTs,
     });
+
+    const isEphemeral = payload.container?.is_ephemeral === true;
+    const responseUrl = payload.response_url;
+    const messageId =
+      isEphemeral && responseUrl
+        ? this.encodeEphemeralMessageId(messageTs, responseUrl, payload.user.id)
+        : messageTs;
 
     // Process each action (usually just one, but can be multiple)
     for (const action of payload.actions) {
@@ -748,7 +757,7 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
           isBot: false,
           isMe: false,
         },
-        messageId: messageTs,
+        messageId,
         threadId,
         adapter: this,
         raw: payload,
@@ -1475,6 +1484,24 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
     messageId: string,
     message: AdapterPostableMessage,
   ): Promise<RawMessage<unknown>> {
+    const ephemeral = this.decodeEphemeralMessageId(messageId);
+    if (ephemeral) {
+      const { threadTs } = this.decodeThreadId(threadId);
+      const result = await this.sendToResponseUrl(
+        ephemeral.responseUrl,
+        "replace",
+        {
+          message,
+          threadTs,
+        },
+      );
+      return {
+        id: ephemeral.messageTs,
+        threadId,
+        raw: { ephemeral: true, ...result },
+      };
+    }
+
     const { channel } = this.decodeThreadId(threadId);
 
     try {
@@ -1549,6 +1576,11 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
   }
 
   async deleteMessage(threadId: string, messageId: string): Promise<void> {
+    const ephemeral = this.decodeEphemeralMessageId(messageId);
+    if (ephemeral) {
+      await this.sendToResponseUrl(ephemeral.responseUrl, "delete");
+      return;
+    }
     const { channel } = this.decodeThreadId(threadId);
 
     try {
@@ -2064,6 +2096,125 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
     }
 
     throw error;
+  }
+
+  /**
+   * Encode response_url and userId into messageId for ephemeral messages.
+   * This allows edit/delete operations to work via response_url.
+   */
+  private encodeEphemeralMessageId(
+    messageTs: string,
+    responseUrl: string,
+    userId: string,
+  ): string {
+    const data = JSON.stringify({ responseUrl, userId });
+    return `ephemeral:${messageTs}:${btoa(data)}`;
+  }
+
+  /**
+   * Decode ephemeral messageId to extract messageTs, responseUrl, and userId.
+   * Returns null if the messageId is not an ephemeral encoding.
+   */
+  private decodeEphemeralMessageId(
+    messageId: string,
+  ): { messageTs: string; responseUrl: string; userId: string } | null {
+    if (!messageId.startsWith("ephemeral:")) return null;
+    const parts = messageId.split(":");
+    if (parts.length < 3) return null;
+    const messageTs = parts[1];
+    const encodedData = parts.slice(2).join(":");
+    try {
+      const decoded = atob(encodedData);
+      try {
+        const data = JSON.parse(decoded);
+        if (data.responseUrl && data.userId) {
+          return {
+            messageTs,
+            responseUrl: data.responseUrl,
+            userId: data.userId,
+          };
+        }
+      } catch {
+        return { messageTs, responseUrl: decoded, userId: "" };
+      }
+      return null;
+    } catch {
+      this.logger.warn("Failed to decode ephemeral messageId", { messageId });
+      return null;
+    }
+  }
+
+  /**
+   * Send a request to Slack's response_url to modify an ephemeral message.
+   */
+  private async sendToResponseUrl(
+    responseUrl: string,
+    action: "replace" | "delete",
+    options?: { message?: AdapterPostableMessage; threadTs?: string },
+  ): Promise<Record<string, unknown>> {
+    let payload: Record<string, unknown>;
+
+    if (action === "delete") {
+      payload = { delete_original: true };
+    } else {
+      const message = options?.message;
+      if (!message) {
+        throw new ChatError(
+          "Message required for replace action",
+          "INVALID_ARGS",
+        );
+      }
+      const card = extractCard(message);
+      if (card) {
+        payload = {
+          replace_original: true,
+          text: cardToFallbackText(card),
+          blocks: cardToBlockKit(card),
+        };
+      } else {
+        payload = {
+          replace_original: true,
+          text: convertEmojiPlaceholders(
+            this.formatConverter.renderPostable(message),
+            "slack",
+          ),
+        };
+      }
+      if (options?.threadTs) {
+        payload.thread_ts = options.threadTs;
+      }
+    }
+    this.logger.debug("Slack response_url request", {
+      action,
+      threadTs: options?.threadTs,
+    });
+    const response = await fetch(responseUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      this.logger.error("Slack response_url failed", {
+        action,
+        status: response.status,
+        body: errorText,
+      });
+      throw new ChatError(
+        `Failed to ${action} via response_url: ${errorText}`,
+        response.status.toString(),
+      );
+    }
+    const responseText = await response.text();
+    if (responseText) {
+      try {
+        return JSON.parse(responseText) as Record<string, unknown>;
+      } catch {
+        return { raw: responseText };
+      }
+    }
+    return {};
   }
 }
 
