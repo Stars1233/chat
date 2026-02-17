@@ -9,6 +9,12 @@
     "indentStyle": "space",
     "indentWidth": 2
   },
+  "files": {
+    "includes": [
+      "**/*",
+      "!apps/docs"
+    ]
+  },
   "linter": {
     "enabled": true,
     "rules": {
