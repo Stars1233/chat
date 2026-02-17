@@ -10,13 +10,13 @@ This guide walks through setting up a Chat SDK bot with Next.js and Slack. The s
 
 Install the core SDK, a platform adapter, and a state adapter:
 
-```bash
+```sh title="Terminal"
 pnpm add chat @chat-adapter/slack @chat-adapter/state-redis
 ```
 
 For development without Redis, use the in-memory state adapter instead:
 
-```bash
+```sh title="Terminal"
 pnpm add chat @chat-adapter/slack @chat-adapter/state-memory
 ```
 
