@@ -1,0 +1,218 @@
+---
+title: Slack
+description: Configure the Slack adapter for single-workspace or multi-workspace OAuth deployments.
+type: integration
+prerequisites:
+  - /docs/getting-started
+---
+
+## Installation
+
+```sh title="Terminal"
+pnpm add @chat-adapter/slack
+```
+
+## Single-workspace mode
+
+For bots deployed to a single Slack workspace:
+
+```typescript title="lib/bot.ts" lineNumbers
+import { Chat } from "chat";
+import { createSlackAdapter } from "@chat-adapter/slack";
+
+const bot = new Chat({
+  userName: "mybot",
+  adapters: {
+    slack: createSlackAdapter({
+      botToken: process.env.SLACK_BOT_TOKEN!,
+      signingSecret: process.env.SLACK_SIGNING_SECRET!,
+    }),
+  },
+});
+
+bot.onNewMention(async (thread, message) => {
+  await thread.post("Hello from Slack!");
+});
+```
+
+## Multi-workspace mode
+
+For apps installed across multiple Slack workspaces via OAuth, omit `botToken` and provide OAuth credentials instead. The adapter resolves tokens dynamically from your state adapter using the `team_id` from incoming webhooks.
+
+```typescript title="lib/bot.ts" lineNumbers
+import { createSlackAdapter } from "@chat-adapter/slack";
+import { createRedisState } from "@chat-adapter/state-redis";
+
+const slackAdapter = createSlackAdapter({
+  signingSecret: process.env.SLACK_SIGNING_SECRET!,
+  clientId: process.env.SLACK_CLIENT_ID!,
+  clientSecret: process.env.SLACK_CLIENT_SECRET!,
+  encryptionKey: process.env.SLACK_ENCRYPTION_KEY,
+});
+
+const bot = new Chat({
+  userName: "mybot",
+  adapters: { slack: slackAdapter },
+  state: createRedisState({ url: process.env.REDIS_URL! }),
+});
+```
+
+### OAuth callback
+
+The adapter handles the full Slack OAuth V2 exchange. Point your OAuth redirect URL to a route that calls `handleOAuthCallback`:
+
+```typescript title="app/api/slack/install/callback/route.ts"
+import { slackAdapter } from "@/lib/bot";
+
+export async function GET(request: Request) {
+  const { teamId } = await slackAdapter.handleOAuthCallback(request);
+  return new Response(`Installed for team ${teamId}!`);
+}
+```
+
+### Using the adapter outside webhooks
+
+During webhook handling, the adapter resolves tokens automatically from `team_id`. Outside that context (e.g. cron jobs or background workers), use `getInstallation` and `withBotToken`:
+
+```typescript title="lib/bot.ts" lineNumbers
+const install = await slackAdapter.getInstallation(teamId);
+if (!install) throw new Error("Workspace not installed");
+
+await slackAdapter.withBotToken(install.botToken, async () => {
+  const thread = bot.thread("slack:C12345:1234567890.123456");
+  await thread.post("Hello from a cron job!");
+});
+```
+
+`withBotToken` uses `AsyncLocalStorage` under the hood, so concurrent calls with different tokens are isolated.
+
+### Removing installations
+
+```typescript title="lib/bot.ts"
+await slackAdapter.deleteInstallation(teamId);
+```
+
+### Token encryption
+
+Pass a base64-encoded 32-byte key as `encryptionKey` to encrypt bot tokens at rest using AES-256-GCM:
+
+```sh title="Terminal"
+openssl rand -base64 32
+```
+
+When `encryptionKey` is set, `setInstallation()` encrypts the token before storing and `getInstallation()` decrypts it transparently.
+
+## Slack app setup
+
+### 1. Create a Slack app
+
+1. Go to [api.slack.com/apps](https://api.slack.com/apps)
+2. Click **Create New App** then **From scratch**
+3. Enter app name and select workspace
+4. Click **Create App**
+
+### 2. Configure bot token scopes
+
+Go to **OAuth & Permissions** and add these **Bot Token Scopes**:
+
+| Scope | Description |
+|-------|-------------|
+| `app_mentions:read` | Receive @mention events |
+| `channels:history` | Read messages in public channels |
+| `channels:read` | View basic channel info |
+| `chat:write` | Send messages |
+| `groups:history` | Read messages in private channels |
+| `groups:read` | View basic private channel info |
+| `im:history` | Read direct messages |
+| `im:read` | View basic DM info |
+| `reactions:read` | View emoji reactions |
+| `reactions:write` | Add/remove emoji reactions |
+| `users:read` | View user info (for display names) |
+
+### 3. Install app to workspace
+
+**Single workspace:**
+
+1. Go to **OAuth & Permissions**
+2. Click **Install to Workspace** and authorize
+3. Copy the **Bot User OAuth Token** (`xoxb-...`) as `SLACK_BOT_TOKEN`
+
+**Multi-workspace:**
+
+Enable **Manage Distribution** under **Basic Information**, then set up an OAuth redirect URL pointing to your callback route. The adapter handles the token exchange via `handleOAuthCallback()`.
+
+### 4. Get signing secret
+
+1. Go to **Basic Information**
+2. Under **App Credentials**, copy:
+   - **Signing Secret** as `SLACK_SIGNING_SECRET`
+   - **Client ID** as `SLACK_CLIENT_ID` (multi-workspace only)
+   - **Client Secret** as `SLACK_CLIENT_SECRET` (multi-workspace only)
+
+### 5. Configure event subscriptions
+
+1. Go to **Event Subscriptions**
+2. Toggle **Enable Events** to On
+3. Set **Request URL** to `https://your-domain.com/api/webhooks/slack`
+4. Under **Subscribe to bot events**, add:
+   - `app_mention` — when someone @mentions your bot
+   - `message.channels` — messages in public channels
+   - `message.groups` — messages in private channels
+   - `message.im` — direct messages
+5. Click **Save Changes**
+
+### 6. Enable interactivity (optional)
+
+For buttons, modals, and other interactive components:
+
+1. Go to **Interactivity & Shortcuts**
+2. Toggle **Interactivity** to On
+3. Set **Request URL** to `https://your-domain.com/api/webhooks/slack`
+
+## Configuration
+
+| Option | Required | Description |
+|--------|----------|-------------|
+| `botToken` | No | Bot token (`xoxb-...`). Required for single-workspace, omit for multi-workspace |
+| `signingSecret` | Yes | Signing secret for webhook verification |
+| `clientId` | No | App client ID (required for multi-workspace OAuth) |
+| `clientSecret` | No | App client secret (required for multi-workspace OAuth) |
+| `encryptionKey` | No | Base64-encoded 32-byte AES-256-GCM key for encrypting stored tokens |
+
+## Environment variables
+
+```bash title=".env.local"
+SLACK_BOT_TOKEN=xoxb-...             # Single-workspace only
+SLACK_SIGNING_SECRET=...
+SLACK_CLIENT_ID=...                  # Multi-workspace only
+SLACK_CLIENT_SECRET=...              # Multi-workspace only
+SLACK_ENCRYPTION_KEY=...             # Optional, for token encryption
+```
+
+## Features
+
+| Feature | Supported |
+|---------|-----------|
+| Mentions | Yes |
+| Reactions (add/remove) | Yes |
+| Cards (Block Kit) | Yes |
+| Modals | Yes |
+| Streaming | Native API |
+| DMs | Yes |
+| Ephemeral messages | Yes (native) |
+| File uploads | Yes |
+| Typing indicator | Yes |
+| Message history | Yes |
+
+## Troubleshooting
+
+### "Invalid signature" error
+
+- Verify `SLACK_SIGNING_SECRET` is correct
+- Check that the request timestamp is within 5 minutes (clock sync issue)
+
+### Bot not responding to messages
+
+- Verify event subscriptions are configured
+- Check that the bot has been added to the channel
+- Ensure the webhook URL is correct and accessible

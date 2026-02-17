@@ -1,0 +1,59 @@
+---
+title: Overview
+description: Platform-specific adapters for Slack, Teams, Google Chat, Discord, GitHub, and Linear.
+type: overview
+prerequisites:
+  - /docs/getting-started
+---
+
+Adapters handle webhook verification, message parsing, and API calls for each platform. Install only the adapters you need.
+
+## Platform comparison
+
+| Platform | Package | Mentions | Reactions | Cards | Modals | Streaming | DMs |
+|----------|---------|----------|-----------|-------|--------|-----------|-----|
+| [Slack](/docs/adapters/slack) | `@chat-adapter/slack` | Yes | Yes | Block Kit | Yes | Native | Yes |
+| [Microsoft Teams](/docs/adapters/teams) | `@chat-adapter/teams` | Yes | Read-only | Adaptive Cards | No | Post+Edit | Yes |
+| [Google Chat](/docs/adapters/gchat) | `@chat-adapter/gchat` | Yes | Yes | Google Chat Cards | No | Post+Edit | Yes |
+| [Discord](/docs/adapters/discord) | `@chat-adapter/discord` | Yes | Yes | Embeds | No | Post+Edit | Yes |
+| [GitHub](/docs/adapters/github) | `@chat-adapter/github` | Yes | Yes | GFM Markdown | No | No | No |
+| [Linear](/docs/adapters/linear) | `@chat-adapter/linear` | Yes | Yes | Markdown | No | No | No |
+
+## How adapters work
+
+Each adapter implements a standard interface that the `Chat` class uses to route events and send messages. When a webhook arrives:
+
+1. The adapter verifies the request signature
+2. Parses the platform-specific payload into a normalized `Message`
+3. Calls `chat.handleIncomingMessage()` to route to your handlers
+4. Converts outgoing messages from markdown/JSX to the platform's native format
+
+## Using multiple adapters
+
+Register multiple adapters and your event handlers work across all of them:
+
+```typescript title="lib/bot.ts" lineNumbers
+import { Chat } from "chat";
+import { createSlackAdapter } from "@chat-adapter/slack";
+import { createTeamsAdapter } from "@chat-adapter/teams";
+import { createGoogleChatAdapter } from "@chat-adapter/gchat";
+import { createRedisState } from "@chat-adapter/state-redis";
+
+const bot = new Chat({
+  userName: "mybot",
+  adapters: {
+    slack: createSlackAdapter({ /* ... */ }),
+    teams: createTeamsAdapter({ /* ... */ }),
+    gchat: createGoogleChatAdapter({ /* ... */ }),
+  },
+  state: createRedisState({ url: process.env.REDIS_URL! }),
+});
+
+// This handler fires for mentions on any platform
+bot.onNewMention(async (thread) => {
+  await thread.subscribe();
+  await thread.post("Hello!");
+});
+```
+
+Each adapter creates a webhook handler accessible via `bot.webhooks.slack`, `bot.webhooks.teams`, etc.
