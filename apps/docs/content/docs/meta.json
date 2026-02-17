@@ -6,7 +6,6 @@
     "getting-started",
     "usage",
     "---",
-    "adapters",
     "state",
     "---",
     "cards",
@@ -16,6 +15,9 @@
     "streaming",
     "files",
     "direct-messages",
-    "ephemeral-messages"
+    "ephemeral-messages",
+    "---",
+    "---Adapters---",
+    "...adapters"
   ]
 }
