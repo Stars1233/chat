@@ -14,6 +14,7 @@ import type {
   Adapter,
   AdapterPostableMessage,
   Attachment,
+  ChannelInfo,
   ChatInstance,
   EmojiValue,
   EphemeralMessage,
@@ -21,6 +22,8 @@ import type {
   FetchResult,
   FileUpload,
   FormattedContent,
+  ListThreadsOptions,
+  ListThreadsResult,
   Logger,
   ModalElement,
   ModalResponse,
@@ -28,6 +31,7 @@ import type {
   ReactionEvent,
   StreamOptions,
   ThreadInfo,
+  ThreadSummary,
   WebhookOptions,
 } from "chat";
 
@@ -115,6 +119,10 @@ export interface SlackEvent {
   }>;
   team?: string;
   team_id?: string;
+  /** Number of replies in the thread (present on thread parent messages) */
+  reply_count?: number;
+  /** Timestamp of the latest reply (present on thread parent messages) */
+  latest_reply?: string;
 }
 
 /** Slack reaction event payload */
@@ -992,12 +1000,23 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
 
     // Let Chat class handle async processing, waitUntil, and isMe filtering
     // Use factory function since parseSlackMessage is async (user lookup)
-    this.chat.processMessage(
-      this,
-      threadId,
-      () => this.parseSlackMessage(event, threadId),
-      options,
-    );
+    //
+    // In multi-workspace mode, the request context (token + botUserId) is set via
+    // AsyncLocalStorage during synchronous webhook handling. processMessage creates
+    // an async task (via waitUntil) that may run after requestContext.run() returns.
+    // Node.js AsyncLocalStorage propagates context to async continuations as long as
+    // the Promise is created within the run() callback. We call processMessage inside
+    // run() so the async task and all its awaits inherit the context.
+    const isMention = event.type === "app_mention";
+    const factory = async (): Promise<Message<unknown>> => {
+      const msg = await this.parseSlackMessage(event, threadId);
+      if (isMention) {
+        msg.isMention = true;
+      }
+      return msg;
+    };
+
+    this.chat.processMessage(this, threadId, factory, options);
   }
 
   /**
@@ -1061,13 +1080,61 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
     this.chat.processReaction({ ...reactionEvent, adapter: this }, options);
   }
 
+  /**
+   * Resolve inline user mentions in Slack mrkdwn text.
+   * Converts <@U123> to <@U123|displayName> so that toAst/extractPlainText
+   * renders them as @displayName instead of @U123.
+   *
+   * @param skipSelfMention - When true, skips the bot's own user ID so that
+   *   mention detection (which looks for @botUserId in the text) continues to
+   *   work. Set to false when parsing historical/channel messages where mention
+   *   detection doesn't apply.
+   */
+  private async resolveInlineMentions(
+    text: string,
+    skipSelfMention: boolean,
+  ): Promise<string> {
+    const mentionPattern = /<@([A-Z0-9]+)(?:\|[^>]*)?>/g;
+    const userIds = new Set<string>();
+    let match: RegExpExecArray | null = mentionPattern.exec(text);
+    while (match) {
+      userIds.add(match[1]);
+      match = mentionPattern.exec(text);
+    }
+    if (userIds.size === 0) return text;
+
+    // Don't resolve the bot's own mention when processing incoming webhooks —
+    // detectMention needs @botUserId in the text
+    if (skipSelfMention && this._botUserId) {
+      userIds.delete(this._botUserId);
+    }
+    if (userIds.size === 0) return text;
+
+    // Look up all mentioned users in parallel
+    const lookups = await Promise.all(
+      [...userIds].map(async (uid) => {
+        const info = await this.lookupUser(uid);
+        return [uid, info.displayName] as const;
+      }),
+    );
+    const nameMap = new Map(lookups);
+
+    // Replace <@U123> and <@U123|old> with <@U123|resolvedName>
+    return text.replace(/<@([A-Z0-9]+)(?:\|[^>]*)?>/g, (_m, uid: string) => {
+      const name = nameMap.get(uid);
+      return name ? `<@${uid}|${name}>` : `<@${uid}>`;
+    });
+  }
+
   private async parseSlackMessage(
     event: SlackEvent,
     threadId: string,
+    options?: { skipSelfMention?: boolean },
   ): Promise<Message<unknown>> {
     const isMe = this.isMessageFromSelf(event);
+    const skipSelfMention = options?.skipSelfMention ?? true;
 
-    const text = event.text || "";
+    const rawText = event.text || "";
 
     // Get user info - for human users we need to look up the display name
     // since Slack events only include the user ID, not the username
@@ -1080,6 +1147,9 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
       userName = userInfo.displayName;
       fullName = userInfo.realName;
     }
+
+    // Resolve inline @mentions to display names
+    const text = await this.resolveInlineMentions(rawText, skipSelfMention);
 
     return new Message({
       id: event.ts || "",
@@ -2051,6 +2121,292 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
         this.createAttachment(file),
       ),
     });
+  }
+
+  // =========================================================================
+  // Channel-level methods
+  // =========================================================================
+
+  /**
+   * Derive channel ID from a Slack thread ID.
+   * Slack thread IDs are "slack:CHANNEL:THREAD_TS", channel ID is "slack:CHANNEL".
+   */
+  channelIdFromThreadId(threadId: string): string {
+    const { channel } = this.decodeThreadId(threadId);
+    return `slack:${channel}`;
+  }
+
+  /**
+   * Fetch channel-level messages (conversations.history, not thread replies).
+   */
+  async fetchChannelMessages(
+    channelId: string,
+    options: FetchOptions = {},
+  ): Promise<FetchResult<unknown>> {
+    // Channel ID format: "slack:CHANNEL"
+    const channel = channelId.split(":")[1];
+    if (!channel) {
+      throw new ValidationError(
+        "slack",
+        `Invalid Slack channel ID: ${channelId}`,
+      );
+    }
+
+    const direction = options.direction ?? "backward";
+    const limit = options.limit || 100;
+
+    try {
+      if (direction === "forward") {
+        return await this.fetchChannelMessagesForward(
+          channel,
+          limit,
+          options.cursor,
+        );
+      }
+      return await this.fetchChannelMessagesBackward(
+        channel,
+        limit,
+        options.cursor,
+      );
+    } catch (error) {
+      this.handleSlackError(error);
+    }
+  }
+
+  private async fetchChannelMessagesForward(
+    channel: string,
+    limit: number,
+    cursor?: string,
+  ): Promise<FetchResult<unknown>> {
+    this.logger.debug("Slack API: conversations.history (forward)", {
+      channel,
+      limit,
+      cursor,
+    });
+
+    const result = await this.client.conversations.history(
+      this.withToken({
+        channel,
+        limit,
+        oldest: cursor,
+        inclusive: cursor ? false : undefined,
+      }),
+    );
+
+    const slackMessages = ((result.messages || []) as SlackEvent[]).reverse(); // Slack returns newest-first, we want oldest-first
+
+    const messages = await Promise.all(
+      slackMessages.map((msg) => {
+        const threadTs = msg.thread_ts || msg.ts || "";
+        const threadId = `slack:${channel}:${threadTs}`;
+        return this.parseSlackMessage(msg, threadId, {
+          skipSelfMention: false,
+        });
+      }),
+    );
+
+    // For forward pagination, cursor points to newer messages
+    let nextCursor: string | undefined;
+    if (result.has_more && slackMessages.length > 0) {
+      const newest = slackMessages[slackMessages.length - 1];
+      if (newest?.ts) {
+        nextCursor = newest.ts;
+      }
+    }
+
+    return {
+      messages,
+      nextCursor,
+    };
+  }
+
+  private async fetchChannelMessagesBackward(
+    channel: string,
+    limit: number,
+    cursor?: string,
+  ): Promise<FetchResult<unknown>> {
+    this.logger.debug("Slack API: conversations.history (backward)", {
+      channel,
+      limit,
+      cursor,
+    });
+
+    const result = await this.client.conversations.history(
+      this.withToken({
+        channel,
+        limit,
+        latest: cursor,
+        inclusive: cursor ? false : undefined,
+      }),
+    );
+
+    const slackMessages = (result.messages || []) as SlackEvent[];
+    // Slack returns newest-first for conversations.history; reverse for chronological
+    const chronological = [...slackMessages].reverse();
+
+    const messages = await Promise.all(
+      chronological.map((msg) => {
+        const threadTs = msg.thread_ts || msg.ts || "";
+        const threadId = `slack:${channel}:${threadTs}`;
+        return this.parseSlackMessage(msg, threadId, {
+          skipSelfMention: false,
+        });
+      }),
+    );
+
+    // For backward pagination, cursor points to older messages
+    let nextCursor: string | undefined;
+    if (result.has_more && chronological.length > 0) {
+      const oldest = chronological[0];
+      if (oldest?.ts) {
+        nextCursor = oldest.ts;
+      }
+    }
+
+    return {
+      messages,
+      nextCursor,
+    };
+  }
+
+  /**
+   * List threads in a Slack channel.
+   * Fetches channel history and filters for messages with replies.
+   */
+  async listThreads(
+    channelId: string,
+    options: ListThreadsOptions = {},
+  ): Promise<ListThreadsResult<unknown>> {
+    const channel = channelId.split(":")[1];
+    if (!channel) {
+      throw new ValidationError(
+        "slack",
+        `Invalid Slack channel ID: ${channelId}`,
+      );
+    }
+
+    const limit = options.limit || 50;
+
+    try {
+      this.logger.debug("Slack API: conversations.history (listThreads)", {
+        channel,
+        limit,
+        cursor: options.cursor,
+      });
+
+      const result = await this.client.conversations.history(
+        this.withToken({
+          channel,
+          limit: Math.min(limit * 3, 200), // Fetch extra since not all have threads
+          cursor: options.cursor,
+        }),
+      );
+
+      const slackMessages = (result.messages || []) as SlackEvent[];
+
+      // Filter messages that have replies (they are thread parents)
+      const threadMessages = slackMessages.filter(
+        (msg) => (msg.reply_count ?? 0) > 0,
+      );
+
+      // Take up to `limit` threads
+      const selected = threadMessages.slice(0, limit);
+
+      const threads: ThreadSummary[] = await Promise.all(
+        selected.map(async (msg) => {
+          const threadTs = msg.ts || "";
+          const threadId = `slack:${channel}:${threadTs}`;
+          const rootMessage = await this.parseSlackMessage(msg, threadId, {
+            skipSelfMention: false,
+          });
+
+          return {
+            id: threadId,
+            rootMessage,
+            replyCount: msg.reply_count,
+            lastReplyAt: msg.latest_reply
+              ? new Date(Number.parseFloat(msg.latest_reply) * 1000)
+              : undefined,
+          };
+        }),
+      );
+
+      const nextCursor = (
+        result as { response_metadata?: { next_cursor?: string } }
+      ).response_metadata?.next_cursor;
+
+      return {
+        threads,
+        nextCursor: nextCursor || undefined,
+      };
+    } catch (error) {
+      this.handleSlackError(error);
+    }
+  }
+
+  /**
+   * Fetch Slack channel info/metadata.
+   */
+  async fetchChannelInfo(channelId: string): Promise<ChannelInfo> {
+    const channel = channelId.split(":")[1];
+    if (!channel) {
+      throw new ValidationError(
+        "slack",
+        `Invalid Slack channel ID: ${channelId}`,
+      );
+    }
+
+    try {
+      this.logger.debug("Slack API: conversations.info (channel)", { channel });
+
+      const result = await this.client.conversations.info(
+        this.withToken({ channel }),
+      );
+
+      const info = result.channel as {
+        id?: string;
+        name?: string;
+        is_im?: boolean;
+        is_mpim?: boolean;
+        num_members?: number;
+        purpose?: { value?: string };
+        topic?: { value?: string };
+      };
+
+      return {
+        id: channelId,
+        name: info?.name ? `#${info.name}` : undefined,
+        isDM: info?.is_im || info?.is_mpim || false,
+        memberCount: info?.num_members,
+        metadata: {
+          purpose: info?.purpose?.value,
+          topic: info?.topic?.value,
+        },
+      };
+    } catch (error) {
+      this.handleSlackError(error);
+    }
+  }
+
+  /**
+   * Post a top-level message to a channel (not in a thread).
+   */
+  async postChannelMessage(
+    channelId: string,
+    message: AdapterPostableMessage,
+  ): Promise<RawMessage<unknown>> {
+    const channel = channelId.split(":")[1];
+    if (!channel) {
+      throw new ValidationError(
+        "slack",
+        `Invalid Slack channel ID: ${channelId}`,
+      );
+    }
+
+    // Use the existing postMessage logic but with no threadTs
+    // Build a synthetic thread ID with empty threadTs
+    const syntheticThreadId = `slack:${channel}:`;
+    return this.postMessage(syntheticThreadId, message);
   }
 
   renderFormatted(content: FormattedContent): string {
