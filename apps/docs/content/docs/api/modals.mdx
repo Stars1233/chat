@@ -12,7 +12,7 @@ import { Modal, TextInput, Select, RadioSelect, SelectOption } from "chat";
 
 ## Modal
 
-Top-level container for a form dialog. Open a modal from an `onAction` handler using `event.openModal()`.
+Top-level container for a form dialog. Open a modal from an `onAction` or `onSlashCommand` handler using `event.openModal()`.
 
 ```typescript
 bot.onAction("open-form", async (event) => {

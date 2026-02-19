@@ -147,7 +147,8 @@ settings:
       - message.im
       - message.mpim
   interactivity:
-    is_enabled: false
+    is_enabled: true
+    request_url: https://your-domain.com/api/webhooks/slack
   org_deploy_enabled: false
   socket_mode_enabled: false
   token_rotation_enabled: false
@@ -168,7 +169,7 @@ After creating the app, go to **Basic Information** → **App Credentials** and 
 
 **Multi-workspace:** Enable **Manage Distribution** under **Basic Information** and set up an OAuth redirect URL pointing to your callback route.
 
-### 7. Configure slash commands (optional)
+### 3. Configure slash commands (optional)
 
 1. Go to **Slash Commands** in your app settings
 2. Click **Create New Command**

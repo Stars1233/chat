@@ -47,6 +47,16 @@ bot.onNewMessage(/^help$/i, async (thread, message) => {
 });
 ```
 
+### Slash command handler
+
+`onSlashCommand` fires when a user invokes a `/command` in the message composer. See [Slash Commands](/docs/slash-commands) for the full guide.
+
+```typescript title="lib/bot.ts" lineNumbers
+bot.onSlashCommand("/status", async (event) => {
+  await event.channel.post("All systems operational!");
+});
+```
+
 ### Reaction handler
 
 `onReaction` fires when users add or remove emoji reactions to messages.

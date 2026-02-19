@@ -8,6 +8,13 @@ prerequisites:
 
 Open direct message conversations with users using `bot.openDM()`. The adapter is automatically inferred from the user ID format.
 
+## DM behavior
+
+DMs behave slightly differently from channel messages:
+
+- **Implicit mentions** — DM messages automatically set `isMention=true`, so your `onNewMention` handler fires without the user needing to @-mention the bot. This feels natural for 1:1 conversations.
+- **Per-conversation threading** — Each top-level DM starts a new conversation. Thread replies within a DM continue the same conversation, giving you the same per-thread isolation as channels.
+
 ## Open a DM
 
 ### From an Author object
