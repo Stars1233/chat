@@ -8,10 +8,11 @@ import { Hero } from "./components/hero";
 import { OneTwoSection } from "./components/one-two-section";
 import { Templates } from "./components/templates";
 import { TextGridSection } from "./components/text-grid-section";
+import { Usage } from "./components/usage";
 
-const title = "Geistdocs";
+const title = "Chat SDK";
 const description =
-  "A Vercel documentation template built with Next.js and Fumadocs. Designed for spinning up documentation sites quickly and consistently.";
+  "A unified TypeScript SDK for building chat bots across Slack, Microsoft Teams, Google Chat, Discord, and more. Write your bot logic once, deploy everywhere.";
 
 export const metadata: Metadata = {
   title,
@@ -42,25 +43,28 @@ const templates = [
 const textGridSection = [
   {
     id: "1",
-    title: "Text Grid Section",
-    description: "Description of text grid section",
+    title: "Multi-platform",
+    description:
+      "Deploy to Slack, Teams, Google Chat, Discord, GitHub, and Linear from a single codebase.",
   },
   {
     id: "2",
-    title: "Text Grid Section",
-    description: "Description of text grid section",
+    title: "Type-safe",
+    description:
+      "Full TypeScript support with type-safe adapters, event handlers, and JSX cards.",
   },
   {
     id: "3",
-    title: "Text Grid Section",
-    description: "Description of text grid section",
+    title: "AI streaming",
+    description:
+      "First-class support for streaming LLM responses with native platform rendering.",
   },
 ];
 
 const HomePage = () => (
   <div className="container mx-auto max-w-5xl">
     <Hero
-      badge="Geistdocs is now in beta"
+      badge="Chat SDK is now open source"
       description={description}
       title={title}
     >
@@ -70,29 +74,33 @@ const HomePage = () => (
             Get Started
           </DynamicLink>
         </Button>
-        <Installer command="npx @vercel/geistdocs init" />
+        <Installer command="pnpm add chat" />
       </div>
     </Hero>
     <div className="grid divide-y border-y sm:border-x">
-      <TextGridSection data={textGridSection} />
       <CenteredSection
         description="Description of centered section"
         title="Centered Section"
       >
         <div className="aspect-video rounded-lg border bg-background" />
       </CenteredSection>
+      <TextGridSection data={textGridSection} />
       <OneTwoSection
-        description="Description of one/two section"
-        title="One/Two Section"
+        description="Install the SDK and pair it with your favorite chat providers and state management solutions."
+        title="Usage"
       >
-        <div className="aspect-video rounded-lg border bg-background" />
+        <Usage />
       </OneTwoSection>
       <Templates
         data={templates}
-        description="See Geistdocs in action with one of our templates."
-        title="Get started quickly"
+        description="Description of templates section"
+        title="Templates Section"
       />
-      <CTA cta="Get started" href="/docs" title="Start your docs today" />
+      <CTA
+        cta="Get started"
+        href="/docs/getting-started"
+        title="Build your first chat bot"
+      />
     </div>
   </div>
 );
