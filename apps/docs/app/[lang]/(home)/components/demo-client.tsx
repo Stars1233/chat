@@ -62,27 +62,34 @@ const MESSAGES: ChatMessage[] = [
   },
   {
     id: "m5",
+    author: "ChatBot",
+    initials: "CB",
+    color: "bg-emerald-500",
+    text: "Thanks for the 👍!",
+  },
+  {
+    id: "m6",
     author: "Bob",
     initials: "B",
     color: "bg-blue-500",
     text: "Can you check for updates too?",
   },
   {
-    id: "m6",
+    id: "m7",
     author: "ChatBot",
     initials: "CB",
     color: "bg-emerald-500",
     text: "Checking now...",
   },
   {
-    id: "m7",
+    id: "m8",
     author: "Alice",
     initials: "A",
     color: "bg-violet-500",
     text: "Thanks, that's super helpful!",
   },
   {
-    id: "m8",
+    id: "m9",
     author: "Bob",
     initials: "B",
     color: "bg-blue-500",
@@ -109,63 +116,25 @@ const TIMELINE: TimelineEntry[] = [
   },
   { delay: 1800, visibleCount: 4, reaction: null, handler: null },
   { delay: 1600, visibleCount: 4, reaction: "m4", handler: "onReaction" },
+  { delay: 1800, visibleCount: 5, reaction: "m4", handler: null },
   {
     delay: 2000,
-    visibleCount: 5,
+    visibleCount: 6,
     reaction: "m4",
     handler: "onSubscribedMessage",
   },
-  { delay: 1800, visibleCount: 6, reaction: "m4", handler: null },
-  { delay: 1200, visibleCount: 7, reaction: "m4", handler: null },
+  { delay: 1800, visibleCount: 7, reaction: "m4", handler: null },
   { delay: 1200, visibleCount: 8, reaction: "m4", handler: null },
+  { delay: 1200, visibleCount: 9, reaction: "m4", handler: null },
   { delay: 3000, visibleCount: 0, reaction: null, handler: null },
 ];
 
-const ChatBubble = ({ message }: { message: ChatMessage }) => (
-  <motion.div
-    animate={{ opacity: 1, y: 0 }}
-    className="flex items-start gap-2.5"
-    exit={{ opacity: 0 }}
-    initial={{ opacity: 0, y: 12 }}
-    transition={{ duration: 0.3 }}
-  >
-    <div
-      className={cn(
-        "flex size-8 shrink-0 items-center justify-center rounded-md font-semibold text-white text-xs",
-        message.color
-      )}
-    >
-      {message.initials}
-    </div>
-    <div className="min-w-0">
-      <div className="flex items-baseline gap-1.5">
-        <span className="font-semibold text-foreground text-sm">
-          {message.author}
-        </span>
-        <span className="text-muted-foreground text-xs">12:00 PM</span>
-      </div>
-      <p className="text-foreground text-sm">
-          {message.text.split(/(@ChatBot)/g).map((part) =>
-            part === "@ChatBot" ? (
-              <span
-                className="rounded bg-primary/15 px-0.5 font-medium text-primary"
-                key={part}
-              >
-                @ChatBot
-              </span>
-            ) : (
-              part
-            )
-          )}
-        </p>
-    </div>
-  </motion.div>
-);
 
 const ReactionBadge = () => (
   <motion.span
     animate={{ opacity: 1, scale: 1 }}
     className="mt-1 ml-10.5 inline-flex items-center gap-1 rounded-full border bg-muted px-1.5 py-0.5 text-xs"
+    exit={{ opacity: 0, scale: 0.8 }}
     initial={{ opacity: 0, scale: 0.8 }}
     transition={{ duration: 0.25 }}
   >
@@ -260,12 +229,53 @@ const ChatPanel = ({
       </div>
     </div>
     <div className="flex min-h-0 flex-1 flex-col justify-end gap-3 overflow-hidden p-3">
-      <AnimatePresence mode="popLayout">
+      <AnimatePresence initial={false}>
         {MESSAGES.slice(0, visibleCount).map((msg) => (
-          <div key={msg.id}>
-            <ChatBubble message={msg} />
-            {reaction === msg.id && <ReactionBadge />}
-          </div>
+          <motion.div
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, transition: { duration: 0.15 } }}
+            initial={{ opacity: 0, y: 12 }}
+            key={msg.id}
+            transition={{ duration: 0.3 }}
+          >
+            <div className="flex items-start gap-2.5">
+              <div
+                className={cn(
+                  "flex size-8 shrink-0 items-center justify-center rounded-md font-semibold text-white text-xs",
+                  msg.color
+                )}
+              >
+                {msg.initials}
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-baseline gap-1.5">
+                  <span className="font-semibold text-foreground text-sm">
+                    {msg.author}
+                  </span>
+                  <span className="text-muted-foreground text-xs">
+                    12:00 PM
+                  </span>
+                </div>
+                <p className="text-foreground text-sm">
+                  {msg.text.split(/(@ChatBot)/g).map((part) =>
+                    part === "@ChatBot" ? (
+                      <span
+                        className="rounded bg-primary/15 px-0.5 font-medium text-primary"
+                        key={part}
+                      >
+                        @ChatBot
+                      </span>
+                    ) : (
+                      part
+                    )
+                  )}
+                </p>
+              </div>
+            </div>
+            <AnimatePresence>
+              {reaction === msg.id && <ReactionBadge />}
+            </AnimatePresence>
+          </motion.div>
         ))}
       </AnimatePresence>
     </div>
