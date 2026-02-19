@@ -2,7 +2,7 @@
 
 import { AnimatePresence, motion } from "motion/react";
 import type { CSSProperties, ReactNode } from "react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { HashIcon } from "lucide-react";
 
@@ -310,6 +310,8 @@ const CodePanel = ({
   </div>
 );
 
+const LAST_STEP = TIMELINE.length - 2;
+
 export const DemoClient = ({
   handlers,
   codeHeader,
@@ -320,41 +322,84 @@ export const DemoClient = ({
   codeStyle: CSSProperties;
 }) => {
   const [step, setStep] = useState(0);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const isVisibleRef = useRef(true);
+  const timeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+
+  const clearTimeouts = useCallback(() => {
+    for (const t of timeoutsRef.current) {
+      clearTimeout(t);
+    }
+    timeoutsRef.current = [];
+  }, []);
+
+  const run = useCallback(() => {
+    clearTimeouts();
+
+    const isDesktop = window.matchMedia("(min-width: 1024px)").matches;
+    const lastIdx = isDesktop ? TIMELINE.length - 1 : LAST_STEP;
+
+    let elapsed = 0;
+    for (let i = 0; i <= lastIdx; i++) {
+      elapsed += TIMELINE[i].delay;
+      const idx = i;
+      timeoutsRef.current.push(
+        setTimeout(() => {
+          if (!isVisibleRef.current) {
+            return;
+          }
+
+          if (isDesktop && idx === TIMELINE.length - 1) {
+            setStep(0);
+            timeoutsRef.current.push(
+              setTimeout(() => {
+                if (isVisibleRef.current) {
+                  run();
+                }
+              }, TIMELINE[idx].delay)
+            );
+          } else {
+            setStep(idx);
+          }
+        }, elapsed)
+      );
+    }
+  }, [clearTimeouts]);
 
   useEffect(() => {
-    const timeouts: ReturnType<typeof setTimeout>[] = [];
+    const el = containerRef.current;
+    if (!el) {
+      return;
+    }
 
-    const run = () => {
-      let elapsed = 0;
-      for (let i = 0; i < TIMELINE.length; i++) {
-        elapsed += TIMELINE[i].delay;
-        const idx = i;
-        timeouts.push(
-          setTimeout(() => {
-            if (idx === TIMELINE.length - 1) {
-              setStep(0);
-              timeouts.push(setTimeout(run, TIMELINE[idx].delay));
-            } else {
-              setStep(idx);
-            }
-          }, elapsed)
-        );
-      }
-    };
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        const wasVisible = isVisibleRef.current;
+        isVisibleRef.current = entry.isIntersecting;
 
+        if (entry.isIntersecting && !wasVisible) {
+          setStep(0);
+          run();
+        } else if (!entry.isIntersecting && wasVisible) {
+          clearTimeouts();
+        }
+      },
+      { threshold: 0.3 }
+    );
+
+    observer.observe(el);
     run();
 
     return () => {
-      for (const t of timeouts) {
-        clearTimeout(t);
-      }
+      observer.disconnect();
+      clearTimeouts();
     };
-  }, []);
+  }, [run, clearTimeouts]);
 
   const current = TIMELINE[step];
 
   return (
-    <div className="grid gap-4 lg:grid-cols-2 lg:h-[300px]">
+    <div className="grid gap-4 lg:grid-cols-2 lg:h-[300px]" ref={containerRef}>
       <ChatPanel
         reaction={current.reaction}
         visibleCount={current.visibleCount}
