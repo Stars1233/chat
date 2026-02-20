@@ -80,6 +80,20 @@ import { Message } from "chat";
   }}
 />
 
+### How `isMe` works
+
+Each adapter detects whether a message came from the bot itself. The detection logic varies by platform:
+
+| Platform | Detection method |
+|----------|-----------------|
+| Slack | Checks `event.user === botUserId` (primary), then `event.bot_id === botId` (for `bot_message` subtypes). Both IDs are fetched during initialization via `auth.test`. |
+| Teams | Checks `activity.from.id === appId` (exact match), then checks if `activity.from.id` ends with `:{appId}` (handles `28:{appId}` format). |
+| Google Chat | Checks `message.sender.name === botUserId`. The bot user ID is learned dynamically from message annotations when the bot is first @-mentioned. |
+
+<Callout type="info">
+All adapters return `false` if the bot ID isn't known yet. This is a safe default that prevents the bot from ignoring messages it should process.
+</Callout>
+
 ## MessageMetadata
 
 <TypeTable

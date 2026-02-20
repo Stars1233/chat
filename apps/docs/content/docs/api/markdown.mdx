@@ -213,3 +213,23 @@ Safely access node properties without type narrowing.
 const children = getNodeChildren(node); // Content[] | undefined
 const value = getNodeValue(node);       // string | undefined
 ```
+
+## Platform formatting
+
+The SDK uses mdast as the canonical format and each adapter converts it to the platform's native syntax. You write standard markdown and the SDK handles the translation — but it helps to know how each platform renders common formatting.
+
+| Feature | Slack | Teams | Google Chat |
+|---------|-------|-------|-------------|
+| Bold | `*text*` | `**text**` | `*text*` |
+| Italic | `_text_` | `_text_` | `_text_` |
+| Strikethrough | `~text~` | `~~text~~` | `~text~` |
+| Code | `` `code` `` | `` `code` `` | `` `code` `` |
+| Code blocks | ```` ``` ```` | ```` ``` ```` | ```` ``` ```` |
+| Links | `<url\|text>` | `[text](url)` | `[text](url)` |
+| Lists | Supported | Supported | Supported |
+| Blockquotes | `>` | `>` | Simulated with `>` prefix |
+| Mentions | `<@USER>` | `<at>name</at>` | `<users/{id}>` |
+
+<Callout type="info">
+You don't need to worry about these differences when using the SDK — the AST builders and `parseMarkdown` handle conversion automatically. This table is useful if you're working with `raw` platform payloads or debugging formatting issues.
+</Callout>

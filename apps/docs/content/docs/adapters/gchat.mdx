@@ -192,8 +192,12 @@ GOOGLE_CHAT_IMPERSONATE_USER=admin@yourdomain.com
 
 ## Limitations
 
-- **Typing indicators**: Not supported by Google Chat API
-- **Adding reactions**: Requires domain-wide delegation (appears from impersonated user, not bot)
+- **Typing indicators**: Not supported by Google Chat API. `startTyping()` is a no-op.
+- **Adding reactions**: The Google Chat API doesn't support service account (app) authentication for adding reactions. To use `addReaction()` or `removeReaction()`, you need domain-wide delegation with `impersonateUser` configured — but the reaction appears as coming from the impersonated user, not the bot.
+
+### Message history (`fetchMessages`)
+
+Fetching message history requires domain-wide delegation with the `impersonateUser` config option set. The impersonated user must have access to the spaces you want to read from. See the [Pub/Sub setup](#4-enable-domain-wide-delegation) above for configuring delegation and OAuth scopes.
 
 ## Troubleshooting
 

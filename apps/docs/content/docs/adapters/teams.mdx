@@ -168,8 +168,20 @@ TEAMS_APP_TENANT_ID=...  # Required for SingleTenant
 
 ## Limitations
 
-- **Adding reactions**: Teams Bot Framework doesn't support bots adding reactions
-- **Message history**: No API to fetch message history
+- **Adding reactions**: Teams Bot Framework doesn't support bots adding reactions. Calling `addReaction()` or `removeReaction()` throws a `NotImplementedError`. The bot can still receive reaction events via `onReaction()`.
+- **Typing indicators**: Not available via Bot Framework. `startTyping()` is a no-op.
+
+### Message history (`fetchMessages`)
+
+Fetching message history requires the Microsoft Graph API with client credentials flow. To enable it:
+
+1. Set `appTenantId` in the adapter config
+2. Grant one of these Azure AD app permissions:
+   - `ChatMessage.Read.Chat`
+   - `Chat.Read.All`
+   - `Chat.Read.WhereInstalled`
+
+Without these permissions, `fetchMessages` will not be able to retrieve channel history.
 
 ## Troubleshooting
 
