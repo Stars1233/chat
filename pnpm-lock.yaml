@@ -358,7 +358,7 @@ importers:
         specifier: workspace:*
         version: link:../adapter-shared
       '@slack/web-api':
-        specifier: ^7.8.0
+        specifier: ^7.11.0
         version: 7.13.0
       chat:
         specifier: workspace:*
@@ -7708,7 +7708,7 @@ snapshots:
 
   '@slack/logger@4.0.0':
     dependencies:
-      '@types/node': 22.19.3
+      '@types/node': 24.10.13
 
   '@slack/types@2.19.0': {}
 
@@ -7716,7 +7716,7 @@ snapshots:
     dependencies:
       '@slack/logger': 4.0.0
       '@slack/types': 2.19.0
-      '@types/node': 22.19.3
+      '@types/node': 24.10.13
       '@types/retry': 0.12.0
       axios: 1.13.2
       eventemitter3: 5.0.1

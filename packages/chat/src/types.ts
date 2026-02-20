@@ -319,6 +319,8 @@ export interface StreamOptions {
   recipientTeamId?: string;
   /** Minimum interval between updates in ms (default: 1000). Used for fallback mode (GChat/Teams). */
   updateIntervalMs?: number;
+  /** Block Kit elements to attach when stopping the stream (Slack only, via chat.stopStream) */
+  stopBlocks?: unknown[];
 }
 
 /** Internal interface for Chat instance passed to adapters */
@@ -416,6 +418,21 @@ export interface ChatInstance {
       adapter: Adapter;
       channelId: string;
     },
+    options?: WebhookOptions,
+  ): void;
+
+  processAssistantThreadStarted(
+    event: AssistantThreadStartedEvent,
+    options?: WebhookOptions,
+  ): void;
+
+  processAssistantContextChanged(
+    event: AssistantContextChangedEvent,
+    options?: WebhookOptions,
+  ): void;
+
+  processAppHomeOpened(
+    event: AppHomeOpenedEvent,
     options?: WebhookOptions,
   ): void;
 
@@ -1646,3 +1663,53 @@ export interface SlashCommandEvent<TState = Record<string, unknown>> {
 export type SlashCommandHandler<TState = Record<string, unknown>> = (
   event: SlashCommandEvent<TState>,
 ) => Promise<void>;
+
+// =============================================================================
+// Assistant Events (Slack Assistants API / AI Apps)
+// =============================================================================
+
+export interface AssistantThreadStartedEvent {
+  threadId: string;
+  userId: string;
+  channelId: string;
+  threadTs: string;
+  context: {
+    channelId?: string;
+    teamId?: string;
+    enterpriseId?: string;
+    threadEntryPoint?: string;
+    forceSearch?: boolean;
+  };
+  adapter: Adapter;
+}
+
+export type AssistantThreadStartedHandler = (
+  event: AssistantThreadStartedEvent,
+) => Promise<void>;
+
+export interface AssistantContextChangedEvent {
+  threadId: string;
+  userId: string;
+  channelId: string;
+  threadTs: string;
+  context: {
+    channelId?: string;
+    teamId?: string;
+    enterpriseId?: string;
+    threadEntryPoint?: string;
+    forceSearch?: boolean;
+  };
+  adapter: Adapter;
+}
+
+export type AssistantContextChangedHandler = (
+  event: AssistantContextChangedEvent,
+) => Promise<void>;
+
+export interface AppHomeOpenedEvent {
+  userId: string;
+  channelId: string;
+  adapter: Adapter;
+}
+
+export type AppHomeOpenedHandler = (event: AppHomeOpenedEvent) => Promise<void>;

@@ -164,11 +164,23 @@ export function createMockSlackClient() {
         user: { id: "U123", name: "testuser", real_name: "Test User" },
       }),
     },
+    views: {
+      publish: vi.fn().mockResolvedValue({ ok: true }),
+      open: vi.fn().mockResolvedValue({ ok: true }),
+      update: vi.fn().mockResolvedValue({ ok: true }),
+    },
     files: {
       uploadV2: vi.fn().mockResolvedValue({
         ok: true,
         files: [{ id: "F123456" }],
       }),
+    },
+    assistant: {
+      threads: {
+        setSuggestedPrompts: vi.fn().mockResolvedValue({ ok: true }),
+        setStatus: vi.fn().mockResolvedValue({ ok: true }),
+        setTitle: vi.fn().mockResolvedValue({ ok: true }),
+      },
     },
     clearMocks: () => {
       client.auth.test.mockClear();
@@ -185,6 +197,12 @@ export function createMockSlackClient() {
       client.conversations.open.mockClear();
       client.users.info.mockClear();
       client.files.uploadV2.mockClear();
+      client.views.publish.mockClear();
+      client.views.open.mockClear();
+      client.views.update.mockClear();
+      client.assistant.threads.setSuggestedPrompts.mockClear();
+      client.assistant.threads.setStatus.mockClear();
+      client.assistant.threads.setTitle.mockClear();
     },
   };
   return client;

@@ -19,6 +19,9 @@ import { createMemoryState } from "@chat-adapter/state-memory";
 import { createTeamsAdapter, type TeamsAdapter } from "@chat-adapter/teams";
 import {
   type ActionEvent,
+  type AppHomeOpenedEvent,
+  type AssistantContextChangedEvent,
+  type AssistantThreadStartedEvent,
   Chat,
   type Logger,
   type Message,
@@ -165,6 +168,13 @@ export function createSlackTestContext(
     onReaction?: (event: ReactionEvent) => Promise<void>;
     onModalSubmit?: (event: ModalSubmitEvent) => Promise<void>;
     onSlashCommand?: (event: SlashCommandEvent) => Promise<void>;
+    onAssistantThreadStarted?: (
+      event: AssistantThreadStartedEvent,
+    ) => Promise<void>;
+    onAssistantContextChanged?: (
+      event: AssistantContextChangedEvent,
+    ) => Promise<void>;
+    onAppHomeOpened?: (event: AppHomeOpenedEvent) => Promise<void>;
   },
 ): SlackTestContext {
   const adapter = createSlackAdapter({
@@ -233,6 +243,18 @@ export function createSlackTestContext(
 
   if (handlers.onSlashCommand) {
     chat.onSlashCommand(handlers.onSlashCommand);
+  }
+
+  if (handlers.onAssistantThreadStarted) {
+    chat.onAssistantThreadStarted(handlers.onAssistantThreadStarted);
+  }
+
+  if (handlers.onAssistantContextChanged) {
+    chat.onAssistantContextChanged(handlers.onAssistantContextChanged);
+  }
+
+  if (handlers.onAppHomeOpened) {
+    chat.onAppHomeOpened(handlers.onAppHomeOpened);
   }
 
   const tracker = createWaitUntilTracker();

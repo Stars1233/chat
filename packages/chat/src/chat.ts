@@ -12,6 +12,12 @@ import type {
   ActionEvent,
   ActionHandler,
   Adapter,
+  AppHomeOpenedEvent,
+  AppHomeOpenedHandler,
+  AssistantContextChangedEvent,
+  AssistantContextChangedHandler,
+  AssistantThreadStartedEvent,
+  AssistantThreadStartedHandler,
   Author,
   Channel,
   ChatConfig,
@@ -181,6 +187,10 @@ export class Chat<
   private modalSubmitHandlers: ModalSubmitPattern[] = [];
   private modalCloseHandlers: ModalClosePattern[] = [];
   private slashCommandHandlers: SlashCommandPattern<TState>[] = [];
+  private assistantThreadStartedHandlers: AssistantThreadStartedHandler[] = [];
+  private assistantContextChangedHandlers: AssistantContextChangedHandler[] =
+    [];
+  private appHomeOpenedHandlers: AppHomeOpenedHandler[] = [];
 
   /** Initialization state */
   private initPromise: Promise<void> | null = null;
@@ -578,6 +588,21 @@ export class Chat<
     }
   }
 
+  onAssistantThreadStarted(handler: AssistantThreadStartedHandler): void {
+    this.assistantThreadStartedHandlers.push(handler);
+    this.logger.debug("Registered assistant thread started handler");
+  }
+
+  onAssistantContextChanged(handler: AssistantContextChangedHandler): void {
+    this.assistantContextChangedHandlers.push(handler);
+    this.logger.debug("Registered assistant context changed handler");
+  }
+
+  onAppHomeOpened(handler: AppHomeOpenedHandler): void {
+    this.appHomeOpenedHandlers.push(handler);
+    this.logger.debug("Registered app home opened handler");
+  }
+
   /**
    * Get an adapter by name with type safety.
    */
@@ -790,6 +815,66 @@ export class Chat<
     }
   }
 
+  processAssistantThreadStarted(
+    event: AssistantThreadStartedEvent,
+    options?: WebhookOptions,
+  ): void {
+    const task = (async () => {
+      for (const handler of this.assistantThreadStartedHandlers) {
+        await handler(event);
+      }
+    })().catch((err) => {
+      this.logger.error("Assistant thread started handler error", {
+        error: err,
+        threadId: event.threadId,
+      });
+    });
+
+    if (options?.waitUntil) {
+      options.waitUntil(task);
+    }
+  }
+
+  processAssistantContextChanged(
+    event: AssistantContextChangedEvent,
+    options?: WebhookOptions,
+  ): void {
+    const task = (async () => {
+      for (const handler of this.assistantContextChangedHandlers) {
+        await handler(event);
+      }
+    })().catch((err) => {
+      this.logger.error("Assistant context changed handler error", {
+        error: err,
+        threadId: event.threadId,
+      });
+    });
+
+    if (options?.waitUntil) {
+      options.waitUntil(task);
+    }
+  }
+
+  processAppHomeOpened(
+    event: AppHomeOpenedEvent,
+    options?: WebhookOptions,
+  ): void {
+    const task = (async () => {
+      for (const handler of this.appHomeOpenedHandlers) {
+        await handler(event);
+      }
+    })().catch((err) => {
+      this.logger.error("App home opened handler error", {
+        error: err,
+        userId: event.userId,
+      });
+    });
+
+    if (options?.waitUntil) {
+      options.waitUntil(task);
+    }
+  }
+
   /**
    * Handle a slash command event internally.
    */
@@ -991,13 +1076,15 @@ export class Chat<
         })
       : ({} as Message);
 
-    // Create thread for the action event
-    const thread = await this.createThread(
-      event.adapter,
-      event.threadId,
-      messageForThread,
-      isSubscribed,
-    );
+    // Create thread for the action event (skip for view-based actions with no threadId)
+    const thread = event.threadId
+      ? await this.createThread(
+          event.adapter,
+          event.threadId,
+          messageForThread,
+          isSubscribed,
+        )
+      : (null as unknown as Thread<TState>);
 
     // Build full event with thread and openModal helper
     const fullEvent: ActionEvent = {

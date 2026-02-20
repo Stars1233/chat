@@ -139,11 +139,61 @@ export interface SlackReactionEvent {
   event_ts: string;
 }
 
+/** Slack assistant_thread_started event payload */
+interface SlackAssistantThreadStartedEvent {
+  type: "assistant_thread_started";
+  assistant_thread: {
+    user_id: string;
+    channel_id: string;
+    thread_ts: string;
+    context: {
+      channel_id?: string;
+      team_id?: string;
+      enterprise_id?: string;
+      thread_entry_point?: string;
+      force_search?: boolean;
+    };
+  };
+  event_ts: string;
+}
+
+/** Slack assistant_thread_context_changed event payload */
+interface SlackAssistantContextChangedEvent {
+  type: "assistant_thread_context_changed";
+  assistant_thread: {
+    user_id: string;
+    channel_id: string;
+    thread_ts: string;
+    context: {
+      channel_id?: string;
+      team_id?: string;
+      enterprise_id?: string;
+      thread_entry_point?: string;
+      force_search?: boolean;
+    };
+  };
+  event_ts: string;
+}
+
+/** Slack app_home_opened event payload */
+interface SlackAppHomeOpenedEvent {
+  type: "app_home_opened";
+  user: string;
+  channel: string;
+  tab: string;
+  event_ts: string;
+}
+
 /** Slack webhook payload envelope */
 interface SlackWebhookPayload {
   type: string;
   challenge?: string;
-  event?: SlackEvent | SlackReactionEvent;
+  event?:
+    | SlackEvent
+    | SlackReactionEvent
+    | SlackAssistantThreadStartedEvent
+    | SlackAssistantContextChangedEvent
+    | SlackAppHomeOpenedEvent;
   event_id?: string;
   event_time?: number;
   team_id?: string;
@@ -686,6 +736,21 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
         event.type === "reaction_removed"
       ) {
         this.handleReactionEvent(event as SlackReactionEvent, options);
+      } else if (event.type === "assistant_thread_started") {
+        this.handleAssistantThreadStarted(
+          event as SlackAssistantThreadStartedEvent,
+          options,
+        );
+      } else if (event.type === "assistant_thread_context_changed") {
+        this.handleAssistantContextChanged(
+          event as SlackAssistantContextChangedEvent,
+          options,
+        );
+      } else if (
+        event.type === "app_home_opened" &&
+        (event as SlackAppHomeOpenedEvent).tab === "home"
+      ) {
+        this.handleAppHomeOpened(event as SlackAppHomeOpenedEvent, options);
       }
     }
   }
@@ -792,25 +857,28 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
     const threadTs =
       payload.message?.thread_ts || payload.container?.thread_ts || messageTs;
 
-    if (!channel || !messageTs) {
-      this.logger.warn("Missing channel or message_ts in block_actions", {
-        channel,
-        messageTs,
-      });
+    // Actions from Home tab views don't have channel/messageTs
+    const isViewAction = payload.container?.type === "view";
+
+    if (!isViewAction && !channel) {
+      this.logger.warn("Missing channel in block_actions", { channel });
       return;
     }
 
-    const threadId = this.encodeThreadId({
-      channel,
-      threadTs: threadTs || messageTs,
-    });
+    const threadId =
+      channel && (threadTs || messageTs)
+        ? this.encodeThreadId({
+            channel,
+            threadTs: threadTs || messageTs || "",
+          })
+        : "";
 
     const isEphemeral = payload.container?.is_ephemeral === true;
     const responseUrl = payload.response_url;
     const messageId =
-      isEphemeral && responseUrl
+      isEphemeral && responseUrl && messageTs
         ? this.encodeEphemeralMessageId(messageTs, responseUrl, payload.user.id)
-        : messageTs;
+        : messageTs || "";
 
     // Process each action (usually just one, but can be multiple)
     for (const action of payload.actions) {
@@ -1138,6 +1206,197 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
 
     // Process reaction
     this.chat.processReaction({ ...reactionEvent, adapter: this }, options);
+  }
+
+  /**
+   * Handle assistant_thread_started events from Slack's Assistants API.
+   * Fires when a user opens a new assistant thread (DM with the bot).
+   */
+  private handleAssistantThreadStarted(
+    event: SlackAssistantThreadStartedEvent,
+    options?: WebhookOptions,
+  ): void {
+    if (!this.chat) {
+      this.logger.warn(
+        "Chat instance not initialized, ignoring assistant_thread_started",
+      );
+      return;
+    }
+
+    if (!event.assistant_thread) {
+      this.logger.warn(
+        "Malformed assistant_thread_started: missing assistant_thread",
+      );
+      return;
+    }
+
+    const { channel_id, thread_ts, user_id, context } = event.assistant_thread;
+    const threadId = this.encodeThreadId({
+      channel: channel_id,
+      threadTs: thread_ts,
+    });
+
+    this.chat.processAssistantThreadStarted(
+      {
+        threadId,
+        userId: user_id,
+        channelId: channel_id,
+        threadTs: thread_ts,
+        context: {
+          channelId: context.channel_id,
+          teamId: context.team_id,
+          enterpriseId: context.enterprise_id,
+          threadEntryPoint: context.thread_entry_point,
+          forceSearch: context.force_search,
+        },
+        adapter: this,
+      },
+      options,
+    );
+  }
+
+  /**
+   * Handle assistant_thread_context_changed events from Slack's Assistants API.
+   * Fires when a user navigates to a different channel with the assistant panel open.
+   */
+  private handleAssistantContextChanged(
+    event: SlackAssistantContextChangedEvent,
+    options?: WebhookOptions,
+  ): void {
+    if (!this.chat) {
+      this.logger.warn(
+        "Chat instance not initialized, ignoring assistant_thread_context_changed",
+      );
+      return;
+    }
+
+    if (!event.assistant_thread) {
+      this.logger.warn(
+        "Malformed assistant_thread_context_changed: missing assistant_thread",
+      );
+      return;
+    }
+
+    const { channel_id, thread_ts, user_id, context } = event.assistant_thread;
+    const threadId = this.encodeThreadId({
+      channel: channel_id,
+      threadTs: thread_ts,
+    });
+
+    this.chat.processAssistantContextChanged(
+      {
+        threadId,
+        userId: user_id,
+        channelId: channel_id,
+        threadTs: thread_ts,
+        context: {
+          channelId: context.channel_id,
+          teamId: context.team_id,
+          enterpriseId: context.enterprise_id,
+          threadEntryPoint: context.thread_entry_point,
+          forceSearch: context.force_search,
+        },
+        adapter: this,
+      },
+      options,
+    );
+  }
+
+  /**
+   * Handle app_home_opened events from Slack.
+   * Fires when a user opens the bot's Home tab.
+   */
+  private handleAppHomeOpened(
+    event: SlackAppHomeOpenedEvent,
+    options?: WebhookOptions,
+  ): void {
+    if (!this.chat) {
+      this.logger.warn(
+        "Chat instance not initialized, ignoring app_home_opened",
+      );
+      return;
+    }
+
+    this.chat.processAppHomeOpened(
+      {
+        userId: event.user,
+        channelId: event.channel,
+        adapter: this,
+      },
+      options,
+    );
+  }
+
+  /**
+   * Publish a Home tab view for a user.
+   * Slack API: views.publish
+   */
+  async publishHomeView(
+    userId: string,
+    view: Record<string, unknown>,
+  ): Promise<void> {
+    await this.client.views.publish(
+      // biome-ignore lint/suspicious/noExplicitAny: view blocks are consumer-defined
+      this.withToken({ user_id: userId, view }) as any,
+    );
+  }
+
+  /**
+   * Set suggested prompts for an assistant thread.
+   * Slack Assistants API: assistant.threads.setSuggestedPrompts
+   */
+  async setSuggestedPrompts(
+    channelId: string,
+    threadTs: string,
+    prompts: Array<{ title: string; message: string }>,
+    title?: string,
+  ): Promise<void> {
+    await this.client.assistant.threads.setSuggestedPrompts(
+      this.withToken({
+        channel_id: channelId,
+        thread_ts: threadTs,
+        prompts,
+        title,
+      }),
+    );
+  }
+
+  /**
+   * Set status/thinking indicator for an assistant thread.
+   * Slack Assistants API: assistant.threads.setStatus
+   */
+  async setAssistantStatus(
+    channelId: string,
+    threadTs: string,
+    status: string,
+    loadingMessages?: string[],
+  ): Promise<void> {
+    await this.client.assistant.threads.setStatus(
+      this.withToken({
+        channel_id: channelId,
+        thread_ts: threadTs,
+        status,
+        ...(loadingMessages && { loading_messages: loadingMessages }),
+      }),
+    );
+  }
+
+  /**
+   * Set title for an assistant thread (shown in History tab).
+   * Slack Assistants API: assistant.threads.setTitle
+   */
+  async setAssistantTitle(
+    channelId: string,
+    threadTs: string,
+    title: string,
+  ): Promise<void> {
+    await this.client.assistant.threads.setTitle(
+      this.withToken({
+        channel_id: channelId,
+        thread_ts: threadTs,
+        title,
+      }),
+    );
   }
 
   /**
@@ -1836,7 +2095,10 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
         await streamer.append({ markdown_text: chunk });
       }
     }
-    const result = await streamer.stop();
+    const result = await streamer.stop(
+      // biome-ignore lint/suspicious/noExplicitAny: stopBlocks are platform-specific Block Kit elements
+      options?.stopBlocks ? { blocks: options.stopBlocks as any[] } : undefined,
+    );
     const messageTs = (result.message?.ts ?? result.ts) as string;
 
     this.logger.debug("Slack: stream complete", { messageId: messageTs });
