@@ -224,7 +224,7 @@ const ChatPanel = ({
   visibleCount: number;
   reaction: ReactionTarget;
 }) => (
-  <div className="flex h-full flex-col overflow-hidden rounded-sm border bg-background">
+  <div className="flex h-[300px] flex-col overflow-hidden rounded-sm border bg-background">
     <div className="flex items-center gap-2 border-b bg-sidebar py-2.5 pl-4 text-muted-foreground">
       <div className="font-normal flex items-center gap-2 text-muted-foreground text-sm">
         <HashIcon className="size-4" /> <span>general</span>
@@ -299,16 +299,18 @@ const CodePanel = ({
   <div className="not-prose flex h-full flex-col overflow-hidden rounded-sm border">
     {header}
     <pre
-      className="flex-1 space-y-3 overflow-x-auto bg-background py-3 text-sm"
+      className="flex-1 overflow-x-auto bg-background py-3 text-sm"
       style={style}
     >
-      {handlers.map((handler) => (
-        <HandlerBlock
-          handler={handler}
-          isActive={activeHandler === handler.key}
-          key={handler.key}
-        />
-      ))}
+      <div className="min-w-max space-y-3">
+        {handlers.map((handler) => (
+          <HandlerBlock
+            handler={handler}
+            isActive={activeHandler === handler.key}
+            key={handler.key}
+          />
+        ))}
+      </div>
     </pre>
   </div>
 );
