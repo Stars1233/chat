@@ -183,6 +183,27 @@ Fetching message history requires the Microsoft Graph API with client credential
 
 Without these permissions, `fetchMessages` will not be able to retrieve channel history.
 
+### Receiving all messages
+
+By default, Teams bots only receive messages when directly @-mentioned. To receive all messages in a channel or group chat, add Resource-Specific Consent (RSC) permissions to your Teams app manifest:
+
+```json title="manifest.json"
+{
+  "authorization": {
+    "permissions": {
+      "resourceSpecific": [
+        {
+          "name": "ChannelMessage.Read.Group",
+          "type": "Application"
+        }
+      ]
+    }
+  }
+}
+```
+
+Alternatively, configure the bot in Azure to receive all messages.
+
 ## Troubleshooting
 
 ### "Unauthorized" error
