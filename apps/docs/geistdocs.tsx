@@ -5,7 +5,7 @@ export const Logo = () => (
 );
 
 export const github = {
-  owner: "vercel-labs",
+  owner: "vercel",
   repo: "chat",
 };
 
