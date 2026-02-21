@@ -91,7 +91,7 @@ Pass any `AsyncIterable<string>` to `thread.post()`. Works with AI SDK's `textSt
 
 ```typescript
 import { ToolLoopAgent } from "ai";
-const agent = new ToolLoopAgent({ model: "anthropic/claude-3.5-haiku" });
+const agent = new ToolLoopAgent({ model: "anthropic/claude-4.5-sonnet" });
 
 bot.onNewMention(async (thread, message) => {
   const result = await agent.stream({ prompt: message.text });
