@@ -39,6 +39,14 @@ bot.onSubscribedMessage(async (thread, message) => {
 });
 ```
 
+## AI coding agent support
+
+If you use an AI coding agent like [Claude Code](https://docs.anthropic.com/en/docs/claude-code), you can teach it about Chat SDK:
+
+```bash
+npx skills add vercel/chat
+```
+
 ## Documentation
 
 Full documentation is available at [chat-sdk.dev/docs](https://chat-sdk.dev/docs).

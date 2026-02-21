@@ -59,6 +59,16 @@ bot.onNewMention(async (thread) => {
 | GitHub | `@chat-adapter/github` | Yes | Yes | No | No | No | No |
 | Linear | `@chat-adapter/linear` | Yes | Yes | No | No | No | No |
 
+## AI coding agent support
+
+If you use an AI coding agent like [Claude Code](https://docs.anthropic.com/en/docs/claude-code), you can teach it about Chat SDK by installing the skill:
+
+```bash
+npx skills add vercel/chat
+```
+
+This gives your agent access to Chat SDK's documentation, patterns, and best practices so it can help you build bots more effectively.
+
 ## Packages
 
 The SDK is distributed as a set of packages you install based on your needs:
