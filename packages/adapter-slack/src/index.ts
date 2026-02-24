@@ -37,6 +37,7 @@ import type {
 
 import {
   ChatError,
+  ConsoleLogger,
   convertEmojiPlaceholders,
   defaultEmojiResolver,
   isJSX,
@@ -2917,8 +2918,40 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
   }
 }
 
-export function createSlackAdapter(config: SlackAdapterConfig): SlackAdapter {
-  return new SlackAdapter(config);
+export function createSlackAdapter(
+  config?: Partial<SlackAdapterConfig>
+): SlackAdapter {
+  const signingSecret =
+    config?.signingSecret ?? process.env.SLACK_SIGNING_SECRET;
+  if (!signingSecret) {
+    throw new ValidationError(
+      "slack",
+      "signingSecret is required. Set SLACK_SIGNING_SECRET or provide it in config."
+    );
+  }
+  // Auth fields (botToken, clientId, clientSecret) are modal: botToken's
+  // presence selects single-workspace mode, its absence selects multi-workspace
+  // (per-team token lookup via installations). Only fall back to env vars
+  // in zero-config mode (no config provided at all).
+  const zeroConfig = !config;
+
+  const resolved: SlackAdapterConfig = {
+    signingSecret,
+    botToken:
+      config?.botToken ??
+      (zeroConfig ? process.env.SLACK_BOT_TOKEN : undefined),
+    clientId:
+      config?.clientId ??
+      (zeroConfig ? process.env.SLACK_CLIENT_ID : undefined),
+    clientSecret:
+      config?.clientSecret ??
+      (zeroConfig ? process.env.SLACK_CLIENT_SECRET : undefined),
+    encryptionKey: config?.encryptionKey ?? process.env.SLACK_ENCRYPTION_KEY,
+    logger: config?.logger ?? new ConsoleLogger("info").child("slack"),
+    userName: config?.userName,
+    botUserId: config?.botUserId,
+  };
+  return new SlackAdapter(resolved);
 }
 
 // Re-export card converter for advanced use
