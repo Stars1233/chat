@@ -18,12 +18,8 @@ const Layout = async ({ children, params }: LayoutProps<"/[lang]">) => {
     >
       <body>
         <GeistdocsProvider basePath={basePath} lang={lang}>
-          <Banner className="bg-black text-white hidden md:flex">
-            Looking for the chatbot template? It's now{" "}<a className="underline ml-1" target="_blank" href="https://openchat.ai-sdk.dev/">OpenChat</a>.
-          </Banner>
-
-          <Banner className="bg-black text-white md:hidden">
-            The chatbot template is now{" "}<a className="underline ml-1" target="_blank" href="https://openchat.ai-sdk.dev/">OpenChat</a>.
+          <Banner className="bg-black text-white">
+            Looking for the chatbot template? It's now{" "}<a className="underline ml-1" target="_blank" href="https://chatbot.ai-sdk.dev/">here</a>.
           </Banner>
           <Navbar />
           {children}
