@@ -6,6 +6,7 @@ import {
   Actions,
   Button,
   Card,
+  CardLink,
   Chat,
   Divider,
   emoji,
@@ -93,6 +94,9 @@ bot.onNewMention(async (thread, message) => {
       <Text>
         {`${emoji.sparkles} **Mention me with "AI"** to enable AI assistant mode`}
       </Text>
+      <CardLink url="https://chat-sdk.dev/docs/cards">
+        View documentation
+      </CardLink>
       <Divider />
       <Fields>
         <Field label="DM Support" value={thread.isDM ? "Yes" : "No"} />
