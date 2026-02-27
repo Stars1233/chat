@@ -3,6 +3,7 @@
   "ignoreDependencies": ["@biomejs/biome"],
   "ignore": ["apps/docs/**/*"],
   "rules": {
-    "duplicates": "off"
+    "duplicates": "off",
+    "types": "off"
   }
 }

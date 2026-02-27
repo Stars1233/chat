@@ -4,6 +4,7 @@
 
 import { generateKeyPairSync, sign } from "node:crypto";
 import { InteractionType } from "discord-api-types/v10";
+import type { Mock } from "vitest";
 import { vi } from "vitest";
 
 // Generate an Ed25519 keypair for testing using Node.js crypto
@@ -193,24 +194,27 @@ export function createDiscordButtonRequest(options: {
 /**
  * Mock Discord API responses
  */
+// biome-ignore lint/suspicious/noExplicitAny: test mock types
+type MockFn = Mock<(...args: any[]) => any>;
+
 export interface MockDiscordApi {
   channels: {
-    get: ReturnType<typeof vi.fn>;
-    typing: ReturnType<typeof vi.fn>;
+    get: MockFn;
+    typing: MockFn;
   };
   clearMocks: () => void;
   messages: {
-    create: ReturnType<typeof vi.fn>;
-    update: ReturnType<typeof vi.fn>;
-    delete: ReturnType<typeof vi.fn>;
-    list: ReturnType<typeof vi.fn>;
+    create: MockFn;
+    update: MockFn;
+    delete: MockFn;
+    list: MockFn;
   };
   reactions: {
-    add: ReturnType<typeof vi.fn>;
-    remove: ReturnType<typeof vi.fn>;
+    add: MockFn;
+    remove: MockFn;
   };
   users: {
-    createDM: ReturnType<typeof vi.fn>;
+    createDM: MockFn;
   };
 }
 
