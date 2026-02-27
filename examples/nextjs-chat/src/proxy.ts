@@ -2,8 +2,6 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { createClient } from "redis";
 
-export const runtime = "nodejs";
-
 // Redis URL from environment
 const REDIS_URL = process.env.REDIS_URL || "";
 
