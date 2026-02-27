@@ -22,7 +22,7 @@ async function getRedisClient() {
   if (!redisClient) {
     redisClient = createClient({ url: REDIS_URL });
     redisClient.on("error", (err) => {
-      console.error("[middleware] Redis client error:", err);
+      console.error("[proxy] Redis client error:", err);
     });
   }
 
@@ -49,12 +49,12 @@ async function getPreviewBranchUrl(): Promise<string | null> {
     const value = await client.get(PREVIEW_BRANCH_KEY);
     return value || null;
   } catch (error) {
-    console.error("[middleware] Error fetching preview branch URL:", error);
+    console.error("[proxy] Error fetching preview branch URL:", error);
     return null;
   }
 }
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   if (process.env.NODE_ENV !== "production") {
     return NextResponse.next();
   }
@@ -79,7 +79,7 @@ export async function middleware(request: NextRequest) {
     previewBranchUrl
   );
 
-  console.warn(`[middleware] Proxying ${pathname} to ${targetUrl.hostname}`);
+  console.warn(`[proxy] Proxying ${pathname} to ${targetUrl.hostname}`);
 
   // Proxy the request to the preview branch
   return NextResponse.rewrite(targetUrl);
