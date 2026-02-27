@@ -6,6 +6,7 @@ import {
   NetworkError,
   ValidationError,
 } from "@chat-adapter/shared";
+import { auth, chat, type chat_v1 } from "@googleapis/chat";
 import type {
   ActionEvent,
   Adapter,
@@ -34,7 +35,6 @@ import {
   defaultEmojiResolver,
   Message,
 } from "chat";
-import { type chat_v1, google } from "googleapis";
 import { cardToGoogleCard } from "./cards";
 import { GoogleChatFormatConverter } from "./markdown";
 import {
@@ -123,7 +123,7 @@ export interface GoogleChatAdapterADCConfig
 export interface GoogleChatAdapterCustomAuthConfig
   extends GoogleChatAdapterBaseConfig {
   /** Custom auth client (JWT, OAuth2, GoogleAuth, etc.) */
-  auth: Parameters<typeof google.chat>[0]["auth"];
+  auth: Parameters<typeof chat>[0]["auth"];
   credentials?: never;
   useApplicationDefaultCredentials?: never;
 }
@@ -253,9 +253,9 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
   private readonly credentials?: ServiceAccountCredentials;
   private readonly useADC: boolean = false;
   /** Custom auth client (e.g., Vercel OIDC) */
-  private readonly customAuth?: Parameters<typeof google.chat>[0]["auth"];
+  private readonly customAuth?: Parameters<typeof chat>[0]["auth"];
   /** Auth client for making authenticated requests */
-  private readonly authClient!: Parameters<typeof google.chat>[0]["auth"];
+  private readonly authClient!: Parameters<typeof chat>[0]["auth"];
   /** User email to impersonate for Workspace Events API (domain-wide delegation) */
   private readonly impersonateUser?: string;
   /** In-progress subscription creations to prevent duplicate requests */
@@ -276,7 +276,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
     this.impersonateUser = config.impersonateUser;
     this.endpointUrl = config.endpointUrl;
 
-    let auth: Parameters<typeof google.chat>[0]["auth"];
+    let authClient: Parameters<typeof chat>[0]["auth"];
 
     // Scopes needed for full bot functionality including reactions and DMs
     // Note: chat.spaces.create requires domain-wide delegation to work
@@ -291,7 +291,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
     if ("credentials" in config && config.credentials) {
       // Service account credentials (JWT)
       this.credentials = config.credentials;
-      auth = new google.auth.JWT({
+      authClient = new auth.JWT({
         email: config.credentials.client_email,
         key: config.credentials.private_key,
         scopes,
@@ -303,13 +303,13 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
       // Application Default Credentials (ADC)
       // Works with Workload Identity Federation, GCE metadata, GOOGLE_APPLICATION_CREDENTIALS env var
       this.useADC = true;
-      auth = new google.auth.GoogleAuth({
+      authClient = new auth.GoogleAuth({
         scopes,
       });
     } else if ("auth" in config && config.auth) {
       // Custom auth client provided directly (e.g., Vercel OIDC)
       this.customAuth = config.auth;
-      auth = config.auth;
+      authClient = config.auth;
     } else {
       throw new ValidationError(
         "gchat",
@@ -317,14 +317,14 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
       );
     }
 
-    this.authClient = auth;
-    this.chatApi = google.chat({ version: "v1", auth });
+    this.authClient = authClient;
+    this.chatApi = chat({ version: "v1", auth: authClient });
 
     // Create impersonated Chat API for user-context operations (DMs)
     // Domain-wide delegation requires setting the `subject` claim to the impersonated user
     if (this.impersonateUser) {
       if (this.credentials) {
-        const impersonatedAuth = new google.auth.JWT({
+        const impersonatedAuth = new auth.JWT({
           email: this.credentials.client_email,
           key: this.credentials.private_key,
           scopes: [
@@ -334,13 +334,13 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
           ],
           subject: this.impersonateUser,
         });
-        this.impersonatedChatApi = google.chat({
+        this.impersonatedChatApi = chat({
           version: "v1",
           auth: impersonatedAuth,
         });
       } else if (this.useADC) {
         // ADC with impersonation (requires clientOptions.subject support)
-        const impersonatedAuth = new google.auth.GoogleAuth({
+        const impersonatedAuth = new auth.GoogleAuth({
           scopes: [
             "https://www.googleapis.com/auth/chat.spaces",
             "https://www.googleapis.com/auth/chat.spaces.create",
@@ -350,7 +350,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
             subject: this.impersonateUser,
           },
         });
-        this.impersonatedChatApi = google.chat({
+        this.impersonatedChatApi = chat({
           version: "v1",
           auth: impersonatedAuth,
         });
@@ -2489,7 +2489,7 @@ export class GoogleChatAdapter implements Adapter<GoogleChatThreadId, unknown> {
 }
 
 export function createGoogleChatAdapter(config?: {
-  auth?: Parameters<typeof google.chat>[0]["auth"];
+  auth?: Parameters<typeof chat>[0]["auth"];
   credentials?: ServiceAccountCredentials;
   endpointUrl?: string;
   impersonateUser?: string;
