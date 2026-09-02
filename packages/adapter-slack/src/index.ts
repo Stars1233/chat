@@ -780,6 +780,7 @@ export interface SlackEvent {
   /** Rich text blocks containing structured elements (links, mentions, etc.) */
   blocks?: SlackMessageBlock[];
   bot_id?: string;
+  bot_profile?: { user_id?: string };
   channel?: string;
   /** Channel type: "channel", "group", "mpim", or "im" (DM) */
   channel_type?: string;
@@ -4228,7 +4229,8 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
       formatted,
       raw: event,
       author: {
-        userId: event.user || event.bot_id || "unknown",
+        userId:
+          event.user || event.bot_profile?.user_id || event.bot_id || "unknown",
         userName,
         fullName,
         email,
@@ -6201,7 +6203,8 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
       formatted,
       raw: event,
       author: {
-        userId: event.user || event.bot_id || "unknown",
+        userId:
+          event.user || event.bot_profile?.user_id || event.bot_id || "unknown",
         userName,
         fullName,
         isBot: !!event.bot_id,
@@ -6743,21 +6746,23 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
    *
    * Slack messages can come from:
    * - User messages: have `user` field (U_xxx format)
-   * - Bot messages: have `bot_id` field (B_xxx format)
+   * - Bot messages: have `bot_id` and may include a bot user ID
    *
    * We check both because:
-   * - _botUserId is the user ID (U_xxx) - matches event.user
+   * - _botUserId is the user ID (U_xxx) - matches event.user or bot_profile.user_id
    * - _botId is the bot ID (B_xxx) - matches event.bot_id
    */
   protected isMessageFromSelf(event: SlackEvent): boolean {
+    const userId = event.user || event.bot_profile?.user_id;
+
     // Check request context first (multi-workspace)
     const ctx = this.requestContext.getStore();
-    if (ctx?.botUserId && event.user === ctx.botUserId) {
+    if (ctx?.botUserId && userId === ctx.botUserId) {
       return true;
     }
 
     // Primary check: user ID match (for messages sent as the bot user)
-    if (this._botUserId && event.user === this._botUserId) {
+    if (this._botUserId && userId === this._botUserId) {
       return true;
     }
 
