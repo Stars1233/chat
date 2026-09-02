@@ -9,7 +9,12 @@ import {
   isEncryptedTokenData,
   ValidationError,
 } from "@chat-adapter/shared";
-import type { AgentActivityPayload, Comment } from "@linear/sdk";
+import type {
+  AgentActivity,
+  AgentActivityPayload,
+  AgentSession,
+  Comment,
+} from "@linear/sdk";
 import { AgentActivityType, LinearClient } from "@linear/sdk";
 import {
   type AgentSessionEventWebhookPayload,
@@ -64,6 +69,19 @@ const COMMENT_THREAD_PATTERN = /^([^:]+):c:([^:]+)$/;
 const ISSUE_SESSION_THREAD_PATTERN = /^([^:]+):s:([^:]+)$/;
 const INSTALLATION_KEY_PREFIX = "linear:installation";
 const INSTALLATION_REFRESH_BUFFER_MS = 5 * 60 * 1000;
+
+function renderActivity(activity: AgentActivity): string {
+  const { content } = activity;
+  if ("body" in content) {
+    return content.body;
+  }
+
+  const action = content.action.trim() || "Action";
+  const parameter = content.parameter.trim();
+  const result = content.result?.trim();
+  const text = parameter ? `${action}: ${parameter}` : action;
+  return result ? `${text}\n${result}` : text;
+}
 
 function parseEnvClientCredentialScopes(value?: string): string[] | undefined {
   if (!value) {
@@ -1115,17 +1133,9 @@ export class LinearAdapter
         return null;
       }
 
-      if (!agentActivity.sourceCommentId) {
-        this.logger.warn("Missing source comment ID for agent activity", {
-          agentSessionId: payload.agentSession.id,
-          agentActivityId: agentActivity.id,
-        });
-        return null;
-      }
-
       const content = agentActivity.content as { type: "prompt"; body: string };
       const commentData: LinearCommentData = {
-        id: agentActivity.sourceCommentId,
+        id: agentActivity.sourceCommentId ?? agentActivity.id,
         body: content.body,
         issueId,
         user: {
@@ -1165,16 +1175,14 @@ export class LinearAdapter
         return null;
       }
 
-      if (!agentSession.comment) {
-        this.logger.warn("Missing comment for agent session", {
-          agentSessionId: payload.agentSession.id,
-        });
-        return null;
-      }
+      const sessionComment = agentSession.comment ?? {
+        id: `agent-session-${agentSession.id}`,
+        body: payload.promptContext ?? "",
+      };
 
       const commentData: LinearCommentData = {
-        id: agentSession.comment.id,
-        body: agentSession.comment.body,
+        id: sessionComment.id,
+        body: sessionComment.body,
         issueId,
         user: agentSession.creator
           ? {
@@ -1187,9 +1195,9 @@ export class LinearAdapter
             }
           : {
               type: "bot",
-              id: this.botUserId,
-              displayName: this.userName,
-              fullName: this.userName,
+              id: "linear-automation",
+              displayName: "Linear automation",
+              fullName: "Linear automation",
               email: undefined,
               avatarUrl: undefined,
             },
@@ -2052,9 +2060,10 @@ export class LinearAdapter
 
     const rootComment = await agentSession.comment;
     if (!rootComment) {
-      throw new AdapterError(
-        `Linear agent session ${thread.agentSessionId} is missing a root comment`,
-        "linear"
+      return await this.fetchAgentSessionActivities(
+        agentSession,
+        issueId,
+        options
       );
     }
 
@@ -2082,6 +2091,72 @@ export class LinearAdapter
       nextCursor: childrenConnection.pageInfo.hasNextPage
         ? (childrenConnection.pageInfo.endCursor ?? undefined)
         : undefined,
+    };
+  }
+
+  protected async fetchAgentSessionActivities(
+    agentSession: AgentSession,
+    issueId: string,
+    options?: FetchOptions
+  ): Promise<FetchResult<LinearRawMessage>> {
+    const forward = options?.direction === "forward";
+    const activitiesConnection = await agentSession.activities({
+      ...(forward
+        ? {
+            first: options?.limit ?? 50,
+            ...(options?.cursor ? { after: options.cursor } : {}),
+          }
+        : {
+            last: options?.limit ?? 50,
+            ...(options?.cursor ? { before: options.cursor } : {}),
+          }),
+    });
+    const activities = [...activitiesConnection.nodes].sort(
+      (first, second) => first.createdAt.getTime() - second.createdAt.getTime()
+    );
+    const messages = await Promise.all(
+      activities.map(async (activity) => {
+        const user = await activity.user;
+        const isBot = activity.content.type !== AgentActivityType.Prompt;
+        const fallback = isBot ? this.userName : "unknown";
+        const actor: LinearActorData = {
+          type: isBot ? "bot" : "user",
+          id:
+            user?.id ?? activity.userId ?? (isBot ? this.botUserId : "unknown"),
+          displayName: user?.displayName ?? user?.name ?? fallback,
+          fullName: user?.name ?? user?.displayName ?? fallback,
+          email: user?.email ?? undefined,
+          avatarUrl: user?.avatarUrl ?? undefined,
+        };
+
+        return this.parseMessage({
+          kind: "agent_session_comment",
+          organizationId: this.organizationId,
+          agentSessionId: agentSession.id,
+          comment: {
+            id: activity.sourceCommentId ?? activity.id,
+            body: renderActivity(activity),
+            issueId,
+            user: actor,
+            parentId: undefined,
+            createdAt: activity.createdAt.toISOString(),
+            updatedAt: activity.updatedAt.toISOString(),
+            url: agentSession.url ?? undefined,
+          },
+        });
+      })
+    );
+    const pageInfo = activitiesConnection.pageInfo;
+    let cursor: string | undefined;
+    if (forward && pageInfo.hasNextPage) {
+      cursor = pageInfo.endCursor ?? undefined;
+    } else if (!forward && pageInfo.hasPreviousPage) {
+      cursor = pageInfo.startCursor ?? undefined;
+    }
+
+    return {
+      messages,
+      nextCursor: cursor,
     };
   }
 
@@ -2298,12 +2373,16 @@ export class LinearAdapter
     return new Message<LinearRawMessage>({
       id: raw.comment.id,
       isMention: raw.kind === "agent_session_comment", // Agent session comments are treated as mentions as they directly target the bot
-      threadId: this.encodeThreadId({
-        issueId: raw.comment.issueId,
-        commentId: raw.comment.id,
-        agentSessionId:
-          raw.kind === "agent_session_comment" ? raw.agentSessionId : undefined,
-      }),
+      threadId:
+        raw.kind === "agent_session_comment"
+          ? this.encodeThreadId({
+              issueId: raw.comment.issueId,
+              agentSessionId: raw.agentSessionId,
+            })
+          : this.encodeThreadId({
+              issueId: raw.comment.issueId,
+              commentId: raw.comment.id,
+            }),
       text,
       formatted,
       author: {
