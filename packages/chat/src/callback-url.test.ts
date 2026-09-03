@@ -56,7 +56,10 @@ describe("processCardCallbackUrls", () => {
       ],
     });
 
-    const result = await processCardCallbackUrls(card, state);
+    const result = await processCardCallbackUrls(card, state, {
+      id: "slack:C1",
+      type: "channel",
+    });
     expect(result).toBe(card);
   });
 
@@ -74,7 +77,10 @@ describe("processCardCallbackUrls", () => {
       ],
     });
 
-    const result = await processCardCallbackUrls(card, state);
+    const result = await processCardCallbackUrls(card, state, {
+      id: "slack:C1:1.1",
+      type: "thread",
+    });
 
     const actions = result.children.find((c) => c.type === "actions");
     expect(actions).toBeDefined();
@@ -87,8 +93,15 @@ describe("processCardCallbackUrls", () => {
     expect(decoded.callbackToken).toBeDefined();
 
     const token = decoded.callbackToken ?? "";
-    const resolved = await resolveCallbackUrl(token, state);
+    const resolved = await resolveCallbackUrl(token, state, {
+      actionId: "approve",
+      threadId: "slack:C1:1.1",
+    });
     expect(resolved?.url).toBe("https://example.com/webhook/123");
+    expect(resolved?.scope).toEqual({
+      id: "slack:C1:1.1",
+      type: "thread",
+    });
   });
 
   it("stores original value in state alongside callback URL", async () => {
@@ -106,7 +119,10 @@ describe("processCardCallbackUrls", () => {
       ],
     });
 
-    const result = await processCardCallbackUrls(card, state);
+    const result = await processCardCallbackUrls(card, state, {
+      id: "slack:C1",
+      type: "channel",
+    });
     const button = result.children.find((c) => c.type === "actions")
       ?.children[0];
 
@@ -114,7 +130,10 @@ describe("processCardCallbackUrls", () => {
 
     const decoded = decodeCallbackValue(button?.value);
     const token = decoded.callbackToken ?? "";
-    const resolved = await resolveCallbackUrl(token, state);
+    const resolved = await resolveCallbackUrl(token, state, {
+      actionId: "btn",
+      channelId: "slack:C1",
+    });
     expect(resolved?.url).toBe("https://hook.example.com");
     expect(resolved?.originalValue).toBe("item-99");
   });
@@ -134,7 +153,10 @@ describe("processCardCallbackUrls", () => {
       ],
     });
 
-    const result = await processCardCallbackUrls(card, state);
+    const result = await processCardCallbackUrls(card, state, {
+      id: "slack:C1",
+      type: "channel",
+    });
     const actions = result.children.find((c) => c.type === "actions");
     const normalBtn = actions?.children[0];
     const callbackBtn = actions?.children[1];
@@ -160,7 +182,10 @@ describe("processCardCallbackUrls", () => {
       ],
     });
 
-    const result = await processCardCallbackUrls(card, state);
+    const result = await processCardCallbackUrls(card, state, {
+      id: "slack:C1",
+      type: "channel",
+    });
     const section = result.children.find((c) => c.type === "section");
     expect(section).toBeDefined();
     if (section?.type !== "section") {
@@ -180,7 +205,10 @@ describe("processCardCallbackUrls", () => {
 
     const decoded = decodeCallbackValue(button.value);
     const token = decoded.callbackToken ?? "";
-    const resolved = await resolveCallbackUrl(token, state);
+    const resolved = await resolveCallbackUrl(token, state, {
+      actionId: "nested-btn",
+      channelId: "slack:C1",
+    });
     expect(resolved?.url).toBe("https://example.com/nested");
   });
 
@@ -199,7 +227,10 @@ describe("processCardCallbackUrls", () => {
     });
 
     const original = JSON.parse(JSON.stringify(card));
-    await processCardCallbackUrls(card, state);
+    await processCardCallbackUrls(card, state, {
+      id: "slack:C1",
+      type: "channel",
+    });
     expect(card).toEqual(original);
   });
 });
@@ -218,19 +249,96 @@ describe("resolveCallbackUrl", () => {
 
   it("resolves stored callback with URL and original value", async () => {
     await state.set("chat:callback:test-token", {
+      actionId: "approve",
       url: "https://example.com/hook",
       originalValue: "item-42",
+      scope: { id: "slack:C1:1.1", type: "thread" },
     });
-    const result = await resolveCallbackUrl("test-token", state);
+    const result = await resolveCallbackUrl("test-token", state, {
+      actionId: "approve",
+      threadId: "slack:C1:1.1",
+    });
     expect(result?.url).toBe("https://example.com/hook");
     expect(result?.originalValue).toBe("item-42");
+    expect(result?.scope).toEqual({
+      id: "slack:C1:1.1",
+      type: "thread",
+    });
+    expect(await state.get("chat:callback:test-token")).toBeNull();
   });
 
-  it("handles legacy string format", async () => {
+  it("rejects legacy unbound callback records", async () => {
     await state.set("chat:callback:legacy-token", "https://example.com/hook");
-    const result = await resolveCallbackUrl("legacy-token", state);
-    expect(result?.url).toBe("https://example.com/hook");
-    expect(result?.originalValue).toBeUndefined();
+    const result = await resolveCallbackUrl("legacy-token", state, {
+      actionId: "approve",
+    });
+    expect(result).toBeNull();
+  });
+
+  it("allows a callback token to be consumed only once", async () => {
+    await state.set("chat:callback:single-use", {
+      actionId: "approve",
+      scope: { id: "slack:C1", type: "channel" },
+      url: "https://example.com/hook",
+    });
+
+    await expect(
+      resolveCallbackUrl("single-use", state, {
+        actionId: "approve",
+        channelId: "slack:C1",
+      })
+    ).resolves.toMatchObject({ url: "https://example.com/hook" });
+    await expect(
+      resolveCallbackUrl("single-use", state, {
+        actionId: "approve",
+        channelId: "slack:C1",
+      })
+    ).resolves.toBeNull();
+  });
+
+  it("rejects callback tokens outside their action and thread", async () => {
+    await state.set("chat:callback:bound-token", {
+      actionId: "approve",
+      scope: { id: "slack:C1:1.1", type: "thread" },
+      url: "https://example.com/hook",
+    });
+
+    await expect(
+      resolveCallbackUrl("bound-token", state, {
+        actionId: "deny",
+        threadId: "slack:C1:1.1",
+      })
+    ).resolves.toBeNull();
+    await expect(
+      resolveCallbackUrl("bound-token", state, {
+        actionId: "approve",
+        threadId: "slack:C1:2.2",
+      })
+    ).resolves.toBeNull();
+    expect(await state.get("chat:callback:bound-token")).not.toBeNull();
+  });
+
+  it("rejects callback tokens outside their channel", async () => {
+    await state.set("chat:callback:channel-token", {
+      actionId: "approve",
+      scope: { id: "slack:C1", type: "channel" },
+      url: "https://example.com/hook",
+    });
+
+    await expect(
+      resolveCallbackUrl("channel-token", state, {
+        actionId: "approve",
+        channelId: "slack:C2",
+        threadId: "slack:C2:2.2",
+      })
+    ).resolves.toBeNull();
+    await expect(
+      resolveCallbackUrl("channel-token", state, {
+        actionId: "approve",
+        channelId: "slack:C1",
+        threadId: "slack:C1:2.2",
+      })
+    ).resolves.toMatchObject({ url: "https://example.com/hook" });
   });
 });
 

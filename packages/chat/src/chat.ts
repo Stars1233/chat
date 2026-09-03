@@ -1728,9 +1728,16 @@ export class Chat<
 
     const { callbackToken } = decodeCallbackValue(event.value);
 
-    let resolved: { url: string; originalValue?: string } | null = null;
+    let resolved: Awaited<ReturnType<typeof resolveCallbackUrl>> = null;
     if (callbackToken) {
-      resolved = await resolveCallbackUrl(callbackToken, this._stateAdapter);
+      const channelId = event.threadId
+        ? event.adapter.channelIdFromThreadId(event.threadId)
+        : undefined;
+      resolved = await resolveCallbackUrl(callbackToken, this._stateAdapter, {
+        actionId: event.actionId,
+        channelId,
+        threadId: event.threadId,
+      });
     }
 
     const actionEvent = resolved
@@ -1743,7 +1750,7 @@ export class Chat<
       callbackUrlPromise = (async () => {
         const { error } = await postToCallbackUrl(callbackUrl, {
           type: "action",
-          actionId: event.actionId,
+          actionId: resolved.actionId,
           value: resolved.originalValue,
           user: { id: event.user.userId, name: event.user.userName },
           threadId: event.threadId,
@@ -2793,10 +2800,12 @@ export class Chat<
         lockKey,
         messageId: latest.message.id,
       });
-      await this.dispatchToHandlers(adapter, messageThreadId, latest.message, {
-        skipped: messageSkipped,
-        totalSinceLastHandler: messageSkipped.length + 1,
-      });
+      await runInConversation(messageThreadId, () =>
+        this.dispatchToHandlers(adapter, messageThreadId, latest.message, {
+          skipped: messageSkipped,
+          totalSinceLastHandler: messageSkipped.length + 1,
+        })
+      );
       skipped.length = 0;
       // Loop again: a message enqueued while the handler ran must be
       // debounced and processed, not stranded until the next webhook.
@@ -2868,11 +2877,13 @@ export class Chat<
         totalSinceLastHandler: skipped.length + 1,
       };
 
-      await this.dispatchToHandlers(
-        adapter,
-        messageThreadId,
-        latest.message,
-        context
+      await runInConversation(messageThreadId, () =>
+        this.dispatchToHandlers(
+          adapter,
+          messageThreadId,
+          latest.message,
+          context
+        )
       );
 
       // After processing, check if MORE messages arrived during this handler

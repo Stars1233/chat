@@ -8,11 +8,25 @@ import type { StateAdapter } from "./types";
 
 const CALLBACK_TOKEN_PREFIX = "__cb:";
 const CALLBACK_CACHE_KEY_PREFIX = "chat:callback:";
-const CALLBACK_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+const CALLBACK_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const CALLBACK_LOCK_TTL_MS = 10_000;
 
 interface StoredCallback {
+  actionId: string;
   originalValue?: string;
+  scope: CallbackScope;
   url: string;
+}
+
+interface CallbackContext {
+  actionId: string;
+  channelId?: string;
+  threadId?: string;
+}
+
+interface CallbackScope {
+  id: string;
+  type: "channel" | "thread";
 }
 
 export function encodeCallbackValue(token: string): string {
@@ -34,7 +48,8 @@ function generateToken(): string {
 
 async function processActionsElement(
   actions: ActionsElement,
-  stateAdapter: StateAdapter
+  stateAdapter: StateAdapter,
+  scope: CallbackScope
 ): Promise<ActionsElement> {
   return {
     type: "actions",
@@ -46,8 +61,10 @@ async function processActionsElement(
 
         const token = generateToken();
         const stored: StoredCallback = {
+          actionId: el.id,
           url: el.callbackUrl,
           originalValue: el.value,
+          scope,
         };
         await stateAdapter.set(
           `${CALLBACK_CACHE_KEY_PREFIX}${token}`,
@@ -92,16 +109,17 @@ function hasCallbackButtons(children: CardChild[]): boolean {
 
 async function processChildren(
   children: CardChild[],
-  stateAdapter: StateAdapter
+  stateAdapter: StateAdapter,
+  scope: CallbackScope
 ): Promise<CardChild[]> {
   const result: CardChild[] = [];
   for (const child of children) {
     if (child.type === "actions") {
-      result.push(await processActionsElement(child, stateAdapter));
+      result.push(await processActionsElement(child, stateAdapter, scope));
     } else if (child.type === "section" && "children" in child) {
       result.push({
         ...child,
-        children: await processChildren(child.children, stateAdapter),
+        children: await processChildren(child.children, stateAdapter, scope),
       });
     } else {
       result.push(child);
@@ -112,7 +130,8 @@ async function processChildren(
 
 export async function processCardCallbackUrls(
   card: CardElement,
-  stateAdapter: StateAdapter
+  stateAdapter: StateAdapter,
+  scope: CallbackScope
 ): Promise<CardElement> {
   if (!hasCallbackButtons(card.children)) {
     return card;
@@ -120,24 +139,48 @@ export async function processCardCallbackUrls(
 
   return {
     ...card,
-    children: await processChildren(card.children, stateAdapter),
+    children: await processChildren(card.children, stateAdapter, scope),
   };
 }
 
 export async function resolveCallbackUrl(
   token: string,
-  stateAdapter: StateAdapter
-): Promise<{ url: string; originalValue?: string } | null> {
-  const stored = await stateAdapter.get<StoredCallback | string>(
-    `${CALLBACK_CACHE_KEY_PREFIX}${token}`
-  );
-  if (!stored) {
+  stateAdapter: StateAdapter,
+  context?: CallbackContext
+): Promise<StoredCallback | null> {
+  const key = `${CALLBACK_CACHE_KEY_PREFIX}${token}`;
+  const lock = await stateAdapter.acquireLock(key, CALLBACK_LOCK_TTL_MS);
+  if (!lock) {
     return null;
   }
-  if (typeof stored === "string") {
-    return { url: stored };
+
+  try {
+    const stored = await stateAdapter.get<StoredCallback>(key);
+    if (
+      !stored ||
+      typeof stored !== "object" ||
+      typeof stored.actionId !== "string" ||
+      typeof stored.url !== "string" ||
+      (stored.originalValue !== undefined &&
+        typeof stored.originalValue !== "string") ||
+      !stored.scope ||
+      typeof stored.scope.id !== "string" ||
+      (stored.scope.type !== "channel" && stored.scope.type !== "thread")
+    ) {
+      return null;
+    }
+
+    const scopeId =
+      stored.scope.type === "channel" ? context?.channelId : context?.threadId;
+    if (stored.actionId !== context?.actionId || stored.scope.id !== scopeId) {
+      return null;
+    }
+
+    await stateAdapter.delete(key);
+    return stored;
+  } finally {
+    await stateAdapter.releaseLock(lock);
   }
-  return stored;
 }
 
 export async function postToCallbackUrl(

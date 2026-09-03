@@ -9,6 +9,7 @@ async function* chunks(): AsyncGenerator<string> {
 }
 
 import { Chat } from "./chat";
+import { activeConversation } from "./context";
 import { getEmoji } from "./emoji";
 import { LockError } from "./errors";
 import { jsx } from "./jsx-runtime";
@@ -1767,8 +1768,10 @@ describe("Chat", () => {
         (mockState as MockStateAdapter).cache.set(
           "chat:callback:testtoken123",
           {
+            actionId: "approve",
             url: "https://example.com/webhook/hook1",
             originalValue: "order-789",
+            scope: { id: "slack:C123", type: "channel" },
           }
         );
 
@@ -1823,7 +1826,9 @@ describe("Chat", () => {
         chat.onAction(handler);
 
         (mockState as MockStateAdapter).cache.set("chat:callback:tok999", {
+          actionId: "deny",
           url: "https://example.com/webhook/hook2",
+          scope: { id: "slack:C123:1234.5678", type: "thread" },
         });
 
         const event: Omit<ActionEvent, "thread" | "openModal"> = {
@@ -1899,7 +1904,9 @@ describe("Chat", () => {
         chat.onAction("approve", specificHandler);
 
         (mockState as MockStateAdapter).cache.set("chat:callback:tok555", {
+          actionId: "approve",
           url: "https://example.com/webhook/hook3",
+          scope: { id: "slack:C123:1234.5678", type: "thread" },
         });
 
         const event: Omit<ActionEvent, "thread" | "openModal"> = {
@@ -3392,7 +3399,9 @@ describe("Chat", () => {
         chat.onAction("approve", vi.fn().mockResolvedValue(undefined));
 
         (mockState as MockStateAdapter).cache.set("chat:callback:bad-token", {
+          actionId: "approve",
           url: "https://example.com/webhook/will-fail",
+          scope: { id: "slack:C123:1234.5678", type: "thread" },
         });
 
         await chat.processAction(
@@ -5514,8 +5523,10 @@ describe("Chat", () => {
 
       const first = "telegram:C123:topic1";
       const second = "telegram:C123:topic2";
+      const activeConversations: Array<string | undefined> = [];
       const mentions = vi.fn().mockResolvedValue(undefined);
       const subscribed = vi.fn().mockImplementation(async (thread, message) => {
+        activeConversations.push(activeConversation());
         await thread.setState({ request: message.text });
       });
       queueChat.onNewMention(mentions);
@@ -5551,6 +5562,7 @@ describe("Chat", () => {
       expect(subscribed).toHaveBeenCalledTimes(1);
       expect(subscribed.mock.calls[0][0].id).toBe(second);
       expect(subscribed.mock.calls[0][1].threadId).toBe(second);
+      expect(activeConversations).toEqual([second]);
       expect(subscribed.mock.calls[0][2]).toEqual({
         skipped: [],
         totalSinceLastHandler: 1,
@@ -5589,8 +5601,11 @@ describe("Chat", () => {
 
         const first = "telegram:C123:topic1";
         const second = "telegram:C123:topic2";
+        const activeConversations: Array<string | undefined> = [];
         const mentions = vi.fn().mockResolvedValue(undefined);
-        const subscribed = vi.fn().mockResolvedValue(undefined);
+        const subscribed = vi.fn().mockImplementation(async () => {
+          activeConversations.push(activeConversation());
+        });
         debounceChat.onNewMention(mentions);
         debounceChat.onSubscribedMessage(subscribed);
         await state.subscribe(second);
@@ -5619,6 +5634,7 @@ describe("Chat", () => {
         expect(subscribed).toHaveBeenCalledTimes(1);
         expect(subscribed.mock.calls[0][0].id).toBe(second);
         expect(subscribed.mock.calls[0][1].threadId).toBe(second);
+        expect(activeConversations).toEqual([second]);
         expect(subscribed.mock.calls[0][2]).toEqual({
           skipped: [],
           totalSinceLastHandler: 1,
