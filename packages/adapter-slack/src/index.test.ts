@@ -7775,7 +7775,7 @@ describe("configured suggestedPrompts", () => {
     );
   });
 
-  it("passes active-view entities to the resolver under agentView", async () => {
+  it("passes team and active-view entities to the resolver under agentView", async () => {
     const resolver = vi.fn().mockResolvedValue(null);
     const { adapter } = await setup({
       agentView: true,
@@ -7797,6 +7797,7 @@ describe("configured suggestedPrompts", () => {
         entities: [
           expect.objectContaining({ kind: "channel", channelId: "C42" }),
         ],
+        teamId: "T123",
       })
     );
   });
