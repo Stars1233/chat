@@ -196,6 +196,10 @@ interface SlackMentionNames {
   users: Map<string, string>;
 }
 
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?${}()|[\]\\]/g, "\\$&");
+}
+
 /**
  * Collect the user and channel IDs referenced by `<@U…>` / `<#C…>` tokens.
  * Parses by splitting on angle brackets to avoid ReDoS.
@@ -699,6 +703,37 @@ function attachmentContent(
   }
 
   return { parts, tables };
+}
+
+function mentionIds(
+  tables: SlackEventTables,
+  attachments: SlackAttachmentContent[]
+): { channelIds: Set<string>; userIds: Set<string> } {
+  const userIds = new Set<string>();
+  const channelIds = new Set<string>();
+  const scan = (data: SlackTableData) => {
+    for (const row of data.rows) {
+      for (const cell of row) {
+        collectMentionIds(cell, userIds, channelIds);
+      }
+    }
+  };
+  for (const data of [...tables.leading, ...tables.trailing]) {
+    scan(data);
+  }
+  for (const attachment of attachments) {
+    for (const data of attachment.tables) {
+      scan(data);
+    }
+    for (const part of attachment.parts) {
+      collectMentionIds(
+        "mrkdwn" in part ? part.mrkdwn : part.literal,
+        userIds,
+        channelIds
+      );
+    }
+  }
+  return { channelIds, userIds };
 }
 
 /**
@@ -4012,45 +4047,25 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
   /**
    * Resolve inline user mentions in Slack mrkdwn text.
    * Converts <@U123> to <@U123|displayName> so that toAst/extractPlainText
-   * renders them as @displayName instead of @U123.
-   *
-   * @param skipSelfMention - When true, skips the bot's own user ID so that
-   *   mention detection (which looks for @botUserId in the text) continues to
-   *   work. Uses the effective request-scoped bot user ID in multi-workspace
-   *   mode, not only the adapter's default bot user ID. Set to false when
-   *   parsing historical/channel messages where mention detection doesn't
-   *   apply.
+   * renders them as @displayName instead of @U123. The bot's own mention is
+   * decoded too — parseSlackMessage detects it from the raw event text and
+   * flags the message with `isMention`.
    */
-  protected async resolveInlineMentions(
-    text: string,
-    skipSelfMention: boolean
-  ): Promise<string> {
+  protected async resolveInlineMentions(text: string): Promise<string> {
     const userIds = new Set<string>();
     const channelIds = new Set<string>();
     collectMentionIds(text, userIds, channelIds);
-    const names = await this.lookupMentionNames(
-      userIds,
-      channelIds,
-      skipSelfMention
-    );
+    const names = await this.lookupMentionNames(userIds, channelIds);
     return applyMentionNames(text, names);
   }
 
   /**
    * Look up display names for collected mention IDs in one parallel wave.
-   * Mutates `userIds`: the bot's own ID is removed when `skipSelfMention` is
-   * set — detectMention needs @botUserId to stay in the text (see
-   * `resolveInlineMentions`).
    */
   private async lookupMentionNames(
     userIds: Set<string>,
-    channelIds: Set<string>,
-    skipSelfMention: boolean
+    channelIds: Set<string>
   ): Promise<SlackMentionNames> {
-    const currentBotUserId = this.botUserId;
-    if (skipSelfMention && currentBotUserId) {
-      userIds.delete(currentBotUserId);
-    }
     if (userIds.size === 0 && channelIds.size === 0) {
       return { channels: new Map(), users: new Map() };
     }
@@ -4069,7 +4084,8 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
         })
       ),
     ]);
-    return { channels: new Map(channelLookups), users: new Map(userLookups) };
+    const userNameMap = new Map(userLookups);
+    return { channels: new Map(channelLookups), users: userNameMap };
   }
 
   /**
@@ -4190,11 +4206,9 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
 
   protected async parseSlackMessage(
     event: SlackEvent,
-    threadId: string,
-    options?: { skipSelfMention?: boolean }
+    threadId: string
   ): Promise<Message<unknown>> {
     const isMe = this.isMessageFromSelf(event);
-    const skipSelfMention = options?.skipSelfMention ?? true;
 
     const rawText = event.text || "";
 
@@ -4234,9 +4248,27 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
       }
     }
 
-    // Resolve inline @mentions to display names
-    const text = await this.resolveInlineMentions(rawText, skipSelfMention);
-    const formatted = await this.resolvedContent(event, text, skipSelfMention);
+    // Resolve inline @mentions to display names. The bot's own mention is
+    // decoded like any other, so detect it here from the raw event text —
+    // after resolution the ID markup is gone, and detectMention's username
+    // pattern cannot reliably match the bot's resolved display name.
+    const text = await this.resolveInlineMentions(rawText);
+    const formatted = await this.resolvedContent(event, text);
+    const { userIds } = mentionIds(
+      eventTables(event),
+      authorAttachments(event).map(attachmentContent)
+    );
+
+    const botUserId = this.botUserId;
+    const selfMentionPattern = botUserId
+      ? new RegExp(
+          `<@!?${escapeRegExp(botUserId)}(?:\\|[^>]*)?>|(?<!\\w)@${escapeRegExp(botUserId)}(?![\\w-])`,
+          "i"
+        )
+      : undefined;
+    const isSelfMentioned = Boolean(
+      selfMentionPattern?.test(rawText) || (botUserId && userIds.has(botUserId))
+    );
 
     return new Message({
       id: event.ts || "",
@@ -4244,6 +4276,7 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
       text: toPlainText(formatted),
       formatted,
       raw: event,
+      isMention: isSelfMentioned || undefined,
       author: {
         userId:
           event.user || event.bot_profile?.user_id || event.bot_id || "unknown",
@@ -6265,41 +6298,15 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
    */
   protected async resolvedContent(
     event: SlackEvent,
-    text: string,
-    skipSelfMention: boolean
+    text: string
   ): Promise<FormattedContent> {
     const { leading, trailing } = eventTables(event);
     const attachments = authorAttachments(event).map(attachmentContent);
-
-    const userIds = new Set<string>();
-    const channelIds = new Set<string>();
-    const collectTable = (data: SlackTableData) => {
-      for (const row of data.rows) {
-        for (const cell of row) {
-          collectMentionIds(cell, userIds, channelIds);
-        }
-      }
-    };
-    for (const data of [...leading, ...trailing]) {
-      collectTable(data);
-    }
-    for (const attachment of attachments) {
-      for (const data of attachment.tables) {
-        collectTable(data);
-      }
-      for (const part of attachment.parts) {
-        collectMentionIds(
-          "mrkdwn" in part ? part.mrkdwn : part.literal,
-          userIds,
-          channelIds
-        );
-      }
-    }
-    const names = await this.lookupMentionNames(
-      userIds,
-      channelIds,
-      skipSelfMention
+    const { channelIds, userIds } = mentionIds(
+      { leading, trailing },
+      attachments
     );
+    const names = await this.lookupMentionNames(userIds, channelIds);
 
     const resolveTable = (data: SlackTableData): SlackTableData => ({
       ...data,
@@ -6512,9 +6519,7 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
       slackMessages.map((msg) => {
         const threadTs = msg.thread_ts || msg.ts || "";
         const threadId = `slack:${channel}:${threadTs}`;
-        return this.parseSlackMessage(msg, threadId, {
-          skipSelfMention: false,
-        });
+        return this.parseSlackMessage(msg, threadId);
       })
     );
 
@@ -6561,9 +6566,7 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
       chronological.map((msg) => {
         const threadTs = msg.thread_ts || msg.ts || "";
         const threadId = `slack:${channel}:${threadTs}`;
-        return this.parseSlackMessage(msg, threadId, {
-          skipSelfMention: false,
-        });
+        return this.parseSlackMessage(msg, threadId);
       })
     );
 
@@ -6629,9 +6632,7 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
         selected.map(async (msg) => {
           const threadTs = msg.ts || "";
           const threadId = `slack:${channel}:${threadTs}`;
-          const rootMessage = await this.parseSlackMessage(msg, threadId, {
-            skipSelfMention: false,
-          });
+          const rootMessage = await this.parseSlackMessage(msg, threadId);
 
           return {
             id: threadId,
