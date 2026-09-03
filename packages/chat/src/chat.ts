@@ -2291,9 +2291,6 @@ export class Chat<
       adapter: adapter.name,
       threadId,
       messageId: message.id,
-      text: message.text,
-      author: message.author.userName,
-      authorUserId: message.author.userId,
       isBot: message.author.isBot,
       isMe: message.author.isMe,
     });

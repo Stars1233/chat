@@ -1,7 +1,11 @@
 import { createClient } from "redis";
+import { authorizePreviewBranchRequest } from "@/lib/authorization";
+import {
+  PREVIEW_BRANCH_KEY,
+  parseAllowedPreviewBranchUrl,
+} from "@/lib/preview-branch";
 
 const REDIS_URL = process.env.REDIS_URL || "";
-const PREVIEW_BRANCH_KEY = "chat-sdk:cache:preview-branch-url";
 
 // Redis client singleton
 let redisClient: ReturnType<typeof createClient> | null = null;
@@ -29,7 +33,12 @@ async function getRedisClient() {
   return redisClient;
 }
 
-export async function GET(): Promise<Response> {
+export async function GET(request: Request): Promise<Response> {
+  const unauthorized = authorizePreviewBranchRequest(request);
+  if (unauthorized) {
+    return unauthorized;
+  }
+
   try {
     const client = await getRedisClient();
     const value = await client.get(PREVIEW_BRANCH_KEY);
@@ -45,26 +54,46 @@ export async function GET(): Promise<Response> {
 }
 
 export async function POST(request: Request): Promise<Response> {
+  const unauthorized = authorizePreviewBranchRequest(request);
+  if (unauthorized) {
+    return unauthorized;
+  }
+
   try {
-    const body = await request.json();
-    const { url } = body;
+    const body: unknown = await request.json();
+    if (!(body && typeof body === "object" && "url" in body)) {
+      return Response.json({ error: "Missing URL" }, { status: 400 });
+    }
+    const { url } = body as { url: unknown };
 
     const client = await getRedisClient();
 
-    if (url) {
-      // Validate URL
-      try {
-        new URL(url);
-      } catch {
-        return Response.json({ error: "Invalid URL" }, { status: 400 });
+    if (typeof url === "string" && url.length > 0) {
+      const allowedUrl = parseAllowedPreviewBranchUrl(url);
+      if (!allowedUrl) {
+        return Response.json(
+          {
+            error:
+              "URL must be an HTTPS Vercel deployment or a configured allowed host",
+          },
+          { status: 400 }
+        );
       }
-      await client.set(PREVIEW_BRANCH_KEY, url);
-    } else {
+      await client.set(PREVIEW_BRANCH_KEY, allowedUrl.origin);
+      return Response.json({ success: true, url: allowedUrl.origin });
+    }
+    if (url === null || url === "") {
       // Clear the preview branch URL
       await client.del(PREVIEW_BRANCH_KEY);
+      return Response.json({ success: true, url: null });
     }
 
-    return Response.json({ success: true, url: url || null });
+    return Response.json(
+      { error: "URL must be a string or null" },
+      {
+        status: 400,
+      }
+    );
   } catch (error) {
     console.error("[settings] Error setting preview branch URL:", error);
     return Response.json(

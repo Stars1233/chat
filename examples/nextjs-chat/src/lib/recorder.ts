@@ -64,32 +64,23 @@ export type RecordEntry =
   | FetchRecord
   | GatewayRecord;
 
-// Headers that contain sensitive data - values will be redacted
-const SENSITIVE_HEADERS = new Set([
-  "authorization",
-  "cookie",
-  "set-cookie",
-  "x-api-key",
-  "x-auth-token",
-  "x-access-token",
-  "x-refresh-token",
-  "x-csrf-token",
-  "x-xsrf-token",
-]);
+const SENSITIVE_HEADER_PATTERN =
+  /authorization|cookie|token|secret|signature|api-key|csrf|xsrf/i;
 
 /**
  * Sanitize header values by redacting sensitive information.
  */
-function sanitizeHeaderValue(key: string, value: string): string {
-  if (SENSITIVE_HEADERS.has(key.toLowerCase())) {
-    // Keep first few chars for debugging (e.g., "Bearer ey...")
-    const prefix = value.slice(0, 10);
-    return `${prefix}...[REDACTED]`;
+export function sanitizeHeaderValue(key: string, value: string): string {
+  if (SENSITIVE_HEADER_PATTERN.test(key)) {
+    return "[REDACTED]";
   }
   return value;
 }
 
 const RECORDING_TTL_SECONDS = 1 * 60 * 60; // 1 hour
+const MAX_RECORD_BYTES = 256 * 1024;
+const MAX_RECORDS_PER_SESSION = 500;
+const RECORDING_READ_TIMEOUT_MS = 5000;
 
 const DEFAULT_FETCH_URL_PATTERNS: RegExp[] = [
   /graph\.microsoft\.com/,
@@ -97,6 +88,67 @@ const DEFAULT_FETCH_URL_PATTERNS: RegExp[] = [
   /\.slack\.com/,
   /chat\.googleapis\.com/,
 ];
+
+async function readBoundedBody(
+  stream: ReadableStream<Uint8Array> | null,
+  contentLength: string | null
+): Promise<string | null> {
+  const declaredLength = contentLength ? Number(contentLength) : 0;
+  if (Number.isFinite(declaredLength) && declaredLength > MAX_RECORD_BYTES) {
+    return null;
+  }
+  if (!stream) {
+    return "";
+  }
+
+  const reader = stream.getReader();
+  const decoder = new TextDecoder();
+  let totalBytes = 0;
+  let body = "";
+  let timedOut = false;
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<null>((resolve) => {
+    timeoutId = setTimeout(() => {
+      timedOut = true;
+      reader.cancel().catch(() => {});
+      resolve(null);
+    }, RECORDING_READ_TIMEOUT_MS);
+  });
+
+  try {
+    while (true) {
+      const result = await Promise.race([reader.read(), timeout]);
+      if (timedOut || result === null) {
+        return null;
+      }
+      if (result.done) {
+        return body + decoder.decode();
+      }
+      totalBytes += result.value.byteLength;
+      if (totalBytes > MAX_RECORD_BYTES) {
+        reader.cancel().catch(() => {});
+        return null;
+      }
+      body += decoder.decode(result.value, { stream: true });
+    }
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+async function readBoundedRequestBody(
+  request: Request
+): Promise<string | null> {
+  return readBoundedBody(request.body, request.headers.get("content-length"));
+}
+
+export async function readBoundedResponseBody(
+  response: Response
+): Promise<string | null> {
+  return readBoundedBody(response.body, response.headers.get("content-length"));
+}
 
 class Recorder {
   private readonly redis: RedisClientType | null = null;
@@ -156,10 +208,14 @@ class Recorder {
 
     const headers: Record<string, string> = {};
     request.headers.forEach((value, key) => {
-      headers[key] = value;
+      headers[key] = sanitizeHeaderValue(key, value);
     });
 
-    const body = await request.clone().text();
+    const body = await readBoundedRequestBody(request.clone());
+    if (body === null) {
+      console.warn("[recorder] Skipping oversized webhook record");
+      return;
+    }
 
     const record: WebhookRecord = {
       type: "webhook",
@@ -190,7 +246,8 @@ class Recorder {
 
     let recordedResponse = response;
     if (recordedResponse && recordedResponse instanceof Response) {
-      recordedResponse = await recordedResponse.clone().text();
+      recordedResponse =
+        (await readBoundedResponseBody(recordedResponse.clone())) ?? undefined;
     }
 
     const record: ApiCallRecord = {
@@ -236,7 +293,13 @@ class Recorder {
 
     try {
       await this.ensureConnected();
-      await this.redis.rPush(this.redisKey, JSON.stringify(record));
+      const serialized = JSON.stringify(record);
+      if (Buffer.byteLength(serialized) > MAX_RECORD_BYTES) {
+        console.warn("[recorder] Skipping oversized record");
+        return;
+      }
+      await this.redis.rPush(this.redisKey, serialized);
+      await this.redis.lTrim(this.redisKey, -MAX_RECORDS_PER_SESSION, -1);
       await this.redis.expire(this.redisKey, RECORDING_TTL_SECONDS);
     } catch (err) {
       console.error("[recorder] Failed to record:", err);
@@ -353,7 +416,7 @@ class Recorder {
         if (response) {
           try {
             const cloned = response.clone();
-            responseBody = await cloned.text();
+            responseBody = (await readBoundedResponseBody(cloned)) ?? undefined;
             const respHeaders: Record<string, string> = {};
             cloned.headers.forEach((value, key) => {
               respHeaders[key] = sanitizeHeaderValue(key, value);
