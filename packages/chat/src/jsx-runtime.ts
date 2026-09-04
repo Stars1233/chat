@@ -41,6 +41,7 @@ import {
   type CardElement,
   CardLink,
   type CardOptions,
+  type CardWidth,
   Chart,
   type ChartDefinition,
   type ChartElement,
@@ -107,6 +108,7 @@ export interface CardProps {
   imageUrl?: string;
   subtitle?: string;
   title?: string;
+  width?: CardWidth;
 }
 
 /** Props for Text component in JSX */
@@ -124,6 +126,8 @@ export interface ButtonProps {
   id: string;
   label?: string;
   style?: ButtonStyle;
+  /** Hover text for the button. Rendered by Teams only; other adapters ignore it */
+  tooltip?: string;
   value?: string;
 }
 
@@ -133,6 +137,8 @@ export interface LinkButtonProps {
   id?: string;
   label?: string;
   style?: ButtonStyle;
+  /** Hover text for the button. Rendered by Teams only; other adapters ignore it */
+  tooltip?: string;
   url: string;
 }
 
@@ -582,16 +588,6 @@ function isFieldProps(props: CardJSXProps): props is FieldProps {
 }
 
 /**
- * Type guard to check if props match CardProps
- */
-function isCardProps(props: CardJSXProps): props is CardProps {
-  return (
-    !("id" in props || "url" in props || "callbackId" in props) &&
-    ("title" in props || "subtitle" in props || "imageUrl" in props)
-  );
-}
-
-/**
  * Type guard to check if props match ModalProps
  */
 function isModalProps(props: CardJSXProps): props is ModalProps {
@@ -724,6 +720,7 @@ function resolveJSXElement(element: JSXElement): AnyCardElement {
       actionType: props.actionType,
       callbackUrl: props.callbackUrl,
       disabled: props.disabled,
+      tooltip: props.tooltip,
     });
   }
 
@@ -742,6 +739,7 @@ function resolveJSXElement(element: JSXElement): AnyCardElement {
       url: props.url,
       label,
       style: props.style,
+      tooltip: props.tooltip,
     });
   }
 
@@ -916,12 +914,15 @@ function resolveJSXElement(element: JSXElement): AnyCardElement {
     });
   }
 
-  // Default: Card({ title, subtitle, imageUrl, children })
-  const cardProps = isCardProps(props) ? props : {};
+  // Default: Card({ title, subtitle, imageUrl, width, children }).
+  // Every other component is dispatched by identity above, so a cast is
+  // safe here and avoids a prop-name allowlist that silently drops new props.
+  const cardProps = props as CardProps;
   return Card({
     title: cardProps.title,
     subtitle: cardProps.subtitle,
     imageUrl: cardProps.imageUrl,
+    width: cardProps.width,
     children: processedChildren as CardChild[],
   });
 }

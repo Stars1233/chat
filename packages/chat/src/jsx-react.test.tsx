@@ -20,6 +20,7 @@ import {
   Fields,
   fromReactElement,
   Image,
+  LinkButton,
   Section,
   Text,
 } from "./cards";
@@ -120,6 +121,16 @@ describe("fromReactElement - React JSX mode", () => {
         expect(result.imageUrl).toBe("https://example.com/image.png");
       }
     });
+
+    it("converts Card with width", () => {
+      const reactCard = createReactElement(Card, {
+        title: "Test",
+        width: "full",
+      });
+
+      const result = fromReactElement(reactCard);
+      expect(result).toMatchObject({ type: "card", width: "full" });
+    });
   });
 
   describe("Text conversion", () => {
@@ -198,6 +209,48 @@ describe("fromReactElement - React JSX mode", () => {
           expect(btn.value).toBe("item-123");
         }
       }
+    });
+
+    it("converts Button with tooltip", () => {
+      const reactCard = createReactElement(Card, {
+        children: createReactElement(Actions, {
+          children: createReactElement(Button, {
+            id: "approve",
+            tooltip: "Approve the request",
+            children: "Approve",
+          }),
+        }),
+      });
+
+      const result = fromReactElement(reactCard);
+      expect(result).toMatchObject({
+        type: "card",
+        children: [
+          {
+            type: "actions",
+            children: [{ type: "button", tooltip: "Approve the request" }],
+          },
+        ],
+      });
+    });
+  });
+
+  describe("LinkButton conversion", () => {
+    it("converts LinkButton with tooltip", () => {
+      const result = fromReactElement(
+        createReactElement(LinkButton, {
+          url: "https://example.com",
+          tooltip: "Opens example.com",
+          children: "Open",
+        })
+      );
+
+      expect(result).toMatchObject({
+        type: "link-button",
+        url: "https://example.com",
+        label: "Open",
+        tooltip: "Opens example.com",
+      });
     });
   });
 

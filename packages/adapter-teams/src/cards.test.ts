@@ -26,7 +26,7 @@ describe("cardToAdaptiveCard", () => {
     expect(adaptive.$schema).toBe(
       "http://adaptivecards.io/schemas/adaptive-card.json"
     );
-    expect(adaptive.version).toBe("1.4");
+    expect(adaptive.version).toBe("1.5");
     expect(adaptive.body).toBeInstanceOf(Array);
   });
 
@@ -449,5 +449,57 @@ describe("cardToAdaptiveCard with CardLink", () => {
       text: "[Click here](https://example.com)",
       wrap: true,
     });
+  });
+});
+
+describe("cardToAdaptiveCard with Teams-specific hints", () => {
+  it("sets msteams width when the card asks for full width", () => {
+    const adaptive = cardToAdaptiveCard(Card({ title: "Wide", width: "full" }));
+
+    expect(adaptive.msteams).toEqual({ width: "full" });
+  });
+
+  it("leaves msteams unset by default", () => {
+    const adaptive = cardToAdaptiveCard(Card({ title: "Default" }));
+
+    expect(adaptive.msteams).toBeUndefined();
+  });
+
+  it("forwards button tooltips to the actions", () => {
+    const card = Card({
+      children: [
+        Actions([
+          Button({
+            id: "approve",
+            label: "Approve",
+            tooltip: "Approve the request",
+          }),
+          LinkButton({
+            url: "https://example.com/docs",
+            label: "View Docs",
+            tooltip: "Opens the docs",
+          }),
+        ]),
+      ],
+    });
+    const adaptive = cardToAdaptiveCard(card);
+
+    expect(adaptive.actions?.[0]).toMatchObject({
+      type: "Action.Submit",
+      tooltip: "Approve the request",
+    });
+    expect(adaptive.actions?.[1]).toMatchObject({
+      type: "Action.OpenUrl",
+      tooltip: "Opens the docs",
+    });
+  });
+
+  it("leaves tooltip unset when none is given", () => {
+    const card = Card({
+      children: [Actions([Button({ id: "ok", label: "OK" })])],
+    });
+    const adaptive = cardToAdaptiveCard(card);
+
+    expect(adaptive.actions?.[0]?.tooltip).toBeUndefined();
   });
 });
