@@ -91,6 +91,43 @@ curl -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/setWebhook" \
   }'
 ```
 
+## Business mode (Connected Business Bots)
+
+Enable Telegram Business mode when your bot manages customer conversations on behalf of a connected business account:
+
+```typescript
+const telegram = createTelegramAdapter({
+  businessMode: true,
+});
+```
+
+With `businessMode: true`, the adapter:
+
+- Handles `business_connection`, `business_message`, and `edited_business_message` updates
+- Skips messages typed by the business owner, messages the bot itself sent on the account's behalf (`sender_business_bot`), and connections without `can_reply`
+- Encodes business threads as `telegram:biz:{connectionId}:{chatId}`. Each business conversation is its own channel, kept apart from any direct chat the same customer has with the bot
+- Passes `business_connection_id` on outbound `sendMessage`, edits, typing, file uploads, and on threads created from inline-keyboard callbacks
+- Routes `/commands` from business chats through `onSlashCommand`, the same as regular chats
+- Deletes messages with `deleteBusinessMessages`, which needs the `can_delete_sent_messages` right on the connection
+- Stores connection state in the Chat SDK state adapter, so a revoked or disabled connection is honoured by every running instance
+
+Reactions are not available on business threads. The Bot API has no business variant of `setMessageReaction`, so `addReaction` and `removeReaction` throw a `NotImplementedError` there.
+
+When polling, the adapter always sends an explicit `allowed_updates` list in Business mode: the default update types plus the business ones, or your `longPolling.allowedUpdates` merged with the business ones. Telegram otherwise reuses whatever list an earlier call set, which can silently exclude business updates. When registering a webhook yourself, include the business update types:
+
+```json
+[
+  "message",
+  "business_connection",
+  "business_message",
+  "edited_business_message"
+]
+```
+
+Business thread IDs start with `telegram:biz`, so state adapters that shard by the first two ID segments (such as Cloudflare Agents) place every business conversation in one shard. Override the sharder with a key that includes the connection ID if that matters for your deployment.
+
+Defaults to `false` for backward compatibility.
+
 ## Polling (local development)
 
 When developing locally you typically can't expose a public URL for Telegram to deliver webhooks to. Polling mode uses `getUpdates` to fetch messages directly from Telegram instead — no public endpoint needed.
@@ -161,6 +198,7 @@ Most options are auto-detected from environment variables when not provided. `na
 | `secretToken` | Webhook* | Webhook secret token. Auto-detected from `TELEGRAM_WEBHOOK_SECRET_TOKEN` |
 | `mode` | No | Adapter mode: `auto` (default), `webhook`, or `polling` |
 | `longPolling` | No | Optional long polling config for `getUpdates` (`timeout`, `limit`, `allowedUpdates`, `deleteWebhook`, `dropPendingUpdates`, `retryDelayMs`) |
+| `businessMode` | No | Enable Telegram Business mode (`business_connection`, `business_message`, `edited_business_message`). Defaults to `false` |
 | `userName` | No | Bot username used for mention detection. Auto-detected from `TELEGRAM_BOT_USERNAME` or `getMe` |
 | `mentionOnReply` | No | Treat a reply to one of the bot's own messages as a mention, so it routes to `onNewMention`. Defaults to `false`. Auto-detected from `TELEGRAM_MENTION_ON_REPLY=true`. Implicit forum-topic replies and the bot's own messages never count |
 | `nativeStreaming` | No | Stream with Telegram's native draft previews in private chats. Defaults to `false`, which uses post-and-edit in every chat type |
