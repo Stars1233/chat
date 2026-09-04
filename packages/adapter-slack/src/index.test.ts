@@ -10730,6 +10730,478 @@ describe("stream with empty threadTs", () => {
   });
 });
 
+describe("native stream rotation", () => {
+  const THREAD = "slack:D123:1234567890.000000";
+  const TOKEN = "xoxb-test-token";
+  // Max age 100ms; the fixed 30s grace window applies on top of it.
+  const MAX_AGE = 100;
+  const PAST_GRACE = MAX_AGE + 30_001;
+
+  function expiredStreamError() {
+    return Object.assign(new Error("message_not_in_streaming_state"), {
+      code: "slack_webapi_platform_error",
+      data: { error: "message_not_in_streaming_state" },
+    });
+  }
+
+  function setup(config: Record<string, unknown> = {}, segmentCount = 3) {
+    const adapter = createSlackAdapter({
+      botToken: TOKEN,
+      signingSecret: "test-signing-secret",
+      logger: mockLogger,
+      streamSegmentMaxAgeMs: MAX_AGE,
+      ...config,
+    });
+    const segments = Array.from({ length: segmentCount }, (_, index) => ({
+      append: vi.fn().mockResolvedValue({ ok: true }),
+      stop: vi.fn().mockResolvedValue({ ok: true, ts: `1234567890.${index}` }),
+      ts: `1234567890.${index}`,
+    }));
+    const chatStream = vi
+      .fn()
+      .mockImplementation(() => segments[chatStream.mock.calls.length - 1]);
+    mockClientMethod(adapter, "chatStream", chatStream);
+    return { adapter, segments, chatStream };
+  }
+
+  /** Runs `run` with a controllable Date.now(); `tick(ms)` sets the clock. */
+  async function withClock(
+    run: (tick: (ms: number) => void) => Promise<void>
+  ): Promise<void> {
+    let now = 0;
+    const dateNow = vi.spyOn(Date, "now").mockImplementation(() => now);
+    try {
+      await run((ms) => {
+        now = ms;
+      });
+    } finally {
+      dateNow.mockRestore();
+    }
+  }
+
+  it("rotates at a paragraph break past the max age and carries an open fence over", async () => {
+    await withClock(async (tick) => {
+      const { adapter, segments, chatStream } = setup();
+      async function* stream() {
+        yield "```ts\nconst first = true;\n";
+        tick(MAX_AGE + 1);
+        yield "const second = true;\n\nconst third = true;\n";
+        yield "```\n";
+      }
+
+      const result = await adapter.stream(THREAD, stream());
+
+      expect(chatStream).toHaveBeenCalledTimes(2);
+      // The text before the paragraph break and the fence closer travel
+      // with the stop call; no extra newline since the text ends with one.
+      expect(segments[0].stop).toHaveBeenCalledWith({
+        token: TOKEN,
+        markdown_text: "const second = true;\n\n```",
+      });
+      // The new segment reopens the fence and flushes immediately.
+      expect(segments[1].append).toHaveBeenNthCalledWith(1, {
+        markdown_text: "```ts\nconst third = true;\n",
+        token: TOKEN,
+        chunks: [],
+      });
+      expect(segments[1].append).toHaveBeenNthCalledWith(2, {
+        markdown_text: "```\n",
+        token: TOKEN,
+      });
+      expect(segments[1].stop).toHaveBeenCalledWith({ token: TOKEN });
+      expect(result).toMatchObject({ id: "1234567890.1" });
+    });
+  });
+
+  it("waits for a paragraph break within the grace window, then cuts at a line break", async () => {
+    await withClock(async (tick) => {
+      const { adapter, segments, chatStream } = setup();
+      async function* stream() {
+        yield "First line.\n";
+        tick(MAX_AGE + 1);
+        yield "Second line.\n";
+        tick(PAST_GRACE);
+        yield "Third line.\n";
+        yield "Fourth line.\n";
+      }
+
+      await adapter.stream(THREAD, stream());
+
+      expect(chatStream).toHaveBeenCalledTimes(2);
+      expect(segments[0].append).toHaveBeenCalledTimes(2);
+      expect(segments[0].stop).toHaveBeenCalledWith({
+        token: TOKEN,
+        markdown_text: "Third line.\n",
+      });
+      expect(segments[1].append).toHaveBeenNthCalledWith(1, {
+        markdown_text: "Fourth line.\n",
+        token: TOKEN,
+        chunks: [],
+      });
+    });
+  });
+
+  it("does not rotate when the final flush has nothing new to send", async () => {
+    await withClock(async (tick) => {
+      const { adapter, segments, chatStream } = setup();
+      async function* stream() {
+        yield "hello\n";
+        tick(PAST_GRACE);
+      }
+
+      const result = await adapter.stream(THREAD, stream());
+
+      expect(chatStream).toHaveBeenCalledTimes(1);
+      expect(segments[0].stop).toHaveBeenCalledTimes(1);
+      expect(segments[0].stop).toHaveBeenCalledWith({ token: TOKEN });
+      expect(result).toMatchObject({ id: "1234567890.0" });
+    });
+  });
+
+  it("starts the segment clock at the first call Slack accepts, not at construction", async () => {
+    await withClock(async (tick) => {
+      const { adapter, chatStream, segments } = setup();
+      // The first delta is only buffered locally: no Slack stream yet.
+      segments[0].append.mockResolvedValueOnce(null);
+      async function* stream() {
+        yield "a\n";
+        tick(1000);
+        yield "b\n";
+        tick(1000 + MAX_AGE - 1);
+        yield "c\n\nd\n";
+        expect(chatStream).toHaveBeenCalledTimes(1);
+        tick(1000 + MAX_AGE + 1);
+        yield "e\n\nf\n";
+      }
+
+      await adapter.stream(THREAD, stream());
+
+      expect(chatStream).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  it("keeps the agent session processing while the reply continues", async () => {
+    await withClock(async (tick) => {
+      const { adapter, segments } = setup({ agentView: true });
+      async function* stream() {
+        yield "a\n";
+        tick(MAX_AGE + 1);
+        yield "b\n\nc\n";
+      }
+
+      await adapter.stream(THREAD, stream());
+
+      expect(segments[0].stop).toHaveBeenCalledWith(
+        expect.objectContaining({ session_status: "processing" })
+      );
+      expect(segments[1].stop).toHaveBeenCalledWith(
+        expect.objectContaining({ session_status: "active" })
+      );
+    });
+  });
+
+  it("continues in a new message when Slack expired the segment before rotation", async () => {
+    await withClock(async (tick) => {
+      const { adapter, segments } = setup();
+      segments[0].append
+        .mockResolvedValueOnce({ ok: true })
+        .mockResolvedValueOnce(null);
+      segments[0].stop.mockRejectedValue(expiredStreamError());
+      async function* stream() {
+        yield "first\n";
+        // Buffered only: never confirmed by Slack.
+        yield "second\n";
+        tick(MAX_AGE + 1);
+        yield "third\n\nfourth\n";
+      }
+
+      const result = await adapter.stream(THREAD, stream());
+
+      // Everything after the last confirmed flush is resent.
+      expect(segments[1].append).toHaveBeenNthCalledWith(1, {
+        markdown_text: "second\nthird\n\nfourth\n",
+        token: TOKEN,
+        chunks: [],
+      });
+      expect(result).toMatchObject({ id: "1234567890.1" });
+      expect(mockLogger.warn).toHaveBeenCalledWith(
+        expect.stringContaining("expired before rotation"),
+        expect.anything()
+      );
+    });
+  });
+
+  it("delivers unconfirmed text in a new message when the last segment expired before stop", async () => {
+    const { adapter, segments } = setup();
+    segments[0].append
+      .mockResolvedValueOnce({ ok: true })
+      .mockResolvedValueOnce(null);
+    segments[0].stop.mockRejectedValue(expiredStreamError());
+    async function* stream() {
+      yield "first\n";
+      yield "second\n";
+    }
+
+    const result = await adapter.stream(THREAD, stream());
+
+    expect(segments[1].append).not.toHaveBeenCalled();
+    expect(segments[1].stop).toHaveBeenCalledWith({
+      token: TOKEN,
+      markdown_text: "second\n",
+    });
+    expect(result).toMatchObject({ id: "1234567890.1" });
+  });
+
+  it("returns the finalized message when the last segment expired with everything delivered", async () => {
+    const { adapter, segments, chatStream } = setup({
+      feedbackButtons: true,
+    });
+    segments[0].stop.mockRejectedValue(expiredStreamError());
+    async function* stream() {
+      yield "first\n";
+    }
+
+    const result = await adapter.stream(THREAD, stream());
+
+    // No empty message is posted just to carry the feedback buttons.
+    expect(chatStream).toHaveBeenCalledTimes(1);
+    expect(result).toMatchObject({ id: "1234567890.0" });
+    expect(mockLogger.warn).toHaveBeenCalledWith(
+      expect.stringContaining("stream-end blocks skipped"),
+      expect.objectContaining({ skippedBlocks: 1 })
+    );
+  });
+
+  it("still propagates non-expiry failures during rotation", async () => {
+    await withClock(async (tick) => {
+      const { adapter, segments } = setup();
+      segments[0].stop.mockRejectedValue(new Error("rotate boom"));
+      async function* stream() {
+        yield "a\n";
+        tick(MAX_AGE + 1);
+        yield "b\n\nc\n";
+      }
+
+      await expect(adapter.stream(THREAD, stream())).rejects.toThrow(
+        "rotate boom"
+      );
+    });
+  });
+
+  it("replays the plan and open task cards into the new segment", async () => {
+    await withClock(async (tick) => {
+      const { adapter, segments } = setup();
+      const plan = { type: "plan_update" as const, title: "Plan" };
+      const oneInProgress = {
+        type: "task_update" as const,
+        id: "t1",
+        title: "One",
+        status: "in_progress" as const,
+      };
+      const oneComplete = { ...oneInProgress, status: "complete" as const };
+      const twoComplete = {
+        type: "task_update" as const,
+        id: "t2",
+        title: "Two",
+        status: "complete" as const,
+      };
+      async function* stream() {
+        yield plan;
+        yield oneInProgress;
+        yield twoComplete;
+        tick(MAX_AGE + 1);
+        // A structured chunk is a block boundary: rotate right away.
+        yield oneComplete;
+      }
+
+      await adapter.stream(THREAD, stream());
+
+      expect(segments[0].stop).toHaveBeenCalledWith({ token: TOKEN });
+      expect(segments[1].append).toHaveBeenNthCalledWith(1, {
+        chunks: [plan, oneInProgress],
+        token: TOKEN,
+      });
+      expect(segments[1].append).toHaveBeenNthCalledWith(2, {
+        chunks: [oneComplete],
+        token: TOKEN,
+      });
+    });
+  });
+
+  it("repeats the table header when a table continues in the new segment", async () => {
+    await withClock(async (tick) => {
+      const { adapter, segments } = setup();
+      async function* stream() {
+        yield "| a | b |\n|---|---|\n| 1 | 2 |\n";
+        tick(PAST_GRACE);
+        yield "| 3 | 4 |\n";
+        yield "| 5 | 6 |\n";
+      }
+
+      await adapter.stream(THREAD, stream());
+
+      expect(segments[0].stop).toHaveBeenCalledWith({
+        token: TOKEN,
+        markdown_text: "| 3 | 4 |\n",
+      });
+      expect(segments[1].append).toHaveBeenNthCalledWith(1, {
+        markdown_text: "| a | b |\n|---|---|\n| 5 | 6 |\n",
+        token: TOKEN,
+        chunks: [],
+      });
+    });
+  });
+
+  it("does not repeat the table header when the new segment starts with prose", async () => {
+    await withClock(async (tick) => {
+      const { adapter, segments } = setup();
+      async function* stream() {
+        yield "| a | b |\n|---|---|\n| 1 | 2 |\n";
+        tick(PAST_GRACE);
+        yield "| 3 | 4 |\n";
+        yield "\nSummary.\n";
+      }
+
+      await adapter.stream(THREAD, stream());
+
+      expect(segments[1].append).toHaveBeenNthCalledWith(1, {
+        markdown_text: "\nSummary.\n",
+        token: TOKEN,
+        chunks: [],
+      });
+    });
+  });
+
+  it("closes a tilde fence with tildes even when backtick fences appear inside it", async () => {
+    await withClock(async (tick) => {
+      const { adapter, segments } = setup();
+      async function* stream() {
+        yield "~~~\n```js\nconst x = 1;\n```\n";
+        tick(MAX_AGE + 1);
+        yield "still literal\n\nmore\n";
+      }
+
+      await adapter.stream(THREAD, stream());
+
+      expect(segments[0].stop).toHaveBeenCalledWith({
+        token: TOKEN,
+        markdown_text: "still literal\n\n~~~",
+      });
+      expect(segments[1].append).toHaveBeenNthCalledWith(1, {
+        markdown_text: "~~~\nmore\n",
+        token: TOKEN,
+        chunks: [],
+      });
+    });
+  });
+
+  it("finishes a fenced block in the old segment when the pending text closes it", async () => {
+    await withClock(async (tick) => {
+      const { adapter, segments } = setup();
+      async function* stream() {
+        yield "```ts\nconst a = 1;\n";
+        tick(MAX_AGE + 1);
+        yield "```\n\nAfter.\n";
+      }
+
+      await adapter.stream(THREAD, stream());
+
+      expect(segments[0].stop).toHaveBeenCalledWith({
+        token: TOKEN,
+        markdown_text: "```\n\n",
+      });
+      // No empty reopened block at the top of the new segment.
+      expect(segments[1].append).toHaveBeenNthCalledWith(1, {
+        markdown_text: "After.\n",
+        token: TOKEN,
+        chunks: [],
+      });
+    });
+  });
+
+  it("treats a pending partial closing fence as the block's end", async () => {
+    await withClock(async (tick) => {
+      const { adapter, segments } = setup();
+      async function* stream() {
+        yield "```ts\nconst a = 1;\n";
+        tick(PAST_GRACE);
+        yield "```";
+        yield "\nAfter.\n";
+      }
+
+      await adapter.stream(THREAD, stream());
+
+      expect(segments[0].stop).toHaveBeenCalledWith({
+        token: TOKEN,
+        markdown_text: "```",
+      });
+      expect(segments[1].append).toHaveBeenNthCalledWith(1, {
+        markdown_text: "\nAfter.\n",
+        token: TOKEN,
+        chunks: [],
+      });
+    });
+  });
+
+  it("does not rotate a segment before Slack has started it", async () => {
+    await withClock(async (tick) => {
+      const { adapter, chatStream, segments } = setup();
+      segments[0].append.mockResolvedValue(null);
+      async function* stream() {
+        yield "a\n";
+        tick(PAST_GRACE);
+        yield "b\n\nc\n";
+      }
+
+      await adapter.stream(THREAD, stream());
+
+      expect(chatStream).toHaveBeenCalledTimes(1);
+      expect(segments[0].stop).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it.each([
+    0,
+    -5,
+    Number.NaN,
+  ])("falls back to the default max age for streamSegmentMaxAgeMs %s", async (value) => {
+    await withClock(async (tick) => {
+      const { adapter, chatStream } = setup({
+        streamSegmentMaxAgeMs: value,
+      });
+      async function* stream() {
+        yield "a\n";
+        tick(239_999);
+        yield "b\n\nc\n";
+        expect(chatStream).toHaveBeenCalledTimes(1);
+        tick(240_000);
+        yield "d\n\ne\n";
+      }
+
+      await adapter.stream(THREAD, stream());
+
+      expect(chatStream).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  it("never rotates when streamSegmentMaxAgeMs is Infinity", async () => {
+    await withClock(async (tick) => {
+      const { adapter, chatStream } = setup({
+        streamSegmentMaxAgeMs: Number.POSITIVE_INFINITY,
+      });
+      async function* stream() {
+        yield "a\n";
+        tick(10_000_000);
+        yield "b\n\nc\n";
+      }
+
+      await adapter.stream(THREAD, stream());
+
+      expect(chatStream).toHaveBeenCalledTimes(1);
+    });
+  });
+});
+
 describe("native streaming fallback", () => {
   function createAdapter(config?: Record<string, unknown>) {
     const adapter = createSlackAdapter({

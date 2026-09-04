@@ -195,6 +195,12 @@ export interface SlackAdapterConfig {
   /** Shared secret for authenticating forwarded socket mode events. Auto-detected from SLACK_SOCKET_FORWARDING_SECRET. Falls back to appToken if not set. */
   socketForwardingSecret?: string;
   /**
+   * Maximum lifetime of one native Slack stream segment before the adapter
+   * finalizes it and continues in a new segment. Defaults to 240 seconds,
+   * safely below Slack's roughly five-minute stream expiry.
+   */
+  streamSegmentMaxAgeMs?: number;
+  /**
    * Suggested prompts to pin automatically when an assistant/agent thread
    * opens. Applied on `assistant_thread_started` (legacy `assistant_view`)
    * and on Messages-tab `app_home_opened` (with `agentView` enabled, where

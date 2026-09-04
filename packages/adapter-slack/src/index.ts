@@ -43,12 +43,14 @@ import type {
   OptionsLoadResult,
   PlanContent,
   PlanModel,
+  PlanUpdateChunk,
   RawMessage,
   ReactionEvent,
   ScheduledMessage,
   SelectOptionElement,
   StreamChunk,
   StreamOptions,
+  TaskUpdateChunk,
   ThreadInfo,
   ThreadSummary,
   TypingOptions,
@@ -304,6 +306,127 @@ import type {
   SlackSuggestedPrompts,
   SlackSuggestedPromptsContext,
 } from "./types";
+
+/** Default lifetime of one native stream segment before it is rotated. */
+const DEFAULT_STREAM_SEGMENT_MAX_AGE_MS = 240_000;
+/**
+ * Once a segment is past its max age, rotation waits up to this long for a
+ * paragraph break so a paragraph, list, or table is not split across two
+ * messages. The default max age plus this grace stays below Slack's roughly
+ * five-minute stream expiry.
+ */
+const STREAM_SEGMENT_ROTATION_GRACE_MS = 30_000;
+/** Slack's error for appending to or stopping a stream it already expired. */
+const STREAM_EXPIRED_ERROR = "message_not_in_streaming_state";
+/** Fenced code block delimiter: up to three spaces, then 3+ backticks or tildes. */
+const FENCE_LINE_PATTERN = /^ {0,3}(`{3,}|~{3,})(.*)$/;
+const TABLE_ROW_PATTERN = /^\|.*\|$/;
+const TABLE_SEPARATOR_PATTERN = /^\|[\s:]*-+[\s:]*(?:\|[\s:]*-+[\s:]*)*\|$/;
+
+interface OpenFence {
+  /** The fence run that opened the block, e.g. "```" or "~~~~". */
+  marker: string;
+  /** The full opening line (marker plus info string), used to reopen it. */
+  opening: string;
+}
+
+/**
+ * Tracks fenced code block state line by line, CommonMark style: a fence
+ * closes only on a run of the same character at least as long as its opener
+ * with nothing but whitespace after it, and other fence-looking lines inside
+ * the block are literal content.
+ */
+class FenceTracker {
+  open: OpenFence | undefined;
+
+  /**
+   * Feed one complete line (without its newline). Returns true when the line
+   * opened or closed a fence.
+   */
+  feed(line: string): boolean {
+    const match = FENCE_LINE_PATTERN.exec(line);
+    if (!match) {
+      return false;
+    }
+    const [, marker, info] = match;
+    if (this.open) {
+      if (
+        marker[0] === this.open.marker[0] &&
+        marker.length >= this.open.marker.length &&
+        info.trim() === ""
+      ) {
+        this.open = undefined;
+        return true;
+      }
+      return false;
+    }
+    // A backtick fence's info string cannot contain backticks.
+    if (marker[0] === "`" && info.includes("`")) {
+      return false;
+    }
+    this.open = { marker, opening: line.trimEnd() };
+    return true;
+  }
+}
+
+/**
+ * The code fence left open at the end of `text`, if any. A trailing partial
+ * line is fed too: the streaming renderer only commits partial lines inside a
+ * fence, so it is either literal content or a closing delimiter.
+ */
+function openFenceIn(text: string): OpenFence | undefined {
+  const tracker = new FenceTracker();
+  for (const line of text.split("\n")) {
+    tracker.feed(line);
+  }
+  return tracker.open;
+}
+
+/** Whether `line`, appended after a line break, would close `fence`. */
+function closesFence(fence: OpenFence, line: string): boolean {
+  const tracker = new FenceTracker();
+  tracker.open = fence;
+  return tracker.feed(line);
+}
+
+/**
+ * Index in `text` to cut a stream segment at: after the last paragraph break
+ * when there is one, otherwise after the last line break (0 when none).
+ */
+function segmentCutIndex(text: string): number {
+  const paragraphBreak = text.lastIndexOf("\n\n");
+  if (paragraphBreak !== -1) {
+    return paragraphBreak + 2;
+  }
+  return text.lastIndexOf("\n") + 1;
+}
+
+/**
+ * When `text` ends inside a confirmed GFM table, the table's header and
+ * separator rows (each newline-terminated) so the rows that follow in a new
+ * segment still render as a table. Empty otherwise.
+ */
+function tableContinuation(text: string): string {
+  if (!text.endsWith("\n")) {
+    return "";
+  }
+  const lines = text.split("\n");
+  lines.pop();
+  const rows: string[] = [];
+  for (let i = lines.length - 1; i >= 0; i--) {
+    if (!TABLE_ROW_PATTERN.test(lines[i].trim())) {
+      break;
+    }
+    rows.unshift(lines[i]);
+  }
+  const separatorAt = rows.findIndex((row) =>
+    TABLE_SEPARATOR_PATTERN.test(row.trim())
+  );
+  if (separatorAt < 1) {
+    return "";
+  }
+  return `${rows[separatorAt - 1]}\n${rows[separatorAt]}\n`;
+}
 
 export type {
   SlackAdapterConfig,
@@ -1150,6 +1273,7 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
   /** Normalized feedbackButtons config (`true` becomes `{}`). */
   protected readonly feedbackButtons?: SlackFeedbackButtonsOptions;
   protected readonly nativeStreaming: boolean;
+  protected readonly streamSegmentMaxAgeMs: number;
   /**
    * Latched when the workspace rejects native streaming with an error that
    * won't heal (e.g. `unknown_method` on GovSlack) so later streams skip the
@@ -1330,6 +1454,13 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
     this.suggestedPrompts = config.suggestedPrompts;
     this.loadingMessages = config.loadingMessages;
     this.nativeStreaming = config.nativeStreaming ?? true;
+    // Zero, negative, and NaN would make every flush rotate; Infinity means
+    // never rotate.
+    const segmentMaxAge = config.streamSegmentMaxAgeMs;
+    this.streamSegmentMaxAgeMs =
+      segmentMaxAge !== undefined && segmentMaxAge > 0
+        ? segmentMaxAge
+        : DEFAULT_STREAM_SEGMENT_MAX_AGE_MS;
     if (config.feedbackButtons) {
       this.feedbackButtons =
         config.feedbackButtons === true ? {} : config.feedbackButtons;
@@ -5538,6 +5669,11 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
    * streaming API as chunk payloads, enabling native task progress cards
    * and plan displays in the Slack AI Assistant UI.
    *
+   * Slack expires a native stream after roughly five minutes, so a reply
+   * that streams longer than `streamSegmentMaxAgeMs` is finalized and
+   * continued in a new message. The returned `id` is the last message of
+   * the reply; earlier segments are already final and are not tracked.
+   *
    * Falls back to post-and-edit when the thread lacks native stream context.
    */
   async stream(
@@ -5570,21 +5706,61 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
     this.logger.debug("Slack: starting stream", { channel, threadTs });
 
     const token = await this.getToken();
-    const streamer = this._client.chatStream({
-      channel,
-      thread_ts: threadTs,
-      ...(options?.recipientUserId && {
-        recipient_user_id: options.recipientUserId,
-      }),
-      ...(options?.recipientTeamId && {
-        recipient_team_id: options.recipientTeamId,
-      }),
-      ...(options?.taskDisplayMode && {
-        task_display_mode: options.taskDisplayMode,
-      }),
-    });
+    const createStreamer = () =>
+      this._client.chatStream({
+        channel,
+        thread_ts: threadTs,
+        ...(options?.recipientUserId && {
+          recipient_user_id: options.recipientUserId,
+        }),
+        ...(options?.recipientTeamId && {
+          recipient_team_id: options.recipientTeamId,
+        }),
+        ...(options?.taskDisplayMode && {
+          task_display_mode: options.taskDisplayMode,
+        }),
+      });
+    // One native Slack stream (a "segment") is open at a time. Slack expires
+    // streams after roughly five minutes, so a long reply is finalized and
+    // continued in a fresh segment (see rotateSegment). `startedAt` is
+    // stamped by the first API call that succeeds on the segment, which is
+    // when Slack's expiry clock starts; until then the ChatStreamer only
+    // buffers text locally.
+    const segment: {
+      streamer: ReturnType<typeof createStreamer>;
+      startedAt: number | undefined;
+      /**
+       * Flush the next text append immediately instead of buffering it, so a
+       * segment opened by rotation becomes visible with its first text.
+       */
+      flushNextAppend: boolean;
+      /**
+       * Code fence opening line to send before the segment's first text,
+       * when the previous segment was cut inside a fenced block.
+       */
+      reopenFence: string;
+      /**
+       * Table header and separator rows to send before the segment's first
+       * text if that text continues the table cut by the previous segment.
+       */
+      tableHeader: string;
+    } = {
+      streamer: createStreamer(),
+      startedAt: undefined,
+      flushNextAppend: false,
+      reopenFence: "",
+      tableHeader: "",
+    };
+    let rotations = 0;
 
+    /** Prefix of `resolvedCommitted` handed to the current segment's streamer. */
     let lastAppended = "";
+    /**
+     * Prefix of `resolvedCommitted` Slack has confirmed. Text between here
+     * and `lastAppended` sits in the streamer's local buffer and has to be
+     * resent if the segment turns out to have expired.
+     */
+    let lastFlushed = "";
     const renderer = new StreamingMarkdownRenderer({
       wrapTablesForAppend: false,
     });
@@ -5597,12 +5773,7 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
     // counterpart and the coordinate space `lastAppended` tracks.
     let resolvedCommitted = "";
     let resolvedSourceDone = 0;
-    let insideResolvedFence = false;
-
-    const isFenceLine = (line: string): boolean => {
-      const trimmed = line.trimStart();
-      return trimmed.startsWith("```") || trimmed.startsWith("~~~");
-    };
+    const fences = new FenceTracker();
 
     /**
      * Extend `resolvedCommitted` with newly committed renderer text, applying
@@ -5619,19 +5790,22 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
           committable.lastIndexOf("\n", resolvedSourceDone - 1) + 1;
         const newlineAt = committable.indexOf("\n", resolvedSourceDone);
         const lineEnd = newlineAt === -1 ? committable.length : newlineAt + 1;
-        const segment = committable.slice(resolvedSourceDone, lineEnd);
-        const fenceLine = isFenceLine(committable.slice(lineStart, lineEnd));
-        if (insideResolvedFence || fenceLine) {
+        const piece = committable.slice(resolvedSourceDone, lineEnd);
+        const line = committable.slice(
+          lineStart,
+          newlineAt === -1 ? lineEnd : newlineAt
+        );
+        if (fences.open || FENCE_LINE_PATTERN.test(line)) {
           // Fence delimiters and fenced content are literal.
-          resolvedCommitted += segment;
+          resolvedCommitted += piece;
         } else {
           resolvedCommitted += await this.resolveOutgoingMentions(
-            segment,
+            piece,
             threadId
           );
         }
-        if (newlineAt !== -1 && fenceLine) {
-          insideResolvedFence = !insideResolvedFence;
+        if (newlineAt !== -1) {
+          fences.feed(line);
         }
         resolvedSourceDone = lineEnd;
       }
@@ -5696,6 +5870,217 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
       );
     };
 
+    const isStreamExpired = (error: unknown): boolean =>
+      slackPlatformErrorCode(error) === STREAM_EXPIRED_ERROR;
+
+    /** Record that Slack accepted a call on the current segment. */
+    const markSegmentStarted = (): void => {
+      segment.startedAt ??= Date.now();
+      segment.flushNextAppend = false;
+      fallback.nativeRendered = true;
+    };
+
+    const segmentAgeMs = (): number =>
+      segment.startedAt === undefined ? 0 : Date.now() - segment.startedAt;
+
+    /**
+     * Whether the current segment must be rotated before more content is
+     * sent. Past the max age, rotation waits for a block boundary (a
+     * paragraph break in the pending text, or a structured chunk) for up to
+     * the grace window, then happens regardless. A segment Slack has not
+     * started yet has no expiry clock and is never rotated.
+     */
+    const rotationDue = (atBlockBoundary: boolean): boolean => {
+      if (segment.startedAt === undefined) {
+        return false;
+      }
+      const age = segmentAgeMs();
+      if (age < this.streamSegmentMaxAgeMs) {
+        return false;
+      }
+      return (
+        atBlockBoundary ||
+        age >= this.streamSegmentMaxAgeMs + STREAM_SEGMENT_ROTATION_GRACE_MS
+      );
+    };
+
+    // Structured chunk state, replayed into every new segment. Task cards
+    // and the plan title belong to one Slack message, so without the replay
+    // an update for a task first shown in an earlier segment would render
+    // as a brand-new card. Structured chunks may fail if the app lacks the
+    // Assistant scopes/features; they are then disabled for the rest of the
+    // stream to avoid repeated failures, and logged once.
+    let structuredChunksSupported = true;
+    const openTasks = new Map<string, TaskUpdateChunk>();
+    let currentPlan: PlanUpdateChunk | undefined;
+    const rememberStructuredChunk = (chunk: StreamChunk): void => {
+      if (chunk.type === "plan_update") {
+        currentPlan = chunk;
+      } else if (chunk.type === "task_update") {
+        if (chunk.status === "complete" || chunk.status === "error") {
+          openTasks.delete(chunk.id);
+        } else {
+          openTasks.set(chunk.id, chunk);
+        }
+      }
+    };
+    const disableStructuredChunks = (
+      chunkType: string,
+      error: unknown
+    ): void => {
+      structuredChunksSupported = false;
+      this.logger.warn(
+        "Structured streaming chunk failed, falling back to text-only streaming. " +
+          "Ensure your Slack app manifest includes the agent/assistant feature " +
+          "and the assistant:write scope",
+        { chunkType, error }
+      );
+    };
+
+    /**
+     * Open a new segment that continues from `sent`, the resolved text Slack
+     * holds so far. Open task cards and the plan title are replayed right
+     * away; when `sent` ends inside a code fence or a table, the fence
+     * opening or the table header is queued to precede the segment's first
+     * text (see `withSegmentPrefix`) rather than sent on its own.
+     */
+    const startNextSegment = async (sent: string): Promise<void> => {
+      segment.streamer = createStreamer();
+      segment.startedAt = undefined;
+      segment.flushNextAppend = true;
+      const fence = openFenceIn(sent);
+      segment.reopenFence = fence ? `${fence.opening}\n` : "";
+      segment.tableHeader = fence ? "" : tableContinuation(sent);
+      rotations++;
+      const replay: StreamChunk[] = [
+        ...(currentPlan ? [currentPlan] : []),
+        ...openTasks.values(),
+      ];
+      if (replay.length > 0 && structuredChunksSupported) {
+        try {
+          await segment.streamer.append({
+            chunks: replay as ChatAppendStreamArguments["chunks"],
+            token,
+          });
+          markSegmentStarted();
+        } catch (error) {
+          disableStructuredChunks("replay", error);
+        }
+      }
+    };
+
+    /**
+     * Prepend whatever a rotation queued for the segment's first text: the
+     * reopened code fence always (fenced content is literal), the repeated
+     * table header only when `text` starts with a table row.
+     */
+    const withSegmentPrefix = (text: string): string => {
+      const firstLine = text.slice(
+        0,
+        text.includes("\n") ? text.indexOf("\n") : text.length
+      );
+      const header = TABLE_ROW_PATTERN.test(firstLine.trim())
+        ? segment.tableHeader
+        : "";
+      const prefixed = segment.reopenFence + header + text;
+      segment.reopenFence = "";
+      segment.tableHeader = "";
+      return prefixed;
+    };
+
+    /**
+     * Finalize the current segment and continue in a new one. `delta` is the
+     * resolved text about to be sent: the part up to its last paragraph
+     * break (or last line break) travels with the old segment's stop call so
+     * the cut lands on a block boundary, and a code fence still open there
+     * is closed. Returns the text to send on the new segment.
+     */
+    const rotateSegment = async (delta: string): Promise<string> => {
+      const cutAt = segmentCutIndex(delta);
+      let head = delta.slice(0, cutAt);
+      let tail = delta.slice(cutAt);
+      let sent = lastAppended + head;
+      let fence = openFenceIn(sent);
+      if (fence && sent.endsWith("\n") && closesFence(fence, tail)) {
+        // The pending partial line is the closing delimiter: finish the
+        // block in the old segment instead of reopening it in the new one.
+        head += tail;
+        sent += tail;
+        tail = "";
+        fence = undefined;
+      }
+      const closer = fence
+        ? `${sent.endsWith("\n") ? "" : "\n"}${fence.marker}`
+        : "";
+      // `head` may be this segment's first text, so it takes any prefix a
+      // previous rotation queued for it.
+      const finalText =
+        (head.length > 0 ? withSegmentPrefix(head) : "") + closer;
+      const ageMs = segmentAgeMs();
+      try {
+        const result = await segment.streamer.stop({
+          token,
+          ...(finalText.length > 0 ? { markdown_text: finalText } : {}),
+          // Keep the agent session marked busy: the reply continues in the
+          // next segment, and chat.stopStream defaults to "active".
+          ...(this.agentView ? { session_status: "processing" } : {}),
+        } as ChatStopStreamArguments & {
+          session_status?: AgentSessionStatus;
+        });
+        lastFlushed = sent;
+        this.logger.debug("Slack: rotated stream segment", {
+          channel,
+          messageId: result.ts,
+          ageMs,
+        });
+      } catch (error) {
+        if (!isStreamExpired(error)) {
+          throw error;
+        }
+        // Slack expired the segment during an idle gap. Nothing after the
+        // last confirmed flush reached it, so that text moves to the new
+        // segment instead of failing the reply.
+        this.logger.warn(
+          "Slack: stream segment expired before rotation, continuing in a new message",
+          { channel, ageMs }
+        );
+        tail = lastAppended.slice(lastFlushed.length) + delta;
+        sent = lastFlushed;
+      }
+      await startNextSegment(sent);
+      return tail;
+    };
+
+    /**
+     * Send a resolved-text delta to the native stream, rotating the segment
+     * first when it is due. Rotation carries the leading part of the delta
+     * out with the old segment, so only what it returns goes to the new one.
+     */
+    const sendDelta = async (
+      delta: string,
+      atBlockBoundary: boolean
+    ): Promise<void> => {
+      const text = rotationDue(atBlockBoundary || delta.includes("\n\n"))
+        ? await rotateSegment(delta)
+        : delta;
+      if (text.length > 0) {
+        // append() buffers small deltas in memory and returns null until it
+        // actually calls the API — only a non-null response proves content
+        // is rendering natively. An empty chunks array makes it flush right
+        // away, so a segment opened by rotation is visible immediately.
+        const response = await segment.streamer.append({
+          markdown_text: withSegmentPrefix(text),
+          token,
+          ...(segment.flushNextAppend ? { chunks: [] } : {}),
+        });
+        if (response) {
+          markSegmentStarted();
+          lastFlushed = resolvedCommitted;
+        }
+      }
+      lastAppended = resolvedCommitted;
+    };
+
     /**
      * Flush committed renderer text: as a mention-resolved markdown_text
      * delta on the native stream, or as a throttled post/edit in fallback
@@ -5713,17 +6098,7 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
         return;
       }
       try {
-        // append() buffers small deltas in memory and returns null until it
-        // actually calls the API — only a non-null response proves content
-        // is rendering natively.
-        const response = await streamer.append({
-          markdown_text: delta,
-          token,
-        });
-        if (response) {
-          fallback.nativeRendered = true;
-        }
-        lastAppended = resolvedCommitted;
+        await sendDelta(delta, false);
       } catch (error) {
         if (fallback.nativeRendered) {
           // A native call succeeded earlier; content is already rendering
@@ -5738,15 +6113,10 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
     /**
      * Helper to send a structured chunk (task_update, plan_update, etc.)
      * directly to Slack's streaming API. Any buffered markdown text is
-     * flushed first to maintain correct ordering.
-     *
-     * If the Slack API rejects the chunk (e.g. missing assistant:write scope
-     * or Assistant features not enabled in the app manifest), the error is
-     * logged and the chunk is silently skipped. Text streaming continues
-     * unaffected. In fallback mode structured chunks are skipped — task
-     * cards only exist on the native streaming surface.
+     * flushed first to maintain correct ordering. In fallback mode
+     * structured chunks are skipped — task cards only exist on the native
+     * streaming surface.
      */
-    let structuredChunksSupported = true;
     const sendStructuredChunk = async (chunk: StreamChunk): Promise<void> => {
       // Flush any buffered markdown before sending the structured chunk
       await flushCommitted();
@@ -5759,23 +6129,21 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
         return;
       }
 
+      // A structured chunk is a block boundary, so a segment past its max
+      // age rotates here instead of waiting for a paragraph break.
+      await sendDelta("", true);
+
       try {
-        await streamer.append({
+        await segment.streamer.append({
           chunks: [chunk] as ChatAppendStreamArguments["chunks"],
           token,
         });
-        fallback.nativeRendered = true;
+        markSegmentStarted();
+        // Sending chunks flushes the streamer's text buffer as well.
+        lastFlushed = lastAppended;
+        rememberStructuredChunk(chunk);
       } catch (error) {
-        // Structured chunks may fail if the app doesn't have the required
-        // Assistant scopes/features. Disable for the rest of this stream
-        // to avoid repeated failures and log once.
-        structuredChunksSupported = false;
-        this.logger.warn(
-          "Structured streaming chunk failed, falling back to text-only streaming. " +
-            "Ensure your Slack app manifest includes the agent/assistant feature " +
-            "and the assistant:write scope",
-          { chunkType: chunk.type, error }
-        );
+        disableStructuredChunks(chunk.type, error);
       }
     };
 
@@ -5821,38 +6189,71 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
         ? [buildFeedbackButtonsBlock(this.feedbackButtons)]
         : []),
     ];
-    let result: Awaited<ReturnType<typeof streamer.stop>>;
+    const stopArgs = {
+      token,
+      ...(this.agentView
+        ? { session_status: options?.sessionStatus ?? "active" }
+        : {}),
+      ...(stopBlocks.length > 0
+        ? { blocks: stopBlocks as ChatStopStreamArguments["blocks"] }
+        : {}),
+    } as ChatStopStreamArguments & {
+      session_status?: AgentSessionStatus;
+    };
+    let result: Awaited<ReturnType<typeof segment.streamer.stop>>;
     try {
-      result = await streamer.stop({
-        token,
-        ...(this.agentView
-          ? { session_status: options?.sessionStatus ?? "active" }
-          : {}),
-        ...(stopBlocks.length > 0
-          ? { blocks: stopBlocks as ChatStopStreamArguments["blocks"] }
-          : {}),
-      } as ChatStopStreamArguments & {
-        session_status?: AgentSessionStatus;
-      });
+      result = await segment.streamer.stop(stopArgs);
     } catch (error) {
-      if (fallback.nativeRendered) {
+      if (!fallback.nativeRendered) {
+        // Short streams can buffer every delta in the streamer, making stop()
+        // the FIRST real API call — on an unsupported workspace this is where
+        // the failure lands, so the post-and-edit fallback must engage here
+        // too. Stream-end blocks are skipped, as in any fallback.
+        switchToFallback(error);
+        await flushFallback(true);
+        this.logger.debug("Slack: fallback stream complete", {
+          messageId: fallback.message?.id,
+        });
+        await this.endTyping(threadId, options?.sessionStatus ?? "active");
+        return fallback.message;
+      }
+      if (!isStreamExpired(error)) {
         throw error;
       }
-      // Short streams can buffer every delta in the streamer, making stop()
-      // the FIRST real API call — on an unsupported workspace this is where
-      // the failure lands, so the post-and-edit fallback must engage here
-      // too. Stream-end blocks are skipped, as in any fallback.
-      switchToFallback(error);
-      await flushFallback(true);
-      this.logger.debug("Slack: fallback stream complete", {
-        messageId: fallback.message?.id,
+      // Slack expired the last segment during a trailing idle gap and has
+      // already finalized that message.
+      const unconfirmed = lastAppended.slice(lastFlushed.length);
+      if (unconfirmed.length === 0) {
+        // Every delta was delivered, so the reply is complete; only the
+        // stream-end blocks are lost. Report the finalized message rather
+        // than posting an empty one just to carry the blocks.
+        const expiredTs = segment.streamer.ts;
+        if (!expiredTs) {
+          throw error;
+        }
+        this.logger.warn(
+          "Slack: stream expired before stop, stream-end blocks skipped",
+          { channel, messageId: expiredTs, skippedBlocks: stopBlocks.length }
+        );
+        await this.endTyping(threadId, options?.sessionStatus ?? "active");
+        return { id: expiredTs, threadId, raw: { ts: expiredTs } };
+      }
+      this.logger.warn(
+        "Slack: stream expired before stop, delivering the rest in a new message",
+        { channel }
+      );
+      await startNextSegment(lastFlushed);
+      result = await segment.streamer.stop({
+        ...stopArgs,
+        markdown_text: withSegmentPrefix(unconfirmed),
       });
-      await this.endTyping(threadId, options?.sessionStatus ?? "active");
-      return fallback.message;
     }
     const messageTs = (result.message?.ts ?? result.ts) as string;
 
-    this.logger.debug("Slack: stream complete", { messageId: messageTs });
+    this.logger.debug("Slack: stream complete", {
+      messageId: messageTs,
+      segments: rotations + 1,
+    });
 
     return {
       id: messageTs,
@@ -7025,6 +7426,7 @@ export function createSlackAdapter(config?: SlackAdapterConfig): SlackAdapter {
     loadingMessages: config?.loadingMessages,
     logger: config?.logger ?? new ConsoleLogger("info").child("slack"),
     nativeStreaming: config?.nativeStreaming,
+    streamSegmentMaxAgeMs: config?.streamSegmentMaxAgeMs,
     sessionTitle: config?.sessionTitle,
     suggestedPrompts: config?.suggestedPrompts,
     socketForwardingSecret:

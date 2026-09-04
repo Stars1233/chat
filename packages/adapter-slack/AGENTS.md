@@ -273,7 +273,19 @@ Fallback to post-and-edit (`chat.update` deltas, throttled by
   skipped and text streaming continues.
 
 Failures after native content has rendered still propagate — mixing the
-two surfaces would duplicate output.
+two surfaces would duplicate output. The one exception is Slack expiring
+a stream (`message_not_in_streaming_state`): the adapter continues in a
+new message with any text Slack had not confirmed.
+
+Slack expires a native stream after roughly five minutes, so `stream()`
+works in segments: once a segment is `streamSegmentMaxAgeMs` old (the
+clock starts at the first call Slack accepts, not at construction), the
+next paragraph break (or, after a 30 s grace, the next line break)
+finalizes it and a new `chatStream` continues the reply. Rotation closes
+and reopens an open code fence, repeats a table header, replays the plan
+and open task cards, and keeps `session_status: "processing"` with
+`agentView`. Tests drive this with a mocked `Date.now()`; see the
+"native stream rotation" describe block.
 
 ## Socket Mode
 
