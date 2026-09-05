@@ -2228,11 +2228,13 @@ export class TelegramAdapter
         return;
       }
 
-      let draftText = renderPlainText(accumulated);
+      let draftText: string;
       if (streamUsesRich) {
         draftText = truncateRichMarkdown(renderer.render());
       } else if (streamUsesMarkdown) {
         draftText = renderMarkdownText(renderer.render());
+      } else {
+        draftText = renderPlainText(accumulated);
       }
       await sendDraft(draftText, streamUsesMarkdown);
     };

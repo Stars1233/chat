@@ -2254,6 +2254,87 @@ describe("TelegramAdapter", () => {
     expect(finalSendBody.rich_message.markdown).toBe("hello world");
   });
 
+  it.each([
+    "rich",
+    "markdown",
+    "plain",
+  ] as const)("renders plain text only when selected for %s native drafts", async (format) => {
+    const plainText = vi.spyOn(await import("chat"), "markdownToPlainText");
+    mockFetch.mockImplementation((url, init) => {
+      const method = new URL(String(url)).pathname.split("/").at(-1);
+      const body = JSON.parse(String(init?.body)) as {
+        parse_mode?: string;
+      };
+      if (method === "getMe") {
+        return Promise.resolve(
+          telegramOk({ id: 999, is_bot: true, first_name: "Bot" })
+        );
+      }
+      if (method === "sendRichMessageDraft" && format !== "rich") {
+        return Promise.resolve(
+          telegramError(404, 404, "Not Found: method not found")
+        );
+      }
+      if (
+        method === "sendMessageDraft" &&
+        body.parse_mode &&
+        format === "plain"
+      ) {
+        return Promise.resolve(
+          telegramError(400, 400, "Bad Request: can't parse entities")
+        );
+      }
+      return Promise.resolve(
+        telegramOk(
+          method?.endsWith("Draft")
+            ? true
+            : sampleMessage({ text: "hello world" })
+        )
+      );
+    });
+
+    const adapter = createTelegramAdapter({
+      botToken: "token",
+      mode: "webhook",
+      logger: mockLogger,
+      nativeStreaming: true,
+      userName: "mybot",
+    });
+
+    try {
+      await adapter.initialize(createMockChat());
+      async function* textStream(): AsyncIterable<string> {
+        yield "**hello**";
+        expect(plainText).toHaveBeenCalledTimes(format === "plain" ? 1 : 0);
+        yield " world";
+        expect(plainText).toHaveBeenCalledTimes(format === "plain" ? 2 : 0);
+      }
+
+      const result = await adapter.stream("telegram:123", textStream(), {
+        updateIntervalMs: 0,
+      });
+      expect(result?.id).toBe("123:11");
+
+      const finalCall = mockFetch.mock.calls.at(-1);
+      const finalBody = JSON.parse(String(finalCall?.[1]?.body));
+      if (format === "rich") {
+        expect(String(finalCall?.[0])).toContain("/sendRichMessage");
+        expect(finalBody.rich_message.markdown).toBe("**hello** world");
+        expect(plainText).not.toHaveBeenCalled();
+      } else {
+        expect(String(finalCall?.[0])).toContain("/sendMessage");
+        expect(finalBody.text).toBe(
+          format === "markdown" ? "*hello* world" : "hello world"
+        );
+        expect(finalBody.parse_mode).toBe(
+          format === "markdown" ? "MarkdownV2" : undefined
+        );
+      }
+    } finally {
+      plainText.mockRestore();
+    }
+  });
+
   it("flushes trailing table-like lines before completing a rich stream", async () => {
     mockFetch
       .mockResolvedValueOnce(
